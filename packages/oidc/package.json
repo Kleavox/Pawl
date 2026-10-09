@@ -1,0 +1,32 @@
+{
+  "name": "@pawl/oidc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./pkg/*": "./pkg/*"
+  },
+  "files": [
+    "dist",
+    "pkg"
+  ],
+  "scripts": {
+    "build": "wasm-pack build --target web --out-dir ../../packages/oidc/pkg --out-name oidc --release ../../crates/oidc --locked && tsc -p tsconfig.json --checkers 1",
+    "test": "vitest run --exclude \"dist/**\"",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit --checkers 1"
+  },
+  "devDependencies": {
+    "@pawl/typescript": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

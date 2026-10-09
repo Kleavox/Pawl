@@ -1,4 +1,8 @@
-export type BayCode = "1" | "3";
+import type { BayView } from "@pawl/registry";
+
+export type BayCode = string;
+
+export type Catalog = BayView[];
 
 export type AccessRole = "guest" | "visitor" | "owner";
 
@@ -17,6 +21,7 @@ export type MachineState = {
   authAttemptsLeft: number | null;
   consoleLayout: ConsoleLayout;
   consoleOpen: boolean;
+  catalog: Catalog;
 };
 
 export type MachineEvent =
@@ -43,16 +48,25 @@ export type MachineHost = {
   dispatch: (event: MachineEvent) => MachineState;
 };
 
-export const POLICY: Record<BayCode, AccessRole[]> = {
-  "1": ["visitor", "owner"],
-  "3": ["guest", "visitor", "owner"],
+const ALLOWED: Record<BayView["access"], AccessRole[]> = {
+  public: ["guest", "visitor", "owner"],
+  visitor: ["visitor", "owner"],
+  owner: ["owner"],
 };
 
-export function permits(access: AccessRole, bay: BayCode): boolean {
-  return POLICY[bay].includes(access);
+export function permits(
+  access: AccessRole,
+  bay: BayCode,
+  catalog: Catalog,
+): boolean {
+  const entry = catalog.find((candidate) => candidate.code === bay);
+  return entry !== undefined && ALLOWED[entry.access].includes(access);
 }
 
-export function initialState(access: AccessRole): MachineState {
+export function initialState(
+  access: AccessRole,
+  catalog: Catalog,
+): MachineState {
   return {
     access,
     status: "idle",
@@ -66,6 +80,7 @@ export function initialState(access: AccessRole): MachineState {
     authAttemptsLeft: null,
     consoleLayout: "sheet",
     consoleOpen: false,
+    catalog,
   };
 }
 
@@ -73,7 +88,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
   switch (event.type) {
     case "select": {
       if (state.busy) return state;
-      if (permits(state.access, event.bay)) {
+      if (permits(state.access, event.bay, state.catalog)) {
         return {
           ...state,
           selection: event.bay,
@@ -125,7 +140,10 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
 
     case "pass-issued": {
       const access = event.access;
-      if (state.authRequest && permits(access, state.authRequest)) {
+      if (
+        state.authRequest &&
+        permits(access, state.authRequest, state.catalog)
+      ) {
         return {
           ...state,
           access,
@@ -152,7 +170,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
 
     case "pass-removed": {
       return {
-        ...initialState("guest"),
+        ...initialState("guest", state.catalog),
         consoleLayout: state.consoleLayout,
         consoleOpen: state.consoleOpen,
       };

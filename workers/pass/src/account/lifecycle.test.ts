@@ -16,17 +16,14 @@ const credential: AccountCredential = {
 describe("AccountLifecycle", () => {
   let database: FakeDatabase;
   let sessions: FakeSessions;
-  let linkFetch: ReturnType<typeof vi.fn>;
   let env: Env;
 
   beforeEach(() => {
     database = new FakeDatabase();
     sessions = new FakeSessions();
-    linkFetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     env = {
       DB: database as unknown as D1Database,
       SESSIONS: sessions as unknown as KVNamespace,
-      LINK: { fetch: linkFetch } as unknown as Fetcher,
       IP_HASH_SECRET: "test-secret",
     } as Env;
   });
@@ -101,14 +98,14 @@ describe("AccountLifecycle", () => {
     const db = migratedDb();
     seedUser(db, { id: "user-1", email: "owner@product.test" });
     seedClient(db, {
-      id: "krynodes-access",
+      id: "docs-access",
       redirectUris: [
         "https://team.cloudflareaccess.com/cdn-cgi/access/callback",
       ],
       firstParty: false,
     });
     const real = { ...env, DB: db.DB } as Env;
-    const grant = await recordGrant(real, "user-1", "krynodes-access", "p-1", [
+    const grant = await recordGrant(real, "user-1", "docs-access", "p-1", [
       "openid",
     ]);
     await issueRefreshToken(real, grant.id);
@@ -127,20 +124,103 @@ describe("AccountLifecycle", () => {
     }
   });
 
-  it("does not delete the Pass account when the Link purge fails", async () => {
-    linkFetch.mockResolvedValue(new Response(null, { status: 503 }));
+  const PURGING = JSON.stringify({
+    site: { name: "Example" },
+    apps: [
+      {
+        key: "notes",
+        label: "notes",
+        title: "Notes",
+        service: "notes",
+        purge: true,
+      },
+      {
+        key: "files",
+        label: "files",
+        title: "Files",
+        service: "files",
+        purge: true,
+      },
+    ],
+  });
 
-    const result = await createAccountLifecycle(env).delete({
-      userId: "user-1",
-      request: request(),
+  it("asks every purging app before deleting, on its internal host", async () => {
+    const asked: string[] = [];
+    const answer = (key: string) => ({
+      fetch: vi.fn(async (url: string) => {
+        asked.push(`${key} ${url}`);
+        return new Response(null, { status: 204 });
+      }),
     });
+    env = {
+      ...env,
+      ESTATE_MANIFEST: PURGING,
+      APP_NOTES: answer("notes"),
+      APP_FILES: answer("files"),
+    } as unknown as Env;
+    expect(
+      await createAccountLifecycle(env).delete({
+        userId: "user-1",
+        request: request(),
+      }),
+    ).toEqual({ kind: "deleted" });
+    expect(asked.sort()).toEqual([
+      "files http://files.internal/.well-known/pawl/purge-user?id=user-1",
+      "notes http://notes.internal/.well-known/pawl/purge-user?id=user-1",
+    ]);
+  });
 
-    expect(result).toEqual({ kind: "purge_failed" });
+  it("keeps the account when any one app fails to purge", async () => {
+    env = {
+      ...env,
+      ESTATE_MANIFEST: PURGING,
+      APP_NOTES: {
+        fetch: vi.fn(async () => new Response(null, { status: 204 })),
+      },
+      APP_FILES: {
+        fetch: vi.fn(async () => new Response(null, { status: 503 })),
+      },
+    } as unknown as Env;
+    expect(
+      await createAccountLifecycle(env).delete({
+        userId: "user-1",
+        request: request(),
+      }),
+    ).toEqual({ kind: "purge_failed" });
     expect(
       database.runs.some((statement) =>
         statement.sql.includes("DELETE FROM users"),
       ),
     ).toBe(false);
+  });
+
+  it("keeps the account when a purging app's binding is missing", async () => {
+    env = {
+      ...env,
+      ESTATE_MANIFEST: PURGING,
+      APP_NOTES: {
+        fetch: vi.fn(async () => new Response(null, { status: 204 })),
+      },
+    } as unknown as Env;
+    expect(
+      await createAccountLifecycle(env).delete({
+        userId: "user-1",
+        request: request(),
+      }),
+    ).toEqual({ kind: "purge_failed" });
+  });
+
+  it("deletes at once when no app holds anything to purge", async () => {
+    env = {
+      ...env,
+      ESTATE_MANIFEST: JSON.stringify({ site: { name: "Example" }, apps: [] }),
+    } as unknown as Env;
+    expect(
+      await createAccountLifecycle(env).delete({
+        userId: "user-1",
+        request: request(),
+      }),
+    ).toEqual({ kind: "deleted" });
   });
 
   it("does not overwrite an existing verifier through the setup path", async () => {

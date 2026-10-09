@@ -1,29 +1,19 @@
 import { execSync } from "node:child_process";
-import { rmSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readFileSync, rmSync } from "node:fs";
 import path from "node:path";
-import { localWorkerOrigin } from "@pawl/topology";
+import { fileURLToPath } from "node:url";
 
-import { WORKER_SOURCE } from "./repos.mjs";
-
-const repoRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-);
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(here, "..", "..");
+const manifestFile = path.join(here, "fixture", "estate.json");
 
 const env = {
   ...process.env,
-  VITE_ROOT_ORIGIN: localWorkerOrigin("gateway"),
-  VITE_PASS_ORIGIN: localWorkerOrigin("pass"),
-  VITE_LINK_ORIGIN: localWorkerOrigin("link"),
-  PUBLIC_ROOT_ORIGIN: localWorkerOrigin("gateway"),
+  ESTATE_MANIFEST: readFileSync(manifestFile, "utf8"),
+  VITE_ROOT_ORIGIN: "http://127.0.0.1:8786",
+  VITE_PASS_ORIGIN: "http://127.0.0.1:8787",
+  PUBLIC_ROOT_ORIGIN: "http://127.0.0.1:8786",
 };
-
-execSync(
-  "pnpm exec turbo run build --filter=@pawl/gateway-worker^... --filter=@pawl/pass-worker^...",
-  { cwd: repoRoot, env, stdio: "inherit" },
-);
 
 function clearState(state) {
   try {
@@ -37,20 +27,17 @@ function clearState(state) {
   }
 }
 
-for (const [worker, source] of Object.entries(WORKER_SOURCE)) {
-  if (worker === "gateway") continue;
-  if (source === "local") {
-    clearState(path.join(repoRoot, "workers", worker, ".wrangler", "state"));
-    execSync(
-      `pnpm exec wrangler d1 migrations apply DB --local --config workers/${worker}/wrangler.jsonc`,
-      { cwd: repoRoot, env, stdio: "inherit" },
-    );
-    continue;
-  }
-  execSync("pnpm exec turbo run build", { cwd: source, env, stdio: "inherit" });
-  clearState(path.join(source, "worker", ".wrangler", "state"));
-  execSync(
-    "pnpm exec wrangler d1 migrations apply DB --local --config worker/wrangler.jsonc",
-    { cwd: source, env, stdio: "inherit" },
-  );
-}
+execSync("pnpm exec turbo run build", { cwd: repoRoot, env, stdio: "inherit" });
+execSync(
+  `node tooling/deploy/dist/cli.js render-local --manifest "${manifestFile}" --out .wrangler/local`,
+  { cwd: repoRoot, env, stdio: "inherit" },
+);
+clearState(path.join(repoRoot, "workers", "pass", ".wrangler", "state"));
+execSync(
+  "pnpm exec wrangler d1 migrations apply DB --local --config workers/pass/wrangler.jsonc",
+  { cwd: repoRoot, env, stdio: "inherit" },
+);
+execSync(
+  `pnpm exec wrangler d1 execute DB --local --config workers/pass/wrangler.jsonc --command "INSERT INTO oauth_clients (id, name, redirect_uris, allowed_scopes, confidential, first_party, sector, approved_at) VALUES ('fixture-notes', 'Notes', '[\\"http://localhost:8790/callback\\"]', '[\\"openid\\",\\"email\\",\\"profile\\"]', 0, 1, 'localhost', datetime('now'))"`,
+  { cwd: repoRoot, env, stdio: "inherit" },
+);

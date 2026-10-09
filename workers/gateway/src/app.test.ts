@@ -1,26 +1,12 @@
+import { readFileSync } from "node:fs";
+
 import { publicHost } from "@pawl/topology";
 import { describe, expect, it, vi } from "vitest";
 
-import { app } from "./index";
-import type { Env } from "./index";
+import { app } from "./app";
+import type { Env } from "./app";
 
 describe("Gateway public namespace", () => {
-  it("tells Link which public host asked and traces the hop", async () => {
-    const linkFetch = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) =>
-        new Response(null, { status: 404 }),
-    );
-    await app.request("https://product.test/launch", {}, {
-      LINK: { fetch: linkFetch },
-      ASSETS: { fetch: vi.fn(async () => new Response("asset")) },
-      PUBLIC_ORIGIN: "https://product.test",
-    } as unknown as Env);
-
-    const sent = new Headers(linkFetch.mock.calls[0]?.[1]?.headers);
-    expect(sent.get("x-pawl-public-host")).toBe("product.test");
-    expect(sent.get("x-pawl-trace-id")).toMatch(/^[0-9a-f-]{36}$/u);
-  });
-
   it("signs the session out at Pass under the shared header", async () => {
     const passFetch = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>
@@ -41,89 +27,11 @@ describe("Gateway public namespace", () => {
     ).toBe("tok");
   });
 
-  it("resolves normal slugs through Link", async () => {
-    const linkFetch = vi.fn(async () =>
-      Response.redirect("https://example.com", 302),
-    );
-    const response = await app.request("https://product.test/launch", {}, {
-      LINK: { fetch: linkFetch },
-      ASSETS: { fetch: vi.fn() },
-      PUBLIC_ORIGIN: "https://product.test",
-    } as unknown as Env);
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("https://example.com/");
-    expect(linkFetch).toHaveBeenCalledTimes(1);
-  });
-
-  it("serves the Link receiver when a file slug has no Link collision", async () => {
-    const linkFetch = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(null, { status: 404 }))
-      .mockResolvedValueOnce(
-        new Response("<main>receiver</main>", {
-          headers: { "content-type": "text/html" },
-        }),
-      );
-    const response = await app.request(
-      "https://product.test/f_JG2nV6-pQ9",
-      {},
-      {
-        LINK: { fetch: linkFetch },
-        ASSETS: { fetch: vi.fn() },
-        PUBLIC_ORIGIN: "https://product.test",
-      } as unknown as Env,
-    );
-
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("receiver");
-    expect(linkFetch).toHaveBeenCalledTimes(2);
-  });
-
-  it("proxies public file APIs to Link", async () => {
-    const linkFetch = vi.fn(async (request: Request) =>
-      Response.json({ host: new URL(request.url).hostname }),
-    );
-    const response = await app.request(
-      "https://product.test/api/public/f_JG2nV6-pQ9",
-      {},
-      {
-        LINK: { fetch: linkFetch },
-        ASSETS: { fetch: vi.fn() },
-        PUBLIC_ORIGIN: "https://product.test",
-      } as unknown as Env,
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ host: "link.internal" });
-  });
-
-  it("proxies the receiver bundle to Link", async () => {
-    const linkFetch = vi.fn(async (request: Request) =>
-      Response.json({ path: new URL(request.url).pathname }),
-    );
-    const response = await app.request(
-      "https://product.test/link-assets/index.js",
-      {},
-      {
-        LINK: { fetch: linkFetch },
-        ASSETS: { fetch: vi.fn() },
-        PUBLIC_ORIGIN: "https://product.test",
-      } as unknown as Env,
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      path: "/link-assets/index.js",
-    });
-  });
-
   it("renders the unified error page for an unknown HTML route", async () => {
     const response = await app.request(
       "https://product.test/no/such/path",
       { headers: { accept: "text/html" } },
       {
-        LINK: { fetch: vi.fn() },
         ASSETS: {
           fetch: vi.fn(async () => new Response("nope", { status: 404 })),
         },
@@ -140,68 +48,11 @@ describe("Gateway estate endpoint", () => {
   it("rejects a request with no session cookie", async () => {
     const response = await app.request("https://product.test/api/estate", {}, {
       PASS: { fetch: vi.fn() },
-      LINK: { fetch: vi.fn() },
       ASSETS: { fetch: vi.fn() },
       PUBLIC_ORIGIN: "https://product.test",
     } as unknown as Env);
 
     expect(response.status).toBe(401);
-  });
-
-  it("aggregates the two tools and echoes an allowed origin", async () => {
-    const passFetch = vi.fn(async (url: string) => {
-      if (url.includes("/internal/session")) {
-        return Response.json({ identity: { id: "u1", role: "ADMIN" } });
-      }
-      if (url.includes("/api/sessions")) {
-        return Response.json({ sessions: [{ id: "s1" }] });
-      }
-      return new Response(null, { status: 404 });
-    });
-    const linkFetch = vi.fn(async (url: string) => {
-      if (url.includes("/api/links")) {
-        return Response.json({
-          data: [],
-          meta: { page: 1, limit: 1, total: 5, totalPages: 5 },
-        });
-      }
-      if (url.includes("/api/drops")) {
-        return Response.json({ drops: [] });
-      }
-      if (url.includes("/api/admin/file-reports")) {
-        return Response.json({ reports: [] });
-      }
-      if (url.includes("/api/admin/reports")) {
-        return Response.json({ reports: [] });
-      }
-      return new Response(null, { status: 404 });
-    });
-    const response = await app.request(
-      "https://product.test/api/estate",
-      {
-        headers: {
-          cookie: "__Secure-pawl_session=tok",
-          Origin: "https://link.product.test",
-        },
-      },
-      {
-        PASS: { fetch: passFetch },
-        LINK: { fetch: linkFetch },
-        ASSETS: { fetch: vi.fn() },
-        PUBLIC_ORIGIN: "https://product.test",
-      } as unknown as Env,
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      role: "ADMIN",
-      pass: { devices: 1 },
-      link: { active: 5 },
-    });
-    expect(response.headers.get("access-control-allow-origin")).toBe(
-      "https://link.product.test",
-    );
-    expect(response.headers.get("vary")).toBe("Origin");
   });
 
   it("never reflects an origin outside the topology allowlist", async () => {
@@ -222,7 +73,6 @@ describe("Gateway estate endpoint", () => {
       },
       {
         PASS: { fetch: passFetch },
-        LINK: { fetch: vi.fn(async () => new Response(null, { status: 404 })) },
         ASSETS: { fetch: vi.fn() },
         PUBLIC_ORIGIN: "https://product.test",
       } as unknown as Env,
@@ -233,214 +83,12 @@ describe("Gateway estate endpoint", () => {
     expect(response.headers.get("vary")).toBe("Origin");
   });
 
-  it("silences the whole link block when one of its own upstreams answers 200 with a wrong-shaped body, and keeps the other tools", async () => {
-    const passFetch = vi.fn(async (url: string) => {
-      if (url.includes("/internal/session")) {
-        return Response.json({ identity: { id: "u1", role: "ADMIN" } });
-      }
-      if (url.includes("/api/sessions")) {
-        return Response.json({ sessions: [{ id: "s1" }] });
-      }
-      return new Response(null, { status: 404 });
-    });
-    const linkFetch = vi.fn(async (url: string) => {
-      if (url.includes("/api/links")) {
-        return Response.json({ error: "unexpected envelope" });
-      }
-      if (url.includes("/api/drops")) {
-        return Response.json({
-          drops: [
-            {
-              publicToken: "f_ok",
-              name: "fine.txt",
-              downloadCount: 0,
-              expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-              status: "ACTIVE",
-            },
-          ],
-        });
-      }
-      if (url.includes("/api/admin/file-reports")) {
-        return Response.json({ reports: [] });
-      }
-      if (url.includes("/api/admin/reports")) {
-        return Response.json({
-          reports: [
-            {
-              id: "r1",
-              reason: "SPAM",
-              status: "OPEN",
-              created_at: new Date().toISOString(),
-              slug: "still-open",
-            },
-          ],
-        });
-      }
-      return new Response(null, { status: 404 });
-    });
-    const response = await app.request(
-      "https://product.test/api/estate",
-      { headers: { cookie: "__Secure-pawl_session=tok" } },
-      {
-        PASS: { fetch: passFetch },
-        LINK: { fetch: linkFetch },
-        ASSETS: { fetch: vi.fn() },
-        PUBLIC_ORIGIN: "https://product.test",
-      } as unknown as Env,
-    );
-
-    expect(response.status).toBe(200);
-    const degraded = (await response.json()) as {
-      pass: unknown;
-      link: unknown;
-      attention: Array<{ kind: string }>;
-    };
-    expect(degraded.pass).toEqual({ devices: 1 });
-    expect(degraded.link).toBeNull();
-    expect(degraded.attention.map((item) => item.kind)).toContain(
-      "abuse-report",
-    );
-  });
-
-  it("reports a fully failed upstream as null, never as an all-zero block", async () => {
-    const passFetch = vi.fn(async (url: string) => {
-      if (url.includes("/internal/session")) {
-        return Response.json({ identity: { id: "u1", role: "ADMIN" } });
-      }
-      return Response.json({ sessions: [{ id: "s1" }] });
-    });
-
-    const response = await app.request(
-      "https://product.test/api/estate",
-      { headers: { cookie: "__Secure-pawl_session=tok" } },
-      {
-        PASS: { fetch: passFetch },
-        LINK: {
-          fetch: vi.fn(async () => new Response(null, { status: 404 })),
-        },
-        ASSETS: { fetch: vi.fn() },
-        PUBLIC_ORIGIN: "https://product.test",
-      } as unknown as Env,
-    );
-
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { link: unknown };
-    expect(body.link).toBeNull();
-  });
-
-  it("merges file abuse reports with link abuse reports into the count and attention list", async () => {
-    const passFetch = vi.fn(async (url: string) => {
-      if (url.includes("/internal/session")) {
-        return Response.json({ identity: { id: "u1", role: "ADMIN" } });
-      }
-      return Response.json({ sessions: [] });
-    });
-    const linkFetch = vi.fn(async (url: string) => {
-      if (url.includes("/api/links")) {
-        return Response.json({
-          data: [],
-          meta: { page: 1, limit: 1, total: 0, totalPages: 0 },
-        });
-      }
-      if (url.includes("/api/drops")) {
-        return Response.json({ drops: [] });
-      }
-      if (url.includes("/api/admin/file-reports")) {
-        return Response.json({
-          reports: [
-            {
-              id: "fr1",
-              reason: "MALWARE",
-              status: "OPEN",
-              created_at: new Date().toISOString(),
-              public_token: "f_evil",
-            },
-          ],
-        });
-      }
-      if (url.includes("/api/admin/reports")) {
-        return Response.json({ reports: [] });
-      }
-      return new Response(null, { status: 404 });
-    });
-    const response = await app.request(
-      "https://product.test/api/estate",
-      { headers: { cookie: "__Secure-pawl_session=tok" } },
-      {
-        PASS: { fetch: passFetch },
-        LINK: { fetch: linkFetch },
-        ASSETS: { fetch: vi.fn() },
-        PUBLIC_ORIGIN: "https://product.test",
-      } as unknown as Env,
-    );
-
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      link: { reported: number };
-      attention: Array<{ kind: string; title: string; href: string }>;
-    };
-    expect(body.link.reported).toBe(1);
-    expect(
-      body.attention.some(
-        (item) =>
-          item.kind === "abuse-report" &&
-          item.title.includes("f_evil") &&
-          item.href === "https://link.product.test/",
-      ),
-    ).toBe(true);
-    expect(
-      linkFetch.mock.calls.some((call) =>
-        String(call[0]).includes("/api/admin/file-reports"),
-      ),
-    ).toBe(true);
-  });
-
-  it("does not hand an admin a calm payload when the abuse report endpoints failed", async () => {
-    const passFetch = vi.fn(async (url: string) => {
-      if (url.includes("/internal/session")) {
-        return Response.json({ identity: { id: "u1", role: "ADMIN" } });
-      }
-      return Response.json({ sessions: [{ id: "s1" }] });
-    });
-    const linkFetch = vi.fn(async (url: string) => {
-      if (url.includes("/api/links")) {
-        return Response.json({
-          data: [],
-          meta: { page: 1, limit: 1, total: 5, totalPages: 5 },
-        });
-      }
-      if (url.includes("/api/drops")) {
-        return Response.json({ drops: [] });
-      }
-      return new Response(null, { status: 500 });
-    });
-    const response = await app.request(
-      "https://product.test/api/estate",
-      { headers: { cookie: "__Secure-pawl_session=tok" } },
-      {
-        PASS: { fetch: passFetch },
-        LINK: { fetch: linkFetch },
-        ASSETS: { fetch: vi.fn() },
-        PUBLIC_ORIGIN: "https://product.test",
-      } as unknown as Env,
-    );
-
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      link: unknown;
-      attention: unknown[];
-    };
-    expect(body.link).toBeNull();
-    expect(body.attention).toEqual([]);
-  });
-
   it("204s the OPTIONS preflight", async () => {
     const response = await app.request(
       "https://product.test/api/estate",
       { method: "OPTIONS" },
       {
         PASS: { fetch: vi.fn() },
-        LINK: { fetch: vi.fn() },
         ASSETS: { fetch: vi.fn() },
         PUBLIC_ORIGIN: "https://product.test",
       } as unknown as Env,
@@ -462,27 +110,26 @@ describe("Gateway estate endpoint", () => {
       {
         headers: {
           cookie: "__Secure-pawl_session=tok",
-          Origin: "https://link.product.test",
+          Origin: "https://notes.product.test",
         },
       },
       {
         PASS: { fetch: passFetch },
-        LINK: { fetch: vi.fn(async () => new Response(null, { status: 404 })) },
         ASSETS: { fetch: vi.fn() },
         PUBLIC_ORIGIN: "https://product.test",
+        ESTATE_MANIFEST: MANIFEST,
       } as unknown as Env,
     );
 
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBe(
-      "https://link.product.test",
+      "https://notes.product.test",
     );
   });
 });
 
 describe("Gateway auth proxy", () => {
   const baseEnv = {
-    LINK: { fetch: vi.fn() },
     ASSETS: { fetch: vi.fn() },
     PASS: { fetch: vi.fn() },
     PUBLIC_ORIGIN: "https://example.test",
@@ -825,5 +472,207 @@ describe("Gateway auth proxy", () => {
 
     expect(seen[0]!.method).toBe("POST");
     expect(seen[0]!.body).toBe('{"code":"123456"}');
+  });
+});
+
+const MANIFEST = readFileSync(
+  new URL("../../../tooling/e2e/fixture/estate.json", import.meta.url),
+  "utf8",
+);
+
+function appsEnv(
+  answer = (request: Request) => new Response(new URL(request.url).host),
+) {
+  const reached: string[] = [];
+  const fetcher = (key: string) => ({
+    fetch: async (input: Request | string, init?: RequestInit) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      reached.push(`${key} ${request.method} ${request.url}`);
+      return answer(request);
+    },
+  });
+  return {
+    reached,
+    env: {
+      ASSETS: {
+        fetch: vi.fn(async () => new Response("asset", { status: 404 })),
+      },
+      PUBLIC_ORIGIN: "https://example.test",
+      ESTATE_MANIFEST: MANIFEST,
+      APP_NOTES: fetcher("notes"),
+      APP_DOCS: fetcher("docs"),
+    } as unknown as Env,
+  };
+}
+
+describe("apps from the manifest", () => {
+  it("hands an app's subdomain to its binding unchanged", async () => {
+    const { env, reached } = appsEnv();
+    await app.request("https://docs.example.test/page", {}, env);
+    expect(reached).toEqual(["docs GET https://docs.example.test/page"]);
+  });
+
+  it("hands a proxy prefix to its app on the internal host", async () => {
+    const { env, reached } = appsEnv();
+    await app.request("https://example.test/api/notes/list?x=1", {}, env);
+    expect(reached).toEqual([
+      "notes GET http://notes.internal/api/notes/list?x=1",
+    ]);
+  });
+
+  it("resolves an unreserved apex slug through the apex app, with the pawl headers", async () => {
+    const seen: Request[] = [];
+    const { env } = appsEnv((request) => {
+      seen.push(request);
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://elsewhere.test/" },
+      });
+    });
+    const response = await app.request("https://example.test/hello", {}, env);
+    expect(response.status).toBe(302);
+    expect(new URL(seen[0]!.url).pathname).toBe("/internal/resolve/hello");
+    expect(seen[0]!.headers.get("x-pawl-public-host")).toBe("example.test");
+    expect(seen[0]!.headers.get("x-pawl-trace-id")).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("never sends a reserved slug to the apex app", async () => {
+    const { env, reached } = appsEnv();
+    await app.request("https://example.test/notes", {}, env);
+    expect(reached).toEqual([]);
+  });
+
+  it("serves a file slug from the apex app when the resolver does not know it", async () => {
+    const { env, reached } = appsEnv((request) =>
+      new URL(request.url).pathname.startsWith("/internal/resolve/")
+        ? new Response(null, { status: 404 })
+        : new Response("file page"),
+    );
+    const response = await app.request(
+      "https://example.test/n_abc123",
+      { headers: { accept: "text/html" } },
+      env,
+    );
+    expect(await response.text()).toBe("file page");
+    expect(reached[1]).toBe("notes GET http://notes.internal/n_abc123");
+  });
+
+  it("answers a named 503 when a registered app's binding is missing", async () => {
+    const { env } = appsEnv();
+    const response = await app.request("https://example.test/api/notes/x", {}, {
+      ...env,
+      APP_NOTES: undefined,
+    } as unknown as Env);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      code: "APP_UNAVAILABLE",
+      app: "notes",
+    });
+  });
+
+  it("allows the estate to be read from a registered app's origin", async () => {
+    const { env } = appsEnv();
+    const response = await app.request(
+      "https://example.test/api/estate",
+      { method: "OPTIONS", headers: { origin: "https://notes.example.test" } },
+      env,
+    );
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://notes.example.test",
+    );
+  });
+});
+
+describe("the estate endpoint", () => {
+  function estateEnv(notes: () => Response) {
+    return {
+      ASSETS: { fetch: vi.fn(async () => new Response("asset")) },
+      PUBLIC_ORIGIN: "https://example.test",
+      ESTATE_MANIFEST: MANIFEST,
+      PASS: {
+        fetch: async (url: string) =>
+          url.includes("/internal/session")
+            ? Response.json({ identity: { id: "u1", role: "ADMIN" } })
+            : Response.json({ sessions: [{ id: "s1" }] }),
+      },
+      APP_NOTES: { fetch: async () => notes() },
+    } as unknown as Env;
+  }
+
+  async function read(env: Env) {
+    const response = await app.request(
+      "https://example.test/api/estate",
+      { headers: { cookie: "__Secure-pawl_session=tok" } },
+      env,
+    );
+    return (await response.json()) as { tools: Record<string, unknown> };
+  }
+
+  it("asks every estate app, and only those, through its binding", async () => {
+    const asked: string[] = [];
+    const env = estateEnv(() =>
+      Response.json({ count: 2, severity: null, attention: [] }),
+    );
+    (
+      env as unknown as {
+        APP_NOTES: { fetch: (url: string) => Promise<Response> };
+      }
+    ).APP_NOTES.fetch = async (url) => {
+      asked.push(url);
+      return Response.json({ count: 2, severity: null, attention: [] });
+    };
+    expect((await read(env)).tools).toEqual({
+      pass: { count: 1, severity: null },
+      notes: { count: 2, severity: null },
+    });
+    expect(asked).toEqual(["http://notes.internal/.well-known/pawl/estate"]);
+  });
+
+  it("calls a 401 or 403 locked", async () => {
+    expect(
+      (await read(estateEnv(() => new Response(null, { status: 403 })))).tools
+        .notes,
+    ).toBe("locked");
+  });
+
+  it("calls a failure unknown, never zero", async () => {
+    expect(
+      (await read(estateEnv(() => new Response("oops", { status: 500 })))).tools
+        .notes,
+    ).toBeNull();
+    expect(
+      (await read(estateEnv(() => Response.json({ nope: true })))).tools.notes,
+    ).toBeNull();
+  });
+});
+
+describe("the estate call itself", () => {
+  it("tells an estate app which public host asked", async () => {
+    const seen: Headers[] = [];
+    const env = {
+      ASSETS: { fetch: vi.fn(async () => new Response("asset")) },
+      PUBLIC_ORIGIN: "https://example.test",
+      ESTATE_MANIFEST: MANIFEST,
+      PASS: {
+        fetch: async (url: string) =>
+          url.includes("/internal/session")
+            ? Response.json({ identity: { id: "u1", role: "ADMIN" } })
+            : Response.json({ sessions: [] }),
+      },
+      APP_NOTES: {
+        fetch: async (_url: string, init?: RequestInit) => {
+          seen.push(new Headers(init?.headers));
+          return Response.json({ count: 0, severity: null, attention: [] });
+        },
+      },
+    } as unknown as Env;
+    await app.request(
+      "http://localhost:8786/api/estate",
+      { headers: { cookie: "__Secure-pawl_session=tok" } },
+      env,
+    );
+    expect(seen[0]?.get("x-pawl-public-host")).toBe("localhost");
+    expect(seen[0]?.get("cookie")).toBe("__Secure-pawl_session=tok");
   });
 });

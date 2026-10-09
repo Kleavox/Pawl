@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Pawl is a focused ecosystem for routes, temporary files, identity, and infrastructure monitoring."
+      content="{{SITE_NAME}} is the front door to a set of focused apps."
     />
     <meta name="theme-color" content="#070908" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta property="og:title" content="Pawl | Focused systems" />
+    <meta property="og:title" content="{{SITE_NAME}} | Focused systems" />
     <meta
       property="og:description"
       content="Routes, temporary files, identity, and infrastructure monitoring under one deliberate system."
@@ -17,7 +17,7 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="{{ROOT_ORIGIN}}" />
     <link rel="canonical" href="{{ROOT_ORIGIN}}" />
-    <title>Pawl | Focused systems</title>
+    <title>{{SITE_NAME}} | Focused systems</title>
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body>
@@ -42,7 +42,10 @@
     </template>
 
     <main class="machine-room">
-      <section class="stage" aria-label="Pawl software vending machine">
+      <section
+        class="stage"
+        aria-label="{{SITE_NAME}} software vending machine"
+      >
         <div
           class="machine"
           data-machine
@@ -54,126 +57,13 @@
             <div class="door">
               <div class="inventory">
                 <header class="inventory-header">
-                  <h1 class="machine-wordmark">PAWL</h1>
+                  <h1 class="machine-wordmark">{{SITE_NAME_UPPER}}</h1>
                   <span class="cabinet-state" data-cabinet-state="guest"
                     >GUEST MODE</span
                   >
                 </header>
 
-                <div
-                  class="shelf shelf--primary"
-                  data-shelf
-                  role="group"
-                  aria-label="Bays 1 to 3, two applications"
-                >
-                  <div class="slot" data-bay="1">
-                    <span class="bay-backlight" data-backlight></span>
-                    <span class="coil"
-                      ><i></i><i></i><i></i><i></i><i></i
-                    ></span>
-                    <button
-                      class="cartridge cartridge--link"
-                      type="button"
-                      data-cartridge="1"
-                      data-href="{{LINK_HREF}}"
-                      aria-label="Select Link, bay 1"
-                    >
-                      <span class="cartridge__detail"></span>
-                      <span class="cartridge__name">LINK</span>
-                    </button>
-                    <span class="slot-code">
-                      <span>1 &middot; <strong>LINK</strong></span>
-                      <span class="slot-code__scope">Visitor</span>
-                    </span>
-                  </div>
-
-                  <div class="slot slot--empty" data-bay="2" aria-hidden="true">
-                    <span class="coil"
-                      ><i></i><i></i><i></i><i></i><i></i
-                    ></span>
-                    <span class="empty-stop"></span>
-                    <span class="slot-code">2 &middot; EMPTY</span>
-                  </div>
-
-                  <div class="slot" data-bay="3">
-                    <span class="bay-backlight" data-backlight></span>
-                    <span class="coil"
-                      ><i></i><i></i><i></i><i></i><i></i
-                    ></span>
-                    <button
-                      class="cartridge cartridge--portfolio"
-                      type="button"
-                      data-cartridge="3"
-                      data-href="{{PORT_HREF}}"
-                      aria-label="Select Portfolio, bay 3"
-                    >
-                      <span class="cartridge__detail"></span>
-                      <span class="cartridge__name">PORT</span>
-                    </button>
-                    <span class="slot-code">
-                      <span>3 &middot; <strong>PORT</strong></span>
-                      <span class="slot-code__scope">Public</span>
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  class="shelf"
-                  data-shelf
-                  role="group"
-                  aria-label="Bays 4 to 6, three empty bays"
-                >
-                  <div class="slot slot--empty" data-bay="4" aria-hidden="true">
-                    <span class="coil"
-                      ><i></i><i></i><i></i><i></i><i></i
-                    ></span>
-                    <span class="empty-stop"></span>
-                    <span class="slot-code">4 &middot; EMPTY</span>
-                  </div>
-                  <div class="slot slot--empty" data-bay="5" aria-hidden="true">
-                    <span class="coil"
-                      ><i></i><i></i><i></i><i></i><i></i
-                    ></span>
-                    <span class="empty-stop"></span>
-                    <span class="slot-code">5 &middot; EMPTY</span>
-                  </div>
-                  <div class="slot slot--empty" data-bay="6" aria-hidden="true">
-                    <span class="coil"
-                      ><i></i><i></i><i></i><i></i><i></i
-                    ></span>
-                    <span class="empty-stop"></span>
-                    <span class="slot-code">6 &middot; EMPTY</span>
-                  </div>
-                </div>
-
-                <div
-                  class="shelf"
-                  data-shelf
-                  role="group"
-                  aria-label="Bays 7 to 9, three empty bays"
-                >
-                  <div class="slot slot--empty" data-bay="7" aria-hidden="true">
-                    <span class="coil"
-                      ><i></i><i></i><i></i><i></i><i></i
-                    ></span>
-                    <span class="empty-stop"></span>
-                    <span class="slot-code">7 &middot; EMPTY</span>
-                  </div>
-                  <div class="slot slot--empty" data-bay="8" aria-hidden="true">
-                    <span class="coil"
-                      ><i></i><i></i><i></i><i></i><i></i
-                    ></span>
-                    <span class="empty-stop"></span>
-                    <span class="slot-code">8 &middot; EMPTY</span>
-                  </div>
-                  <div class="slot slot--empty" data-bay="9" aria-hidden="true">
-                    <span class="coil"
-                      ><i></i><i></i><i></i><i></i><i></i
-                    ></span>
-                    <span class="empty-stop"></span>
-                    <span class="slot-code">9 &middot; EMPTY</span>
-                  </div>
-                </div>
+                {{SHELVES}}
               </div>
             </div>
 
@@ -350,7 +240,7 @@
       <div class="screen-transfer__cartridge">
         <div class="screen-transfer__copy">
           <span>ROUTE ESTABLISHED</span>
-          <strong data-transfer-name>PAWL</strong>
+          <strong data-transfer-name>{{SITE_NAME_UPPER}}</strong>
           <small>DECODING INTERFACE, PAWL-GW-01</small>
         </div>
         <span class="screen-transfer__rail" aria-hidden="true"
@@ -450,15 +340,14 @@
 
     <footer class="ftr">
       <div class="shell ftr-inner">
-        <span class="ftr-wm">Kleav<b>ox</b></span>
+        <span class="ftr-wm">{{SITE_NAME}}</span>
         <div class="ftr-links">
-          <a href="{{LINK_HREF}}">Link</a>
           <a href="{{PASS_HREF}}">Pawl</a>
-          <a href="{{PORT_HREF}}">Port</a>
+          {{FOOTER_LINKS}}
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
         </div>
-        <span class="ftr-copy">&copy; {{YEAR}} Pawl</span>
+        <span class="ftr-copy">&copy; {{YEAR}} {{SITE_NAME}}</span>
       </div>
     </footer>
   </body>

@@ -24,7 +24,7 @@ export function findLegacyNames(root, files) {
     const lines = text.split(/\r?\n/u);
     const count = lines.filter(
       (line) =>
-        PATTERN.test(line) &&
+        PATTERN.test(line.replace(/<[^>]*>/gu, "")) &&
         !(file === FROZEN_FILE && FROZEN_LINE.test(line.trim())),
     ).length;
     if (count > 0) hits.push({ file, count });

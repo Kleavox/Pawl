@@ -1,9 +1,16 @@
 import { defineConfig } from "@playwright/test";
 import { LOCAL_WORKER_PORTS, localWorkerOrigin } from "@pawl/topology";
 
-import { WORKER_SOURCE } from "./repos.mjs";
-
 const reuse = !process.env.CI;
+
+function fixture(key: string, port: number) {
+  return {
+    command: `pnpm exec wrangler dev --config fixture/${key}.jsonc --port ${port}`,
+    url: `http://127.0.0.1:${port}/health`,
+    reuseExistingServer: reuse,
+    timeout: 90_000,
+  };
+}
 
 export default defineConfig({
   testDir: "./tests",
@@ -17,20 +24,15 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `pnpm exec wrangler dev --config ../../workers/pass/wrangler.jsonc --port ${LOCAL_WORKER_PORTS.pass}`,
+      command: `pnpm exec wrangler dev --config ../../.wrangler/local/pass.json --port ${LOCAL_WORKER_PORTS.pass} --persist-to ../../workers/pass/.wrangler/state`,
       url: `${localWorkerOrigin("pass")}/health`,
       reuseExistingServer: reuse,
       timeout: 90_000,
     },
+    fixture("notes", 8790),
+    fixture("docs", 8791),
     {
-      command: `pnpm exec wrangler dev --config worker/wrangler.jsonc --port ${LOCAL_WORKER_PORTS.link}`,
-      cwd: WORKER_SOURCE.link,
-      url: `${localWorkerOrigin("link")}/health`,
-      reuseExistingServer: reuse,
-      timeout: 90_000,
-    },
-    {
-      command: `pnpm exec wrangler dev --config ../../workers/gateway/wrangler.jsonc --port ${LOCAL_WORKER_PORTS.gateway}`,
+      command: `pnpm exec wrangler dev --config ../../.wrangler/local/gateway.json --port ${LOCAL_WORKER_PORTS.gateway}`,
       url: `${localWorkerOrigin("gateway")}/health`,
       reuseExistingServer: reuse,
       timeout: 90_000,

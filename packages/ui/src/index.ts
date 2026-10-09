@@ -6,7 +6,6 @@ export { renderAppHeader } from "./app-header-dom";
 export { AppFooter, type AppFooterProps } from "./app-footer";
 export {
   ROOT_ORIGIN,
-  LINK_ORIGIN,
   PASS_ORIGIN,
   ROOT_HOST,
   signInUrl,
@@ -28,10 +27,9 @@ export {
   navCountsFrom,
   readCache,
   writeCache,
-  UNREADABLE_COUNTS,
+  unreadableCounts,
   type AttentionAge,
   type AttentionItem,
-  type AttentionKind,
   type Indicator,
   type NavCounts,
   type Overview,

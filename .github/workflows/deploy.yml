@@ -36,6 +36,7 @@ jobs:
       PASS_D1_ID: ${{ secrets.PASS_D1_ID }}
       PASS_KV_ID: ${{ secrets.PASS_KV_ID }}
       AUTH_FROM_EMAIL: ${{ vars.AUTH_FROM_EMAIL }}
+      ESTATE_MANIFEST: ${{ vars.ESTATE_MANIFEST }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
       IP_HASH_SECRET: ${{ secrets.IP_HASH_SECRET }}

@@ -1,19 +1,20 @@
 import { permits } from "./state";
-import type { AccessRole, BayCode, MachineState } from "./state";
+import type { AccessRole, BayCode, Catalog, MachineState } from "./state";
 import type { MachineModel } from "../estate-adapter";
 
-const BAYS: readonly BayCode[] = ["1", "3"];
 const OTP_LENGTH = 6;
 
-const PRODUCT: Record<BayCode, string> = {
-  "1": "LINK",
-  "3": "PORT",
-};
+function entryOf(catalog: Catalog, bay: BayCode) {
+  return catalog.find((entry) => entry.code === bay);
+}
 
-const TITLE: Record<BayCode, string> = {
-  "1": "Link",
-  "3": "Portfolio",
-};
+function productOf(catalog: Catalog, bay: BayCode): string {
+  return entryOf(catalog, bay)?.product ?? "";
+}
+
+function shapeOf(catalog: Catalog, bay: BayCode | null): string {
+  return bay === null ? "none" : (entryOf(catalog, bay)?.shape ?? "none");
+}
 
 const CABINET_WORD: Record<AccessRole, string> = {
   guest: "GUEST MODE",
@@ -29,19 +30,23 @@ const PASS_WORD: Record<AccessRole, string> = {
 
 type ScreenCopy = { main: string; sub: string };
 
-function passWord(bay: BayCode): string {
-  return permits("visitor", bay) ? "visitor" : "owner";
+function passWord(catalog: Catalog, bay: BayCode): string {
+  return permits("visitor", bay, catalog) ? "visitor" : "owner";
 }
 
-function denialReason(bay: BayCode): string {
-  return `${passWord(bay).toUpperCase()} PASS REQUIRED`;
+function denialReason(catalog: Catalog, bay: BayCode): string {
+  return `${passWord(catalog, bay).toUpperCase()} PASS REQUIRED`;
 }
 
-function cartridgeName(bay: BayCode, access: AccessRole): string {
-  const state = permits(access, bay)
+function cartridgeName(
+  catalog: Catalog,
+  bay: BayCode,
+  access: AccessRole,
+): string {
+  const state = permits(access, bay, catalog)
     ? "ready"
-    : `${passWord(bay)} pass required`;
-  return `Select ${TITLE[bay]}, bay ${bay}, ${state}`;
+    : `${passWord(catalog, bay)} pass required`;
+  return `Select ${entryOf(catalog, bay)?.title ?? bay}, bay ${bay}, ${state}`;
 }
 
 function triesLeft(left: number): string {
@@ -78,25 +83,25 @@ function screenCopy(state: MachineState, model: MachineModel): ScreenCopy {
       return { main: "DENIED", sub: "A PASS IS REQUIRED" };
     }
     return {
-      main: `${state.selection} DENIED, ${denialReason(state.selection)}`,
+      main: `${state.selection} DENIED, ${denialReason(state.catalog, state.selection)}`,
       sub: "TAP YOUR PASS TO UNLOCK IT",
     };
   }
   if (state.status === "dispensing" && state.selection !== null) {
     return {
-      main: `${state.selection} RELEASING, ${PRODUCT[state.selection]}`,
+      main: `${state.selection} RELEASING, ${productOf(state.catalog, state.selection)}`,
       sub: "WAIT FOR THE DELIVERY BAY",
     };
   }
   if (state.tray !== null) {
     return {
-      main: `${state.tray} DELIVERED, ${PRODUCT[state.tray]}`,
+      main: `${state.tray} DELIVERED, ${productOf(state.catalog, state.tray)}`,
       sub: "TAKE IT FROM THE DELIVERY BAY",
     };
   }
   if (state.status === "selected" && state.selection !== null) {
     return {
-      main: `${state.selection} SELECTED, ${PRODUCT[state.selection]}`,
+      main: `${state.selection} SELECTED, ${productOf(state.catalog, state.selection)}`,
       sub: "PRESS GO TO RELEASE IT",
     };
   }
@@ -187,7 +192,7 @@ export function render(
   }
 
   const lit = new Map(model.items.map((item) => [item.code, item.lit]));
-  for (const bay of BAYS) {
+  for (const { code: bay } of state.catalog) {
     const backlight = root.querySelector<HTMLElement>(
       `[data-bay="${bay}"] [data-backlight]`,
     );
@@ -196,7 +201,10 @@ export function render(
     }
     root
       .querySelector(`[data-cartridge="${bay}"]`)
-      ?.setAttribute("aria-label", cartridgeName(bay, state.access));
+      ?.setAttribute(
+        "aria-label",
+        cartridgeName(state.catalog, bay, state.access),
+      );
   }
 
   const copy = screenCopy(state, model);
@@ -207,25 +215,35 @@ export function render(
 
   const releasing = state.status === "dispensing" ? state.selection : null;
   const falling = root.querySelector<HTMLElement>("[data-falling]");
-  if (falling !== null) falling.dataset.falling = releasing ?? "none";
+  if (falling !== null) {
+    falling.dataset.falling = releasing ?? "none";
+    falling.dataset.fallingShape = shapeOf(state.catalog, releasing);
+  }
   write(
     root,
     "[data-falling-name]",
-    releasing === null ? "" : PRODUCT[releasing],
+    releasing === null ? "" : productOf(state.catalog, releasing),
   );
 
   const tray = root.querySelector<HTMLElement>("[data-tray]");
-  if (tray !== null) tray.dataset.tray = state.tray ?? "none";
+  if (tray !== null) {
+    tray.dataset.tray = state.tray ?? "none";
+    tray.dataset.trayShape = shapeOf(state.catalog, state.tray);
+  }
   write(root, "[data-tray-code]", state.tray ?? "");
   write(
     root,
     "[data-tray-name]",
-    state.tray === null ? "" : PRODUCT[state.tray],
+    state.tray === null ? "" : productOf(state.catalog, state.tray),
   );
 
   const transfer = root.querySelector<HTMLElement>("[data-transfer]");
   if (transfer !== null) {
     transfer.dataset.transfer = state.screenTransfer ?? "none";
+    transfer.dataset.transferShape = shapeOf(
+      state.catalog,
+      state.screenTransfer,
+    );
     if (transfer instanceof HTMLDialogElement) {
       const bridging = state.screenTransfer !== null;
       if (bridging && !transfer.open) transfer.showModal();
@@ -235,7 +253,9 @@ export function render(
   write(
     root,
     "[data-transfer-name]",
-    state.screenTransfer === null ? "PAWL" : PRODUCT[state.screenTransfer],
+    state.screenTransfer === null
+      ? "PAWL"
+      : productOf(state.catalog, state.screenTransfer),
   );
 
   write(root, "[data-terminal-access]", PASS_WORD[state.access]);

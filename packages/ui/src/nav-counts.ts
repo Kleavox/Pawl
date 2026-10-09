@@ -1,11 +1,9 @@
 export type Severity = "warn" | "danger";
 
-export type AttentionKind = "abuse-report" | "link-expiring";
-
 export type AttentionAge = "elapsed" | "remaining";
 
 export interface AttentionItem {
-  kind: AttentionKind;
+  kind: string;
   severity: Severity;
   title: string;
   detail: string;
@@ -14,64 +12,46 @@ export interface AttentionItem {
   href: string;
 }
 
+type Block = { count: number; severity: Severity | null };
+
 export interface Overview {
   role: "ADMIN" | "USER";
-  pass: { devices: number } | null;
-  link: {
-    active: number;
-    files: number;
-    reported: number;
-    expiringSoon: number;
-  } | null;
+  tools: Record<string, Block | "locked" | null>;
   attention: AttentionItem[];
 }
 
-export type Indicator =
-  "locked" | "unknown" | { count: number; severity: Severity | null };
+export type Indicator = "locked" | "unknown" | Block;
 
 export interface NavCounts {
   role: "ADMIN" | "USER" | null;
-  indicators: {
-    pass: Indicator;
-    link: Indicator;
-  };
+  indicators: Record<string, Indicator>;
 }
-
-export const UNREADABLE_COUNTS: NavCounts = {
-  role: null,
-  indicators: { pass: "unknown", link: "unknown" },
-};
 
 const CACHE_KEY = "pawl:overview";
 const CACHE_MS = 60_000;
 
-function indicatorFor(
-  block: { count: number } | null,
-  severity: Severity | null,
-  permitted: boolean,
-): Indicator {
-  if (!permitted) return "locked";
-  if (block === null) return "unknown";
-  return { count: block.count, severity };
+export function unreadableCounts(keys: readonly string[]): NavCounts {
+  return {
+    role: null,
+    indicators: Object.fromEntries(keys.map((key) => [key, "unknown"])),
+  };
 }
 
-export function navCountsFrom(overview: Overview): NavCounts {
+function indicatorFor(block: Block | "locked" | null | undefined): Indicator {
+  if (block === "locked") return "locked";
+  if (block === null || block === undefined) return "unknown";
+  return { count: block.count, severity: block.severity };
+}
+
+export function navCountsFrom(
+  overview: Overview,
+  keys: readonly string[],
+): NavCounts {
   return {
     role: overview.role,
-    indicators: {
-      pass: indicatorFor(
-        overview.pass ? { count: overview.pass.devices } : null,
-        null,
-        true,
-      ),
-      link: indicatorFor(
-        overview.link ? { count: overview.link.active } : null,
-        overview.link !== null && overview.link.expiringSoon > 0
-          ? "warn"
-          : null,
-        true,
-      ),
-    },
+    indicators: Object.fromEntries(
+      keys.map((key) => [key, indicatorFor(overview.tools[key])]),
+    ),
   };
 }
 
@@ -83,25 +63,19 @@ export function writeCache(overview: Overview, now: number = Date.now()): void {
   }
 }
 
-function isBlockOrNull(value: unknown): boolean {
-  return value === null || typeof value === "object";
-}
-
 function isOverviewShape(value: unknown): value is Overview {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as {
     role?: unknown;
     attention?: unknown;
-    pass?: unknown;
-    link?: unknown;
+    tools?: unknown;
   };
   return (
     (candidate.role === "ADMIN" || candidate.role === "USER") &&
     Array.isArray(candidate.attention) &&
-    "pass" in candidate &&
-    "link" in candidate &&
-    isBlockOrNull(candidate.pass) &&
-    isBlockOrNull(candidate.link)
+    typeof candidate.tools === "object" &&
+    candidate.tools !== null &&
+    !Array.isArray(candidate.tools)
   );
 }
 
@@ -138,7 +112,9 @@ export async function loadOverview(): Promise<Overview | null> {
   }
 }
 
-export async function loadNavCounts(): Promise<NavCounts> {
+export async function loadNavCounts(
+  keys: readonly string[],
+): Promise<NavCounts> {
   const overview = await loadOverview();
-  return overview ? navCountsFrom(overview) : UNREADABLE_COUNTS;
+  return overview ? navCountsFrom(overview, keys) : unreadableCounts(keys);
 }

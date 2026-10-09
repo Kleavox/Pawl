@@ -8,7 +8,6 @@ const REDUCED_MOTION_MS = 40;
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 const REQUEST_KEY = "pawl:machine-request";
-const BAY_CODES: readonly BayCode[] = ["1", "3"];
 
 function prefersReducedMotion(): boolean {
   try {
@@ -47,10 +46,12 @@ export function rememberRequest(bay: BayCode): boolean {
   }
 }
 
-export function readRememberedRequest(): BayCode | null {
+export function readRememberedRequest(
+  codes: readonly BayCode[],
+): BayCode | null {
   try {
     const stored = globalThis.sessionStorage.getItem(REQUEST_KEY);
-    return BAY_CODES.find((code) => code === stored) ?? null;
+    return codes.find((code) => code === stored) ?? null;
   } catch {
     return null;
   }

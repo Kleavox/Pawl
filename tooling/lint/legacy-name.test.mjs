@@ -66,3 +66,10 @@ test("ignores the abbreviation inside a longer token such as an integrity hash",
   });
   assert.deepEqual(findLegacyNames(root, ["pnpm-lock.yaml"]), []);
 });
+
+test("finds the old name split by markup", () => {
+  const root = tree({
+    "page.html": `<span>${OLD.slice(0, 5)}<b>${OLD.slice(5)}</b></span>`,
+  });
+  assert.equal(findLegacyNames(root, ["page.html"]).length, 1);
+});

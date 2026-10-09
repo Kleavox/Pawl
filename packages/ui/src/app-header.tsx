@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { LINK_ORIGIN, PASS_ORIGIN } from "./origins";
+import type { Tool } from "@pawl/registry";
+
 import type { NavCounts } from "./nav-counts";
 import { displayFor, nameFor, padClass, severityFor } from "./indicator-view";
 
@@ -7,30 +8,29 @@ export interface AppHeaderProps {
   product?: string;
   rootOrigin?: string;
   counts?: NavCounts | null;
+  tools: Tool[];
+  siteName: string;
   children?: ReactNode;
 }
-
-const TOOLS = [
-  { key: "pass", label: "pawl", origin: PASS_ORIGIN, noun: "devices" },
-  { key: "link", label: "link", origin: LINK_ORIGIN, noun: "active routes" },
-] as const;
 
 export function AppHeader({
   product,
   rootOrigin = "/",
   counts,
+  tools,
+  siteName,
   children,
 }: AppHeaderProps) {
   const current = product?.toLowerCase();
-  const brand = TOOLS.find((tool) => tool.key === current)?.label ?? current;
+  const brand = tools.find((tool) => tool.key === current)?.label ?? current;
   return (
     <header className="pw-header">
       <a className="pw-brand" href={rootOrigin}>
-        pawl
+        {siteName.toLowerCase()}
         {current ? <b>/{brand}</b> : null}
       </a>
-      <nav className="pw-nav" aria-label="Pawl tools">
-        {TOOLS.map((tool) => {
+      <nav className="pw-nav" aria-label={`${siteName} tools`}>
+        {tools.map((tool) => {
           const active = current === tool.key;
           const indicator = counts ? counts.indicators[tool.key] : undefined;
           const display = displayFor(indicator);

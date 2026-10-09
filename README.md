@@ -5,32 +5,156 @@ domain. This repository holds both Cloudflare Workers, their browser application
 TypeScript packages, the Rust/WASM cryptography module, and their build and
 deployment tooling.
 
-Short links and Drops live in the sibling repository `desmyx`; monitoring lives in `krynodes`. The Portfolio is
-maintained in a separate repository and is only reached by Gateway through a
-Cloudflare service binding.
+The apps it fronts live in their own repositories and are registered through a
+manifest; see [Registering apps](#registering-apps).
 
 ## Runtime architecture
 
 ```text
 Browser
   |
-Gateway Worker ----- PORTFOLIO binding ---- external Portfolio Worker
+Gateway Worker ----- APP_<KEY> bindings ---- every app in the manifest
   | PASS binding
-  | LINK binding --------------------------- Link Worker, deployed from desmyx
   |
   +-- Pass Worker ---- D1 + session KV
 ```
 
-| Runtime | Responsibility                                                                      |
-| ------- | ----------------------------------------------------------------------------------- |
-| Gateway | Public entry point, canonical routing, static Web app, and explicit service proxies |
-| Pass    | Accounts, verifier-only authentication, sessions, OAuth, and account lifecycle      |
+| Runtime | Responsibility                                                                                  |
+| ------- | ----------------------------------------------------------------------------------------------- |
+| Gateway | Public entry point, routing by the manifest, the static cabinet, `/api/estate`                  |
+| Pass    | Accounts, verifier-only authentication, sessions, the OpenID Connect provider, account deletion |
 
-A service binding resolves by Worker name, not by source tree, so the `LINK`
-binding reaches the Worker desmyx deploys from its own repository.
+Pawl names no app of its own. Every app it fronts arrives through a manifest:
+the gateway binds each one as `APP_<KEY>`, reaches it on `<key>.internal`, and
+the cabinet, the header and the footer are built from the same list. A service
+binding resolves by Worker name, so an app can live in any repository.
 
-Gateway routing is explicit. Adding a public API prefix requires registering its
-owner deliberately; there is no catch-all proxy to another Worker.
+## Registering apps
+
+The manifest is one JSON document:
+
+```json
+{
+  "site": { "name": "Example", "reservedSlugs": ["blog"] },
+  "apps": [
+    {
+      "key": "notes",
+      "label": "notes",
+      "title": "Notes",
+      "subdomain": "notes",
+      "service": "notes",
+      "proxy": ["/api/notes/"],
+      "apex": { "resolve": "/internal/resolve/", "fileSlugPrefix": "n_" },
+      "estate": true,
+      "purge": true,
+      "header": { "noun": "notes" },
+      "access": "visitor",
+      "local": { "port": 8790 }
+    },
+    {
+      "key": "docs",
+      "label": "docs",
+      "title": "Docs",
+      "subdomain": "docs",
+      "service": "docs",
+      "local": { "port": 8791 }
+    }
+  ]
+}
+```
+
+| Field                | Rule                                                                                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `site.name`          | 1–32 printable characters; the cabinet's wordmark, the header brand and the legal pages' operator name                                                                                       |
+| `site.reservedSlugs` | optional, each `[a-z0-9-]{1,32}`; added to the apex slug reservation                                                                                                                         |
+| `key`                | `^[a-z][a-z0-9]{1,15}$`, unique, not `gateway`, `pass`, `pawl`. Binding `APP_<KEY>`, internal host `<key>.internal`                                                                          |
+| `label`              | `^[a-z0-9-]{1,12}$`; printed on the cartridge in capitals. Four characters or fewer makes a tall cartridge, more makes a wide one                                                            |
+| `title`              | 1–32 printable characters                                                                                                                                                                    |
+| `subdomain`          | optional, `^[a-z][a-z0-9-]{0,30}$`, unique, not `paw`, `pass`, `www`. An app with a subdomain takes a bay; at most nine                                                                      |
+| `service`            | Worker name suffix (`<WORKER_PREFIX>-<service>`); required when `subdomain`, `proxy`, `apex`, `estate` or `purge` is set                                                                     |
+| `proxy`              | prefixes starting and ending with `/`, unique and non-overlapping, never under `/api/estate`, `/api/session`, `/api/logout`, `/api/auth/`, `/oauth/`, `/.well-known/`, `/health`, `/assets/` |
+| `apex`               | at most one app; `resolve` starts and ends with `/`; `fileSlugPrefix` optional, like `n_`                                                                                                    |
+| `estate`, `purge`    | the app implements the contract below                                                                                                                                                        |
+| `header`             | optional `{ noun }`, requires `estate`; the app appears in the shared header with its count                                                                                                  |
+| `access`             | optional `public` (default), `visitor` or `owner`: who may take the app's bay                                                                                                                |
+| `bay`                | optional pin `"1"`–`"9"`. Bays are placed automatically from the key; `pawl manifest pin` writes the current placement so a later app never moves an earlier one                             |
+| `local`              | optional `{ port }` or `{ vitePort }`, unique, not 8786, 8787, 3000, 3001                                                                                                                    |
+
+Unknown fields are refused, so a typo is an error rather than a missing app.
+
+Where the manifest lives:
+
+- **Locally:** `estate.json` at the repository root. It is gitignored; never
+  commit a deployment's manifest.
+- **In CI:** `tooling/e2e/fixture/estate.json`, which registers two invented
+  apps that the end-to-end suite boots as a fixture Worker.
+- **In deploy:** the GitHub Actions variable `ESTATE_MANIFEST` (Settings →
+  Secrets and variables → Actions → Variables), holding the whole JSON
+  document. `deploy-config render` refuses to run without it.
+
+## The app contract
+
+Every call goes through the app's service binding to `<key>.internal`, carrying
+the viewer's `cookie` and `x-pawl-public-host` headers.
+
+**Estate**, `GET /.well-known/pawl/estate`:
+
+```json
+{
+  "count": 12,
+  "severity": "warn",
+  "attention": [
+    {
+      "kind": "item-expiring",
+      "severity": "warn",
+      "title": "/abc",
+      "detail": "report.pdf, 4 downloads",
+      "since": "2026-10-09T10:00:00.000Z",
+      "age": "remaining",
+      "href": "https://notes.example.test/"
+    }
+  ]
+}
+```
+
+- `count` is a non-negative integer; `severity` is `warn`, `danger` or `null`.
+- `401` or `403` means the viewer may not see the app: its indicator is locked.
+- Any other status, a network failure or a wrong-shaped body means unknown,
+  never zero.
+- An attention item whose `href` is not on the app's own public origin is
+  dropped. Build it on the host `x-pawl-public-host` names.
+
+**Purge**, `POST /.well-known/pawl/purge-user?id=<account id>`: answer `2xx`
+once the app holds nothing more for that account. Pass deletes an account only
+after every `purge: true` app has answered `2xx`. Answer it only on
+`<key>.internal`.
+
+**Apex short links:** for the one `apex` app, the gateway forwards an unreserved
+apex path segment to `http://<key>.internal<resolve><slug>` with
+`x-pawl-public-host` and `x-pawl-trace-id`. A `404` falls through to the
+static site; a slug starting with `fileSlugPrefix` that resolves to `404` is
+then fetched from the app as a page.
+
+**Proxies and subdomains:** a request on `<subdomain>.<root>` is handed to the
+app unchanged; a request under a `proxy` prefix on the root host is handed to
+it with its host rewritten to `<key>.internal`.
+
+An app that serves static assets first must let `/.well-known/*` reach its
+Worker (Wrangler's `assets.run_worker_first`).
+
+## Local development with apps
+
+Render local Worker configs from your manifest, then start the Workers with
+them:
+
+```bash
+pnpm --filter @pawl/deploy exec deploy-config render-local --manifest estate.json --out .wrangler/local
+pnpm exec wrangler dev --config .wrangler/local/pass.json --port 8787 --persist-to workers/pass/.wrangler/state
+pnpm exec wrangler dev --config .wrangler/local/gateway.json --port 8786
+```
+
+The rendered pass config carries a throwaway signing key made for that run.
+Start each app's own Worker on the `local.port` its manifest entry names.
 
 ## Repository layout
 
@@ -63,7 +187,6 @@ invalidation, and cross-service account deletion.
 - Rust stable with the `wasm32-unknown-unknown` target
 - `wasm-pack` 0.15
 - Chromium installed through Playwright for E2E tests
-- `desmyx` checked out beside this repository, for E2E tests only
 
 ## Setup
 
@@ -113,23 +236,28 @@ otherwise.
 
 ## Commands
 
-| Command                                 | Purpose                                                                 |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| `pnpm build`                            | Build all TypeScript applications, Workers, and packages                |
-| `pnpm test`                             | Run workspace unit tests                                                |
-| `pnpm typecheck`                        | Type-check runtime and tooling interfaces with TypeScript 7             |
-| `pnpm lint`                             | Verify formatting, unused files and exports, and async error handling   |
-| `pnpm lint:async`                       | Reject async event handlers that discard their failure                  |
-| `pnpm lint:ports`                       | Reject a Worker dev port that drifts from `packages/topology`           |
-| `pnpm format:check`                     | Verify repository formatting                                            |
-| `pnpm native:check`                     | Validate Rust formatting and tests                                      |
-| `pnpm check`                            | Run the complete static, unit, native, and build verification gate      |
-| `pnpm e2e`                              | Reset local Wrangler state and test Gateway, Pass, and Link in Chromium |
-| `pnpm health:check`                     | Verify deployed public service health endpoints                         |
-| `pnpm admin:promote -- --email <email>` | Promote an existing verified account to admin                           |
+| Command                                                             | Purpose                                                                      |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `pnpm build`                                                        | Build all TypeScript applications, Workers, and packages                     |
+| `pnpm test`                                                         | Run workspace unit tests                                                     |
+| `pnpm typecheck`                                                    | Type-check runtime and tooling interfaces with TypeScript 7                  |
+| `pnpm lint`                                                         | Verify formatting, unused files and exports, and async error handling        |
+| `pnpm lint:async`                                                   | Reject async event handlers that discard their failure                       |
+| `pnpm lint:ports`                                                   | Reject a Worker dev port that drifts from `packages/topology`                |
+| `pnpm format:check`                                                 | Verify repository formatting                                                 |
+| `pnpm native:check`                                                 | Validate Rust formatting and tests                                           |
+| `pnpm check`                                                        | Run the complete static, unit, native, and build verification gate           |
+| `pnpm e2e`                                                          | Reset local Wrangler state and test Gateway, Pass and the fixture apps       |
+| `pnpm health:check`                                                 | Verify deployed public service health endpoints                              |
+| `pnpm pawl keygen`                                                  | Make the provider signing key and pairwise subject secret, printed once      |
+| `pnpm pawl manifest check estate.json`                              | Validate a manifest and print where each app sits in the cabinet             |
+| `pnpm pawl manifest pin estate.json`                                | Write the current bay placement into the manifest so it never moves          |
+| `pnpm admin:client -- --id <id> --name <name> --redirect-uri <uri>` | Register an OpenID Connect client; a confidential one prints its secret once |
+| `pnpm admin:promote -- --email <email>`                             | Promote an existing verified account to admin                                |
 
-`pnpm e2e` boots the Link Worker from `../desmyx`. It refuses to start when that
-folder is missing rather than passing by not testing.
+`pnpm e2e` registers two fixture apps from `tooling/e2e/fixture/estate.json` and
+boots them as a fixture Worker. Each Worker has a health check, so the run stops
+before any test when one of them is down rather than passing by not testing.
 
 Authentication protocol changes must pass both verification gates:
 

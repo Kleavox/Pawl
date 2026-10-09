@@ -5,7 +5,7 @@ import { consumeCode, issueCode, type CodeInput } from "./codes";
 import { migratedDb, seedClient, seedUser, type TestDb } from "./db.testkit";
 
 const input: CodeInput = {
-  clientId: "desmyx",
+  clientId: "notes",
   userId: "user-1",
   redirectUri: "https://des.product.test/callback",
   codeChallenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
@@ -20,7 +20,7 @@ beforeEach(() => {
   db = migratedDb();
   seedUser(db, { id: "user-1", email: "owner@product.test" });
   seedClient(db, {
-    id: "desmyx",
+    id: "notes",
     redirectUris: [input.redirectUri],
     firstParty: true,
   });
@@ -42,7 +42,7 @@ describe("issueCode", () => {
       .prepare(
         `INSERT INTO oauth_codes
          (code_hash, client_id, user_id, redirect_uri, code_challenge, scopes, expires_at)
-         VALUES ('old', 'desmyx', 'user-1', 'x', 'y', '[]', '2020-01-01T00:00:00.000Z')`,
+         VALUES ('old', 'notes', 'user-1', 'x', 'y', '[]', '2020-01-01T00:00:00.000Z')`,
       )
       .run();
     await issueCode(env, input);
@@ -61,7 +61,7 @@ describe("consumeCode", () => {
     expect(consumed.kind).toBe("valid");
     if (consumed.kind !== "valid") return;
     expect(consumed.code).toMatchObject({
-      client_id: "desmyx",
+      client_id: "notes",
       user_id: "user-1",
       redirect_uri: input.redirectUri,
       code_challenge: input.codeChallenge,
@@ -77,7 +77,7 @@ describe("consumeCode", () => {
     expect(again.kind).toBe("replayed");
     if (again.kind !== "replayed") return;
     expect(again.code).toMatchObject({
-      client_id: "desmyx",
+      client_id: "notes",
       user_id: "user-1",
     });
   });

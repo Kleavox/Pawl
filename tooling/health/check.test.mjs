@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { test } from "node:test";
 
-test("passes against healthy service responses", async (context) => {
+test("passes when Pawl's own two Workers are healthy, asking no app", async (context) => {
   const server = createServer((request, response) => {
     const path = request.url;
 
@@ -17,23 +17,6 @@ test("passes against healthy service responses", async (context) => {
     if (path === "/pass/api/oauth/providers") {
       return json(response, { google: false, github: false });
     }
-    if (path === "/link/api/session") {
-      return json(response, { authenticated: false });
-    }
-    if (path === "/link/api/drop/session") {
-      return json(response, {
-        authenticated: false,
-        policy: { maxFileBytes: 1, retentionOptions: [] },
-      });
-    }
-    if (path === "/portfolio/health") {
-      return json(response, { service: "portfolio", status: "ok" });
-    }
-    if (path === "/gateway/f_public-health-check") {
-      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      return response.end("<!doctype html>");
-    }
-
     response.writeHead(404);
     return response.end();
   });
@@ -52,8 +35,6 @@ test("passes against healthy service responses", async (context) => {
       APP_ROOT_DOMAIN: "example.com",
       GATEWAY_ORIGIN: `${origin}/gateway`,
       PASS_ORIGIN: `${origin}/pass`,
-      LINK_ORIGIN: `${origin}/link`,
-      PORTFOLIO_ORIGIN: `${origin}/portfolio`,
       HEALTH_ATTEMPTS: "1",
       HEALTH_DELAY_MS: "0",
     },

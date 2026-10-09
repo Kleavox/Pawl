@@ -3,5 +3,5 @@
   "compilerOptions": {
     "lib": ["ES2024", "DOM"]
   },
-  "include": ["playwright.config.ts", "tests"]
+  "include": ["playwright.config.ts", "tests", "fixture"]
 }

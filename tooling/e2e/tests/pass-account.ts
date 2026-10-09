@@ -25,6 +25,17 @@ export function passSql(command: string): void {
   );
 }
 
+export function passQuery(command: string): Record<string, unknown>[] {
+  const output = execSync(
+    `pnpm exec wrangler d1 execute local-pass --local --json --command "${command}"`,
+    { cwd: passDir, stdio: "pipe" },
+  ).toString();
+  const parsed = JSON.parse(output.slice(output.indexOf("["))) as {
+    results?: Record<string, unknown>[];
+  }[];
+  return parsed[0]?.results ?? [];
+}
+
 export function clearRateLimits(): void {
   let listed = "";
   try {

@@ -1,6 +1,6 @@
 import type { Identity } from "@pawl/core";
-import { INTERNAL_URLS } from "@pawl/config";
 import type { AccountCredential } from "@pawl/protocol";
+import { EMPTY_MANIFEST, registryFor } from "@pawl/registry";
 
 import type { Env } from "../env";
 import { writeAuditEvent } from "../lib/audit";
@@ -89,18 +89,25 @@ export function createAccountLifecycle(env: Env): AccountLifecycle {
     },
 
     async delete(input) {
-      if (!env.LINK) return { kind: "purge_failed" };
-
-      let response: Response;
-      try {
-        response = await env.LINK.fetch(
-          `${INTERNAL_URLS.LINK_PURGE}?id=${input.userId}`,
-          { method: "POST" },
-        );
-      } catch {
-        return { kind: "purge_failed" };
-      }
-      if (!response.ok) return { kind: "purge_failed" };
+      const targets = registryFor(
+        env.ESTATE_MANIFEST ?? EMPTY_MANIFEST,
+      ).purgeTargets();
+      const answers = await Promise.all(
+        targets.map(async (target) => {
+          const fetcher = env[target.binding] as Fetcher | undefined;
+          if (!fetcher || typeof fetcher.fetch !== "function") return false;
+          try {
+            const response = await fetcher.fetch(
+              `http://${target.host}/.well-known/pawl/purge-user?id=${encodeURIComponent(input.userId)}`,
+              { method: "POST" },
+            );
+            return response.ok;
+          } catch {
+            return false;
+          }
+        }),
+      );
+      if (answers.some((ok) => !ok)) return { kind: "purge_failed" };
 
       await audit(env, input.request, input.userId, "account_deleted");
       await env.DB.prepare(`DELETE FROM users WHERE id = ?`)

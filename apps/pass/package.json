@@ -19,6 +19,7 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@pawl/registry": "workspace:*",
     "@pawl/typescript": "workspace:*",
     "@pawl/vite-config": "workspace:*",
     "@types/react": "catalog:",

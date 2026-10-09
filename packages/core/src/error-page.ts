@@ -67,7 +67,7 @@ export function renderErrorPage(options: ErrorPageOptions): string {
   const service = escapeHtml(options.service ?? "Pawl");
   const title = escapeHtml(options.title ?? fallback.title);
   const message = escapeHtml(options.message ?? fallback.message);
-  const wordmark = `KLEAV<span>OX</span>`;
+  const wordmark = `PA<span>WL</span>`;
   const code = options.code
     ? `<div class="pw-error-code" data-code="${escapeHtml(options.code)}">${escapeHtml(options.code)}</div>`
     : "";

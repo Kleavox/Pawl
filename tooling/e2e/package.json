@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e": "node --test repos.test.mjs && node prepare.mjs && playwright test",
+    "e2e": "node prepare.mjs && playwright test",
     "e2e:install": "playwright install chromium",
     "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1"
   },

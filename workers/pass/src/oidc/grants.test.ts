@@ -12,7 +12,7 @@ import {
   rotateRefreshToken,
 } from "./grants";
 
-const CLIENT = "krynodes-access";
+const CLIENT = "docs-access";
 const SUBJECT = "pairwise-1";
 
 let db: TestDb;

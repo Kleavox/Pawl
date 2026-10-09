@@ -1,17 +1,19 @@
-import { LINK_ORIGIN, PASS_ORIGIN } from "./origins";
+import type { Tool } from "@pawl/registry";
+
 import type { NavCounts } from "./nav-counts";
 import { displayFor, nameFor, padClass, severityFor } from "./indicator-view";
 
-const TOOLS = [
-  { key: "pass", label: "pawl", origin: PASS_ORIGIN, noun: "devices" },
-  { key: "link", label: "link", origin: LINK_ORIGIN, noun: "active routes" },
-] as const;
-
 export function renderAppHeader(
   target: HTMLElement,
-  options: { product?: string; rootOrigin?: string; counts?: NavCounts | null },
+  options: {
+    product?: string;
+    rootOrigin?: string;
+    counts?: NavCounts | null;
+    tools: Tool[];
+    siteName: string;
+  },
 ): void {
-  const { product, rootOrigin = "/", counts } = options;
+  const { product, rootOrigin = "/", counts, tools, siteName } = options;
   const current = product?.toLowerCase();
 
   target.className = "pw-header";
@@ -20,19 +22,19 @@ export function renderAppHeader(
   const brand = document.createElement("a");
   brand.className = "pw-brand";
   brand.href = rootOrigin;
-  brand.append("pawl");
+  brand.append(siteName.toLowerCase());
   if (current) {
     const b = document.createElement("b");
-    b.textContent = `/${TOOLS.find((tool) => tool.key === current)?.label ?? current}`;
+    b.textContent = `/${tools.find((tool) => tool.key === current)?.label ?? current}`;
     brand.append(b);
   }
   target.append(brand);
 
   const nav = document.createElement("nav");
   nav.className = "pw-nav";
-  nav.setAttribute("aria-label", "Pawl tools");
+  nav.setAttribute("aria-label", `${siteName} tools`);
 
-  for (const tool of TOOLS) {
+  for (const tool of tools) {
     const active = current === tool.key;
     const indicator = counts ? counts.indicators[tool.key] : undefined;
     const display = displayFor(indicator);

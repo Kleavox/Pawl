@@ -7,12 +7,6 @@ describe("public origins", () => {
     expect(getPublicOrigin("https://example.test")).toBe(
       "https://example.test",
     );
-    expect(getPublicOrigin("https://example.test", "link")).toBe(
-      "https://link.example.test",
-    );
-    expect(getPublicOrigin("https://example.test", "port")).toBe(
-      "https://port.example.test",
-    );
     expect(
       getPublicOrigin("https://example.test", PUBLIC_SUBDOMAINS.pass),
     ).toBe("https://paw.example.test");
@@ -24,22 +18,19 @@ describe("local origins", () => {
     expect(
       getPublicOrigin("http://127.0.0.1:8786", PUBLIC_SUBDOMAINS.pass),
     ).toBe("http://127.0.0.1:8787");
-    expect(getPublicOrigin("http://127.0.0.1:8786", "link")).toBe(
-      "http://127.0.0.1:8788",
-    );
   });
 
   it("answers with vite ports when the root is the gateway vite server", () => {
-    expect(getPublicOrigin("http://localhost:3000", "link")).toBe(
-      "http://localhost:3002",
-    );
+    expect(
+      getPublicOrigin("http://localhost:3000", PUBLIC_SUBDOMAINS.pass),
+    ).toBe("http://localhost:3001");
   });
 
   it("treats every loopback host the same, and keeps the host it was given", () => {
     for (const host of ["localhost", "127.0.0.1", "127.0.0.2", "[::1]"]) {
-      expect(getPublicOrigin(`http://${host}:8786`, "link")).toBe(
-        `http://${host}:8788`,
-      );
+      expect(
+        getPublicOrigin(`http://${host}:8786`, PUBLIC_SUBDOMAINS.pass),
+      ).toBe(`http://${host}:8787`);
     }
   });
 
@@ -49,37 +40,26 @@ describe("local origins", () => {
       "http://localhost:3000",
       "http://localhost:8786",
     ]) {
-      for (const subdomain of [PUBLIC_SUBDOMAINS.pass, "link", "port"]) {
-        const resolved = new URL(getPublicOrigin(root, subdomain));
-        expect(resolved.hostname).toBe(new URL(root).hostname);
-        expect(resolved.protocol).toBe("http:");
-      }
+      const resolved = new URL(getPublicOrigin(root, PUBLIC_SUBDOMAINS.pass));
+      expect(resolved.hostname).toBe(new URL(root).hostname);
+      expect(resolved.protocol).toBe("http:");
     }
-  });
-
-  it("sends portfolio to its vite server, the only local address it has", () => {
-    expect(getPublicOrigin("http://127.0.0.1:8786", "port")).toBe(
-      "http://127.0.0.1:3004",
-    );
-    expect(getPublicOrigin("http://localhost:3000", "port")).toBe(
-      "http://localhost:3004",
-    );
   });
 
   it("stays on the root origin when the port belongs to no known family, and says so", () => {
     const warned = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
-    expect(getPublicOrigin("http://127.0.0.1:4321", "link")).toBe(
-      "http://127.0.0.1:4321",
-    );
+    expect(
+      getPublicOrigin("http://127.0.0.1:4321", PUBLIC_SUBDOMAINS.pass),
+    ).toBe("http://127.0.0.1:4321");
     expect(warned).toHaveBeenCalledOnce();
     expect(warned.mock.calls[0]?.[0]).toContain("wrong app");
     warned.mockRestore();
   });
 
   it("stays on the root origin for a subdomain it does not know", () => {
-    expect(getPublicOrigin("http://127.0.0.1:8786", "drop")).toBe(
+    expect(getPublicOrigin("http://127.0.0.1:8786", "notes")).toBe(
       "http://127.0.0.1:8786",
     );
   });

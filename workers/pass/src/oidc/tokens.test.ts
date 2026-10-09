@@ -31,8 +31,8 @@ const headerOf = (token: string) => part(token, 0);
 const payloadOf = (token: string) => part(token, 1);
 
 const firstParty: OidcClient = {
-  id: "desmyx",
-  name: "Desmyx",
+  id: "notes",
+  name: "Notes",
   redirectUris: ["https://des.product.test/callback"],
   allowedScopes: ["openid", "email", "profile"],
   confidential: true,
@@ -42,7 +42,7 @@ const firstParty: OidcClient = {
 
 const thirdParty: OidcClient = {
   ...firstParty,
-  id: "krynodes-access",
+  id: "docs-access",
   firstParty: false,
   sector: "cloudflareaccess.com",
 };
@@ -97,12 +97,12 @@ describe("mintAccessToken", () => {
 
   it("names the client it was issued to, so userinfo can find the grant", async () => {
     const token = await mintAccessToken(env, {
-      audience: ["desmyx", "https://paw.product.test"],
+      audience: ["notes", "https://paw.product.test"],
       sub: "user-1",
       scopes: ["openid"],
-      clientId: "desmyx",
+      clientId: "notes",
     });
-    expect(payloadOf(token).client_id).toBe("desmyx");
+    expect(payloadOf(token).client_id).toBe("notes");
   });
 
   it("expires within ten minutes", async () => {
@@ -137,7 +137,7 @@ describe("mintIdToken", () => {
     });
     expect(payloadOf(token)).toMatchObject({
       iss: "https://paw.product.test",
-      aud: "desmyx",
+      aud: "notes",
       sub: "user-1",
       nonce: "n-0S6",
       email: "owner@product.test",
@@ -161,7 +161,7 @@ describe("verifyAccessToken", () => {
 
   it("accepts a token minted for the audience asking", async () => {
     const token = await mintAccessToken(env, {
-      audience: ["desmyx", issuer],
+      audience: ["notes", issuer],
       sub: "user-1",
       scopes: ["openid"],
     });

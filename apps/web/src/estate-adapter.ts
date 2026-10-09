@@ -1,7 +1,7 @@
 import { navCountsFrom } from "@pawl/ui";
 import type { NavCounts, Overview } from "@pawl/ui";
 import { permits } from "./machine/state";
-import type { AccessRole, BayCode } from "./machine/state";
+import type { AccessRole, BayCode, Catalog } from "./machine/state";
 
 export type Session = {
   authenticated: boolean;
@@ -14,9 +14,6 @@ export type MachineModel = {
   screen: string;
 };
 
-const CATALOG: BayCode[] = ["1", "3"];
-const INDICATOR_KEYS = ["pass", "link"] as const;
-
 function accessFor(session: Session): AccessRole {
   if (!session.authenticated || session.identity?.role === undefined) {
     return "guest";
@@ -26,22 +23,32 @@ function accessFor(session: Session): AccessRole {
   return "guest";
 }
 
-function itemsFor(access: AccessRole): { code: BayCode; lit: boolean }[] {
-  return CATALOG.map((code) => ({ code, lit: permits(access, code) }));
+function itemsFor(
+  access: AccessRole,
+  catalog: Catalog,
+): { code: BayCode; lit: boolean }[] {
+  return catalog.map(({ code }) => ({
+    code,
+    lit: permits(access, code, catalog),
+  }));
 }
 
-function estateFullyRead(indicators: NavCounts["indicators"]): boolean {
-  return INDICATOR_KEYS.every((key) => indicators[key] !== "unknown");
+function estateFullyRead(
+  indicators: NavCounts["indicators"],
+  keys: readonly string[],
+): boolean {
+  return keys.every((key) => indicators[key] !== "unknown");
 }
 
 function screenFor(
   access: AccessRole,
   overview: Overview | null,
   counts: NavCounts | null,
+  keys: readonly string[],
 ): string {
   if (access === "guest") return "INSERT PASS";
   if (overview === null || counts === null) return "ESTATE UNREADABLE";
-  const full = estateFullyRead(counts.indicators);
+  const full = estateFullyRead(counts.indicators, keys);
   if (overview.attention.length > 0) {
     return full
       ? `${overview.attention.length} NEED ATTENTION`
@@ -53,12 +60,14 @@ function screenFor(
 export function toMachineModel(
   session: Session,
   overview: Overview | null,
+  catalog: Catalog,
+  keys: readonly string[],
 ): MachineModel {
   const access = accessFor(session);
-  const counts = overview !== null ? navCountsFrom(overview) : null;
+  const counts = overview !== null ? navCountsFrom(overview, keys) : null;
   return {
     access,
-    items: itemsFor(access),
-    screen: screenFor(access, overview, counts),
+    items: itemsFor(access, catalog),
+    screen: screenFor(access, overview, counts, keys),
   };
 }

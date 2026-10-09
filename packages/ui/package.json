@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@pawl/core": "workspace:*",
+    "@pawl/registry": "workspace:*",
     "@pawl/topology": "workspace:*"
   },
   "peerDependencies": {

@@ -1,7 +1,7 @@
 /*
  * Pawl design tokens. The system, its reasoning, and the measured contrast
  * of every value here live in THEME.md, in the folder that holds this repository.
- * Change a value there and here in the same commit, and keep the portfolio's
+ * Change a value there and here in the same commit, and keep any app's
  * Tailwind @theme block in step.
  */
 :root {

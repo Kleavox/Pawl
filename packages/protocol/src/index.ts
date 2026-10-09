@@ -1,5 +1,19 @@
-import { isReservedSlug } from "@pawl/core";
 import { z } from "zod";
+
+const RESERVED_USERNAMES = new Set([
+  "about",
+  "account",
+  "api",
+  "assets",
+  "contact",
+  "login",
+  "pass",
+  "paw",
+  "pawl",
+  "privacy",
+  "projects",
+  "terms",
+]);
 
 const emailSchema = z
   .string()
@@ -18,7 +32,10 @@ export const usernameSchema = z
     /^[a-z0-9_]{3,20}$/u,
     "Username must be 3-20 lowercase letters, digits, or underscores.",
   )
-  .refine((value) => !isReservedSlug(value), "This username is reserved.");
+  .refine(
+    (value) => !RESERVED_USERNAMES.has(value),
+    "This username is reserved.",
+  );
 
 export const accountCredentialSchema = z
   .object({

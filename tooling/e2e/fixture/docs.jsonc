@@ -1,0 +1,17 @@
+{
+  "name": "local-docs",
+  "main": "worker.ts",
+  "compatibility_date": "2026-06-05",
+  "dev": {
+    "port": 8791,
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "APP_KEY": "docs",
+    "PUBLIC_ORIGIN": "http://127.0.0.1:8791",
+    "PROVIDER": "http://127.0.0.1:8787",
+    "CLIENT_ID": "fixture-docs",
+    "REDIRECT_URI": "http://localhost:8791/callback",
+  },
+}

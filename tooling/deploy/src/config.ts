@@ -1,3 +1,7 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { registryFor, type Registry } from "@pawl/registry";
 import { COMPATIBILITY_DATE, publicHost, workerName } from "@pawl/topology";
 
 export type DomainMode = "none" | "canonical";
@@ -25,10 +29,32 @@ const base = {
   observability: { enabled: true },
 };
 
+function appServices(
+  registry: Registry,
+  serviceName: (service: string) => string,
+): {
+  gateway: { binding: string; service: string }[];
+  pass: { binding: string; service: string }[];
+} {
+  const bindings = registry.bindings().map(({ binding, service }) => ({
+    binding,
+    service: serviceName(service),
+  }));
+  const purged = new Set(
+    registry.purgeTargets().map((target) => target.binding),
+  );
+  return {
+    gateway: bindings,
+    pass: bindings.filter((entry) => purged.has(entry.binding)),
+  };
+}
+
 export function productionConfigs(
   env: DeployEnvironment,
   domains: DomainMode,
+  manifestJson: string,
 ): Record<string, WorkerConfig> {
+  const registry = registryFor(manifestJson);
   validateEnvironment(env);
 
   const rootDomain = normalizeDomain(env.APP_ROOT_DOMAIN);
@@ -37,10 +63,10 @@ export function productionConfigs(
   const canonical = domains === "canonical";
   const names = {
     pass: workerName(prefix, "pass"),
-    link: workerName(prefix, "link"),
-    portfolio: workerName(prefix, "portfolio"),
     gateway: workerName(prefix, "gateway"),
   };
+  const apps = appServices(registry, (service) => `${prefix}-${service}`);
+  const manifest = registry.normalized();
 
   return {
     pass: {
@@ -66,6 +92,7 @@ export function productionConfigs(
         PUBLIC_ORIGIN: `https://${publicHost(rootDomain, "pass")}`,
         ROOT_DOMAIN: rootDomain,
         FROM_EMAIL: env.AUTH_FROM_EMAIL,
+        ESTATE_MANIFEST: manifest,
       },
       kv_namespaces: [{ binding: "SESSIONS", id: env.PASS_KV_ID }],
       d1_databases: [
@@ -76,7 +103,7 @@ export function productionConfigs(
           migrations_dir: "../../workers/pass/migrations",
         },
       ],
-      services: [{ binding: "LINK", service: names.link }],
+      services: apps.pass,
       ratelimits: [
         rateLimit("AUTHORIZE_RATE_LIMIT", "3401", 30),
         rateLimit("TOKEN_RATE_LIMIT", "3402", 60),
@@ -98,6 +125,7 @@ export function productionConfigs(
       vars: {
         ENVIRONMENT: "production",
         PUBLIC_ORIGIN: rootOrigin,
+        ESTATE_MANIFEST: manifest,
       },
       assets: {
         directory: "../../apps/web/dist",
@@ -105,12 +133,95 @@ export function productionConfigs(
         not_found_handling: "none",
         run_worker_first: true,
       },
-      services: [
-        { binding: "LINK", service: names.link },
-        { binding: "PASS", service: names.pass },
-        { binding: "PORTFOLIO", service: names.portfolio },
-      ],
+      services: [{ binding: "PASS", service: names.pass }, ...apps.gateway],
       ...(canonical ? { routes: routes(rootDomain, `www.${rootDomain}`) } : {}),
+    },
+  };
+}
+
+const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
+
+function fromRoot(relative: string): string {
+  return path.join(repoRoot, relative);
+}
+
+export function localConfigs(
+  manifestJson: string,
+  signingKey: string,
+): Record<string, WorkerConfig> {
+  const registry = registryFor(manifestJson);
+  const apps = appServices(registry, (service) => `local-${service}`);
+  const manifest = registry.normalized();
+  const local = {
+    compatibility_date: COMPATIBILITY_DATE,
+    workers_dev: true,
+    preview_urls: false,
+    observability: { enabled: true },
+    rules: [{ type: "CompiledWasm", globs: ["**/*.wasm"], fallthrough: true }],
+  };
+  return {
+    pass: {
+      ...local,
+      name: "local-pass",
+      main: fromRoot("workers/pass/src/index.ts"),
+      vars: {
+        ENVIRONMENT: "development",
+        PUBLIC_ORIGIN: "http://127.0.0.1:8787",
+        ROOT_DOMAIN: "example.test",
+        FROM_EMAIL: "Example <no-reply@example.test>",
+        ESTATE_MANIFEST: manifest,
+        OIDC_SIGNING_KEY: signingKey,
+        OIDC_SUB_SECRET: "local-pairwise-secret",
+      },
+      assets: {
+        directory: fromRoot("apps/pass/dist"),
+        binding: "ASSETS",
+        not_found_handling: "single-page-application",
+        run_worker_first: [
+          "/api/*",
+          "/internal/*",
+          "/oauth/*",
+          "/.well-known/*",
+          "/health",
+          "/ready",
+        ],
+      },
+      services: [
+        ...apps.pass,
+        { binding: "GATEWAY", service: "local-gateway" },
+      ],
+      ratelimits: [
+        rateLimit("AUTHORIZE_RATE_LIMIT", "3401", 30),
+        rateLimit("TOKEN_RATE_LIMIT", "3402", 60),
+      ],
+      kv_namespaces: [
+        { binding: "SESSIONS", id: "00000000000000000000000000000000" },
+      ],
+      d1_databases: [
+        {
+          binding: "DB",
+          database_name: "local-pass",
+          database_id: "00000000-0000-0000-0000-000000000000",
+          migrations_dir: fromRoot("workers/pass/migrations"),
+        },
+      ],
+    },
+    gateway: {
+      ...local,
+      name: "local-gateway",
+      main: fromRoot("workers/gateway/src/index.ts"),
+      vars: {
+        ENVIRONMENT: "development",
+        PUBLIC_ORIGIN: "https://example.test",
+        ESTATE_MANIFEST: manifest,
+      },
+      assets: {
+        directory: fromRoot("apps/web/dist"),
+        binding: "ASSETS",
+        not_found_handling: "none",
+        run_worker_first: true,
+      },
+      services: [{ binding: "PASS", service: "local-pass" }, ...apps.gateway],
     },
   };
 }

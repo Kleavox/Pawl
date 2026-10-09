@@ -5,6 +5,7 @@ node_modules/
 .pnpm-store/
 .agents/
 .dev.vars
+/estate.json
 .env
 .env.*
 !.env.example

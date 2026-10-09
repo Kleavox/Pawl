@@ -6,7 +6,7 @@ import { localWorkerOrigin } from "@pawl/topology";
 
 const GATEWAY = localWorkerOrigin("gateway", "localhost");
 const PASS = localWorkerOrigin("pass", "localhost");
-const LINK = localWorkerOrigin("link", "localhost");
+const NOTES = "http://localhost:8790";
 
 const email = `e2e-${Date.now()}@example.com`;
 const password = "playwright-password-1";
@@ -27,7 +27,7 @@ function markEmailVerified(address: string): void {
 
 test("web home loads through the gateway", async ({ page }) => {
   await page.goto(`${GATEWAY}/`);
-  await expect(page.locator(".pw-brand")).toContainText(/pawl/i);
+  await expect(page.locator(".pw-brand")).toContainText("fixture");
   await expect(page.locator("[data-signin]")).toBeVisible();
 });
 
@@ -37,7 +37,7 @@ test("no horizontal overflow at 320px or 360px", async ({ browser }) => {
       viewport: { width, height: 740 },
     });
     const page = await context.newPage();
-    for (const url of [`${GATEWAY}/`, `${LINK}/`, `${PASS}/`]) {
+    for (const url of [`${GATEWAY}/`, `${NOTES}/`, `${PASS}/`]) {
       await page.goto(url);
       await page.waitForLoadState("networkidle");
       const overflow = await page.evaluate(

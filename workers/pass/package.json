@@ -15,8 +15,10 @@
     "@pawl/config": "workspace:*",
     "@pawl/core": "workspace:*",
     "@pawl/crypto": "workspace:*",
+    "@pawl/oidc": "workspace:*",
     "@pawl/pass-app": "workspace:*",
     "@pawl/protocol": "workspace:*",
+    "@pawl/registry": "workspace:*",
     "@pawl/worker": "workspace:*",
     "hono": "catalog:",
     "zod": "catalog:"

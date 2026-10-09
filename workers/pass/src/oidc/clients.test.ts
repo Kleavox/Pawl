@@ -10,8 +10,8 @@ import {
 } from "./clients";
 
 const client: OidcClient = {
-  id: "krynodes-access",
-  name: "Krynodes",
+  id: "docs-access",
+  name: "Docs",
   redirectUris: ["https://team.cloudflareaccess.com/cdn-cgi/access/callback"],
   allowedScopes: ["openid", "email", "profile"],
   confidential: true,

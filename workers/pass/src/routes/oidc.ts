@@ -1,9 +1,9 @@
 import type { Identity } from "@pawl/core";
 import { escapeHtml } from "@pawl/core";
 import type { Context } from "hono";
+import { pkceS256 } from "@pawl/oidc";
 
 import type { Env } from "../env";
-import { hashToken } from "../lib/crypto";
 import { claimsFor, findClaimsUser, type ClaimsUser } from "../oidc/claims";
 import {
   findClient,
@@ -304,7 +304,7 @@ async function exchangeCode(
     code.client_id !== client.id ||
     code.redirect_uri !== form.get("redirect_uri") ||
     !CODE_VERIFIER.test(verifier) ||
-    (await hashToken(verifier)) !== code.code_challenge
+    pkceS256(verifier) !== code.code_challenge
   ) {
     return tokenError(context, 400, "invalid_grant");
   }

@@ -1,0 +1,27 @@
+{
+  "site": { "name": "Fixture" },
+  "apps": [
+    {
+      "key": "notes",
+      "label": "note",
+      "title": "Notes",
+      "subdomain": "notes",
+      "service": "notes",
+      "proxy": ["/api/notes/"],
+      "apex": { "resolve": "/internal/resolve/", "fileSlugPrefix": "n_" },
+      "estate": true,
+      "purge": true,
+      "header": { "noun": "notes" },
+      "access": "visitor",
+      "local": { "port": 8790 }
+    },
+    {
+      "key": "docs",
+      "label": "manual",
+      "title": "Docs",
+      "subdomain": "docs",
+      "service": "docs",
+      "local": { "port": 8791 }
+    }
+  ]
+}

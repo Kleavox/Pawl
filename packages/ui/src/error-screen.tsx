@@ -23,7 +23,7 @@ export function ErrorScreen({
   const fallback = errorCodeCopy(code);
   return (
     <div className="pw-error">
-      <AppHeader rootOrigin={homeHref} />
+      <AppHeader rootOrigin={homeHref} tools={[]} siteName={service} />
       <main className="pw-error-body">
         <small className="pw-error-kicker">{service}</small>
         {code ? (

@@ -4,8 +4,6 @@ const EXAMPLE_DOMAIN = "example.com";
 
 export const ROOT_ORIGIN =
   import.meta.env.VITE_ROOT_ORIGIN ?? publicOrigin(EXAMPLE_DOMAIN, "gateway");
-export const LINK_ORIGIN =
-  import.meta.env.VITE_LINK_ORIGIN ?? publicOrigin(EXAMPLE_DOMAIN, "link");
 export const PASS_ORIGIN =
   import.meta.env.VITE_PASS_ORIGIN ?? publicOrigin(EXAMPLE_DOMAIN, "pass");
 export const ROOT_HOST = new URL(ROOT_ORIGIN).host;

@@ -2,9 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountConsole, mountTerminal } from "./console";
 import type { MachineHost } from "./state";
 import { initialState, reduce, type MachineEvent } from "./state";
+import { CATALOG } from "./catalog.testkit";
 
 function store(): { host: MachineHost; seen: MachineEvent[] } {
-  let state = initialState("guest");
+  let state = initialState("guest", CATALOG);
   const seen: MachineEvent[] = [];
   return {
     seen,

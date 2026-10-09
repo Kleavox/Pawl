@@ -4,6 +4,7 @@ import {
   accountCredentialSchema,
   loginRequestSchema,
   registerRequestSchema,
+  usernameSchema,
 } from "./index";
 
 const keys = {
@@ -44,5 +45,17 @@ describe("Pass protocol v1", () => {
     expect(
       accountCredentialSchema.safeParse({ ...keys, salt: "short" }).success,
     ).toBe(false);
+  });
+});
+
+describe("usernameSchema", () => {
+  it("refuses a username Pawl keeps for its own pages", () => {
+    for (const name of ["pawl", "api", "account", "login", "PRIVACY"]) {
+      expect(usernameSchema.safeParse(name).success, name).toBe(false);
+    }
+  });
+
+  it("accepts an ordinary username", () => {
+    expect(usernameSchema.safeParse("ada_lovelace").success).toBe(true);
   });
 });

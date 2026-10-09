@@ -13,7 +13,7 @@ describe("machine motion tokens", () => {
     expect(css).toMatch(/--pw-t6:\s*1400ms;/);
   });
 
-  it("adds no colour token, which would break portfolio parity", () => {
+  it("adds no colour token, which would break parity with apps that mirror the palette", () => {
     const colours = [
       ...css.matchAll(/--(?:pw|dt)-[a-z0-9-]+:\s*#[0-9a-fA-F]{3,8}\s*;/g),
     ];

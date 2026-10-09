@@ -6,7 +6,7 @@ import {
   navCountsFrom,
   renderAppHeader,
   PASS_ORIGIN,
-  UNREADABLE_COUNTS,
+  unreadableCounts,
   type NavCounts,
   type Overview,
 } from "@pawl/ui";
@@ -15,6 +15,7 @@ import { toMachineModel, type MachineModel } from "./estate-adapter";
 import { mountConsole, mountTerminal } from "./machine/console";
 import { createKeypad } from "./machine/keypad";
 import { render } from "./machine/render";
+import { SITE } from "./site";
 import {
   forgetRequest,
   readRememberedRequest,
@@ -35,7 +36,9 @@ import {
 
 type GatewaySession = { authenticated: boolean; identity?: Identity };
 
-const BAY_CODES: readonly BayCode[] = ["1", "3"];
+const CATALOG = SITE.bays;
+const TOOL_KEYS = SITE.tools.map((tool) => tool.key);
+const BAY_CODES: readonly BayCode[] = CATALOG.map((bay) => bay.code);
 const PRESSABLE = new Set([
   "0",
   "1",
@@ -54,15 +57,20 @@ const TYPING = "input, textarea, select, button, a, [contenteditable]";
 const FAULT_HOLD_MS = 2000;
 const OTP_LENGTH = 6;
 
-let model: MachineModel = toMachineModel({ authenticated: false }, null);
-let state: MachineState = initialState("guest");
+let model: MachineModel = toMachineModel(
+  { authenticated: false },
+  null,
+  CATALOG,
+  TOOL_KEYS,
+);
+let state: MachineState = initialState("guest", CATALOG);
 let otpEmail = "";
 let checking = false;
 let bridging: AbortController | null = null;
 let faultWords: string | null = null;
 let retrying = false;
 
-const keypad = createKeypad();
+const keypad = createKeypad(BAY_CODES);
 
 const terminal = document.querySelector<HTMLDialogElement>("[data-terminal]");
 const bridge = document.querySelector<HTMLDialogElement>("[data-transfer]");
@@ -139,7 +147,11 @@ const accountNode =
 
 function paintHeader(counts: NavCounts | null): void {
   if (!headerTarget) return;
-  renderAppHeader(headerTarget, { counts });
+  renderAppHeader(headerTarget, {
+    counts,
+    tools: SITE.tools,
+    siteName: SITE.site.name,
+  });
   if (accountNode) headerTarget.append(accountNode);
 }
 
@@ -148,7 +160,9 @@ function headerCounts(
   overview: Overview | null,
 ): NavCounts | null {
   if (!session.authenticated) return null;
-  return overview === null ? UNREADABLE_COUNTS : navCountsFrom(overview);
+  return overview === null
+    ? unreadableCounts(TOOL_KEYS)
+    : navCountsFrom(overview, TOOL_KEYS);
 }
 
 const account =
@@ -247,7 +261,7 @@ async function retryEstate(): Promise<void> {
       return;
     }
     const overview = session.authenticated ? await readEstate() : null;
-    model = toMachineModel(session, overview);
+    model = toMachineModel(session, overview, CATALOG, TOOL_KEYS);
     paintHeader(headerCounts(session, overview));
     paintAccount(session);
     if (model.access === "guest") {
@@ -276,7 +290,7 @@ async function dispense(bay: BayCode): Promise<void> {
 }
 
 async function resumeRemembered(): Promise<void> {
-  const bay = readRememberedRequest();
+  const bay = readRememberedRequest(BAY_CODES);
   if (bay === null) return;
   forgetRequest();
   await dispense(bay);
@@ -345,7 +359,7 @@ async function tapPass(): Promise<void> {
 async function adoptPass(identity: Identity): Promise<void> {
   const session: GatewaySession = { authenticated: true, identity };
   const overview = await readEstate();
-  model = toMachineModel(session, overview);
+  model = toMachineModel(session, overview, CATALOG, TOOL_KEYS);
   paintHeader(headerCounts(session, overview));
   paintAccount(session);
   const issued = dispatch({ type: "pass-issued", access: model.access });
@@ -581,9 +595,11 @@ async function boot(): Promise<void> {
   }
 
   const overview = session.authenticated ? await readEstate() : null;
-  model = toMachineModel(session, overview);
+  model = toMachineModel(session, overview, CATALOG, TOOL_KEYS);
   if (unread) model = { ...model, screen: "SESSION UNREADABLE" };
-  paintHeader(unread ? UNREADABLE_COUNTS : headerCounts(session, overview));
+  paintHeader(
+    unread ? unreadableCounts(TOOL_KEYS) : headerCounts(session, overview),
+  );
   paintAccount(session);
 
   if (model.access === "guest") {

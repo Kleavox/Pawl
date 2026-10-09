@@ -25,12 +25,13 @@
     "deploy:render": "node tooling/deploy/dist/cli.js render",
     "e2e": "pnpm --filter @pawl/topology build && pnpm --filter @pawl/e2e e2e",
     "health:check": "pnpm --filter @pawl/topology build && pnpm --filter @pawl/health check",
-    "admin:promote": "pnpm --filter @pawl/topology build && node tooling/deploy/promote-admin.mjs",
-    "admin:client": "pnpm --filter @pawl/deploy... build && node tooling/deploy/register-client.mjs",
+    "admin:promote": "cargo run -q -p cli -- admin promote",
+    "admin:client": "cargo run -q -p cli -- client register",
     "check": "pnpm lint && turbo run typecheck test build && pnpm native:check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "knip": "knip --no-config-hints"
+    "knip": "knip --no-config-hints",
+    "pawl": "cargo run -q -p cli --"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

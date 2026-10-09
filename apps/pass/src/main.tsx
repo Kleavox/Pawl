@@ -11,6 +11,7 @@ import { ChallengePage } from "./challenge";
 import { LinkOAuth, ResetPassword, VerifyEmail, Welcome } from "./flows";
 import { api, returnTo } from "./helpers";
 import type { Mode, OAuthProviders, SessionResponse } from "./types";
+import { SITE } from "./site";
 import { LoadingState } from "./ui";
 
 function App() {
@@ -24,7 +25,7 @@ function App() {
   const route = window.location.pathname;
 
   useEffect(() => {
-    void loadNavCounts().then(setCounts);
+    void loadNavCounts(SITE.tools.map((tool) => tool.key)).then(setCounts);
   }, []);
 
   useEffect(() => {
@@ -100,12 +101,18 @@ function App() {
 
   return (
     <div className="app">
-      <AppHeader product="pass" rootOrigin={ROOT_ORIGIN} counts={counts} />
+      <AppHeader
+        product="pass"
+        rootOrigin={ROOT_ORIGIN}
+        counts={counts}
+        tools={SITE.tools}
+        siteName={SITE.site.name}
+      />
       <main className="pw-main layout">
         <div className="panel-wrap">
           <section className="panel">
             <div className="panel-head">
-              <span>PAWL / PAWL</span>
+              <span>{SITE.site.name.toUpperCase()} / PAWL</span>
               <b>AUTH / v2.1</b>
             </div>
             <div className="panel-inner">{content}</div>

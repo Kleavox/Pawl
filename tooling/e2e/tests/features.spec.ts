@@ -7,6 +7,7 @@ import { localWorkerOrigin } from "@pawl/topology";
 import {
   clearRateLimits,
   freshAccount,
+  passQuery,
   passSql,
   PROBE_PASSWORD,
 } from "./pass-account";
@@ -408,6 +409,9 @@ test("pass: an account can delete itself", async () => {
   const fresh = await context.browser()!.newContext();
   const worker = await fresh.newPage();
   const account = await freshAccount(worker, "probegone");
+  const accountId = String(
+    passQuery(`SELECT id FROM users WHERE email = '${account.email}'`)[0]?.id,
+  );
   clearRateLimits();
   await worker.goto(`${PASS}/`);
   await worker.locator('input[name="email"]').fill(account.email);
@@ -428,6 +432,10 @@ test("pass: an account can delete itself", async () => {
   await expect(
     worker.getByRole("button", { name: "Sign in", exact: true }),
   ).toBeVisible({ timeout: 20000 });
+  const purged = (await (
+    await worker.request.get("http://127.0.0.1:8790/fixture/purged")
+  ).json()) as string[];
+  expect(purged).toContain(accountId);
 
   clearRateLimits();
   await worker.goto(`${PASS}/`);

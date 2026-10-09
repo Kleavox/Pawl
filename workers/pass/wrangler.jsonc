@@ -27,10 +27,6 @@
   },
   "services": [
     {
-      "binding": "LINK",
-      "service": "local-link",
-    },
-    {
       "binding": "GATEWAY",
       "service": "local-gateway",
     },

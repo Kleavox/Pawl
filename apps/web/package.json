@@ -12,6 +12,7 @@
   "dependencies": {
     "@pawl/config": "workspace:*",
     "@pawl/core": "workspace:*",
+    "@pawl/registry": "workspace:*",
     "@pawl/ui": "workspace:*"
   },
   "devDependencies": {

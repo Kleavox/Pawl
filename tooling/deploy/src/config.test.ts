@@ -1,10 +1,21 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { EMPTY_MANIFEST } from "@pawl/registry";
+import { initRegistryFromDisk } from "@pawl/registry/node";
 import { COMPATIBILITY_DATE } from "@pawl/topology";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import { productionConfigs, productionSecrets } from "./config";
+import { localConfigs, productionConfigs, productionSecrets } from "./config";
+
+const FIXTURE = readFileSync(
+  new URL("../../e2e/fixture/estate.json", import.meta.url),
+  "utf8",
+);
+
+beforeAll(() => {
+  initRegistryFromDisk();
+});
 
 const env = {
   CLOUDFLARE_ACCOUNT_ID: "account-id",
@@ -28,14 +39,14 @@ describe("production deployment config", () => {
   });
 
   it("renders route-free staging configs", () => {
-    const configs = productionConfigs(env, "none");
+    const configs = productionConfigs(env, "none", EMPTY_MANIFEST);
     expect(configs["pass"]?.routes).toBeUndefined();
     expect(configs["gateway"]?.routes).toBeUndefined();
     expect(configs["pass"]?.vars).toMatchObject({ ENVIRONMENT: "production" });
   });
 
   it("derives canonical domains and resource names from environment", () => {
-    const configs = productionConfigs(env, "canonical");
+    const configs = productionConfigs(env, "canonical", EMPTY_MANIFEST);
     expect(configs["gateway"]?.routes).toEqual([
       { pattern: "product.test", custom_domain: true },
       { pattern: "www.product.test", custom_domain: true },
@@ -47,14 +58,9 @@ describe("production deployment config", () => {
     expect(configs["pass"]?.vars).toMatchObject({
       PUBLIC_ORIGIN: "https://paw.product.test",
     });
-    expect(configs["portfolio"]).toBeUndefined();
-    expect(configs["drop"]).toBeUndefined();
-    expect(configs["link"]).toBeUndefined();
-    expect(configs["pulse"]).toBeUndefined();
+    expect(Object.keys(configs)).toEqual(["pass", "gateway"]);
     expect(configs["gateway"]?.services).toEqual([
-      { binding: "LINK", service: "product-link" },
       { binding: "PASS", service: "product-pass" },
-      { binding: "PORTFOLIO", service: "product-portfolio" },
     ]);
   });
 
@@ -66,6 +72,7 @@ describe("production deployment config", () => {
           PASS_D1_ID: "00000000-0000-0000-0000-000000000000",
         },
         "none",
+        EMPTY_MANIFEST,
       ),
     ).toThrow(/PASS_D1_ID/u);
   });
@@ -74,11 +81,12 @@ describe("production deployment config", () => {
     expect(env).not.toHaveProperty("LINK_D1_ID");
     expect(env).not.toHaveProperty("PULSE_D1_ID");
     expect(env).not.toHaveProperty("DROP_BUCKET_NAME");
-    expect(() => productionConfigs(env, "none")).not.toThrow();
+    expect(() => productionConfigs(env, "none", EMPTY_MANIFEST)).not.toThrow();
   });
 
   it("lets the pass Worker answer its OIDC paths before the app shell, here and locally", () => {
-    const assets = productionConfigs(env, "none")["pass"]?.assets as {
+    const assets = productionConfigs(env, "none", EMPTY_MANIFEST)["pass"]
+      ?.assets as {
       run_worker_first: string[];
     };
     expect(assets.run_worker_first).toEqual(
@@ -96,7 +104,8 @@ describe("production deployment config", () => {
   });
 
   it("rate limits the pass Worker's authorize and token endpoints natively", () => {
-    const limits = productionConfigs(env, "none")["pass"]?.ratelimits as {
+    const limits = productionConfigs(env, "none", EMPTY_MANIFEST)["pass"]
+      ?.ratelimits as {
       name: string;
     }[];
     expect(limits.map((limit) => limit.name)).toEqual([
@@ -107,7 +116,61 @@ describe("production deployment config", () => {
 
   it("ignores unrelated runner environment variables", () => {
     const runnerEnvironment = { ...env, DOTNET_MULTILEVEL_LOOKUP: "0" };
-    expect(() => productionConfigs(runnerEnvironment, "none")).not.toThrow();
+    expect(() =>
+      productionConfigs(runnerEnvironment, "none", EMPTY_MANIFEST),
+    ).not.toThrow();
+  });
+});
+
+describe("apps from the manifest", () => {
+  it("binds the gateway to every routed app and nothing else", () => {
+    const services = productionConfigs(env, "none", FIXTURE)["gateway"]
+      ?.services;
+    expect(services).toEqual([
+      { binding: "PASS", service: "product-pass" },
+      { binding: "APP_NOTES", service: "product-notes" },
+      { binding: "APP_DOCS", service: "product-docs" },
+    ]);
+  });
+
+  it("binds the pass Worker to every app it must purge", () => {
+    expect(productionConfigs(env, "none", FIXTURE)["pass"]?.services).toEqual([
+      { binding: "APP_NOTES", service: "product-notes" },
+    ]);
+  });
+
+  it("hands both Workers the validated manifest", () => {
+    const configs = productionConfigs(env, "none", FIXTURE);
+    for (const worker of ["pass", "gateway"]) {
+      const vars = configs[worker]?.vars as { ESTATE_MANIFEST: string };
+      expect(JSON.parse(vars.ESTATE_MANIFEST).apps).toHaveLength(2);
+    }
+  });
+
+  it("refuses an invalid manifest before rendering anything", () => {
+    expect(() =>
+      productionConfigs(env, "none", '{"site":{"name":""}}'),
+    ).toThrow(/site name/);
+  });
+
+  it("names no app when none is registered", () => {
+    const services = productionConfigs(
+      env,
+      "none",
+      '{"site":{"name":"Pawl"},"apps":[]}',
+    )["gateway"]?.services;
+    expect(services).toEqual([{ binding: "PASS", service: "product-pass" }]);
+  });
+
+  it("renders local configs bound to local services, with a throwaway signing key", () => {
+    const local = localConfigs(FIXTURE, "local-key");
+    expect(local["gateway"]?.services).toContainEqual({
+      binding: "APP_NOTES",
+      service: "local-notes",
+    });
+    expect(
+      (local["pass"]?.vars as { OIDC_SIGNING_KEY: string }).OIDC_SIGNING_KEY,
+    ).toBe("local-key");
   });
 });
 
@@ -129,7 +192,7 @@ describe("production secrets", () => {
     expect(result.pass.RESEND_API_KEY).toBe("resend");
     expect(result.pass.OIDC_SIGNING_KEY).toBe("signing");
     expect(result.pass).not.toHaveProperty("OIDC_PREVIOUS_SIGNING_KEY");
-    expect(result).not.toHaveProperty("portfolio");
+    expect(Object.keys(result)).toEqual(["pass"]);
   });
 
   it("carries the previous signing key only while one is set", () => {

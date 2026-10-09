@@ -19,6 +19,7 @@ import {
   type MachineEvent,
   type MachineState,
 } from "./state";
+import { CATALOG } from "./catalog.testkit";
 
 const REQUEST_KEY = "pawl:machine-request";
 
@@ -27,7 +28,7 @@ function machine(access: AccessRole): {
   seen: MachineEvent["type"][];
   read: () => MachineState;
 } {
-  let state = initialState(access);
+  let state = initialState(access, CATALOG);
   const seen: MachineEvent["type"][] = [];
   const dispatch: Dispatch = (event) => {
     seen.push(event.type);
@@ -86,32 +87,32 @@ describe("motionDelay", () => {
 describe("remembering a locked request across a redirect", () => {
   it("reads the bay back without spending it", () => {
     rememberRequest("1");
-    expect(readRememberedRequest()).toBe("1");
-    expect(readRememberedRequest()).toBe("1");
+    expect(readRememberedRequest(["1", "3"])).toBe("1");
+    expect(readRememberedRequest(["1", "3"])).toBe("1");
   });
 
   it("hands the bay back no more once it has been forgotten", () => {
     rememberRequest("1");
-    expect(readRememberedRequest()).toBe("1");
+    expect(readRememberedRequest(["1", "3"])).toBe("1");
     forgetRequest();
-    expect(readRememberedRequest()).toBeNull();
+    expect(readRememberedRequest(["1", "3"])).toBeNull();
   });
 
   it("returns null when nothing was remembered", () => {
-    expect(readRememberedRequest()).toBeNull();
+    expect(readRememberedRequest(["1", "3"])).toBeNull();
   });
 
   it("survives a page load because it lives in sessionStorage", () => {
     rememberRequest("3");
     expect(sessionStorage.getItem(REQUEST_KEY)).toBe("3");
-    expect(readRememberedRequest()).toBe("3");
+    expect(readRememberedRequest(["1", "3"])).toBe("3");
     forgetRequest();
     expect(sessionStorage.getItem(REQUEST_KEY)).toBeNull();
   });
 
   it("refuses a stored value that is not a bay", () => {
     sessionStorage.setItem(REQUEST_KEY, "9");
-    expect(readRememberedRequest()).toBeNull();
+    expect(readRememberedRequest(["1", "3"])).toBeNull();
   });
 
   it("says the request was kept when storage takes it", () => {
@@ -131,7 +132,7 @@ describe("remembering a locked request across a redirect", () => {
       },
     });
     expect(rememberRequest("1")).toBe(false);
-    expect(readRememberedRequest()).toBeNull();
+    expect(readRememberedRequest(["1", "3"])).toBeNull();
     expect(() => forgetRequest()).not.toThrow();
   });
 });

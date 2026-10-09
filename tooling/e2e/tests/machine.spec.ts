@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import { localViteOrigin, localWorkerOrigin } from "@pawl/topology";
+import { localWorkerOrigin } from "@pawl/topology";
 import { clearRateLimits, signedInAs } from "./pass-account";
 
 const GATEWAY = localWorkerOrigin("gateway", "localhost");
@@ -41,12 +41,12 @@ test("each filled bay offers a button named for the person standing there", asyn
 }) => {
   await page.goto("/");
   await expect(
-    page.locator("[data-cartridge='1']"),
+    page.locator("[data-cartridge='2']"),
     "the static markup names the bay without a role claim, so this can only pass after render",
-  ).toHaveAttribute("aria-label", "Select Link, bay 1, visitor pass required");
+  ).toHaveAttribute("aria-label", "Select Notes, bay 2, visitor pass required");
   for (const name of [
-    "Select Link, bay 1, visitor pass required",
-    "Select Portfolio, bay 3, ready",
+    "Select Notes, bay 2, visitor pass required",
+    "Select Docs, bay 7, ready",
   ]) {
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
       1,
@@ -187,7 +187,7 @@ test("the open sheet is a modal, and says so", async ({ page }) => {
   const reach = async (): Promise<boolean> =>
     page.evaluate(() => {
       const cartridge = document.querySelector<HTMLElement>(
-        "[data-cartridge='1']",
+        "[data-cartridge='2']",
       )!;
       cartridge.focus();
       const reached = document.activeElement === cartridge;
@@ -236,11 +236,11 @@ test("narrowing to the sheet does not strand focus inside it", async ({
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(panel).toHaveAttribute("data-console", "open");
-  await page.locator("[data-cartridge='3']").focus();
+  await page.locator("[data-cartridge='7']").focus();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(panel).toHaveAttribute("data-console", "closed");
   await expect(page.locator(".cabinet")).not.toHaveAttribute("inert", "");
-  await expect(page.locator("[data-cartridge='3']")).toBeFocused();
+  await expect(page.locator("[data-cartridge='7']")).toBeFocused();
 });
 
 test("narrowing back onto an open sheet does not strand focus on the body", async ({
@@ -256,8 +256,8 @@ test("narrowing back onto an open sheet does not strand focus on the body", asyn
   await expect(page.locator("[data-reader]")).toBeFocused();
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.locator("[data-cartridge='3']").focus();
-  await expect(page.locator("[data-cartridge='3']")).toBeFocused();
+  await page.locator("[data-cartridge='7']").focus();
+  await expect(page.locator("[data-cartridge='7']")).toBeFocused();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator(".cabinet")).toHaveAttribute("inert", "");
@@ -370,8 +370,8 @@ test("closing the terminal hands the machine back", async ({ page }) => {
     "THE TERMINAL IS OPEN",
   );
 
-  await page.locator("[data-cartridge='3']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "3");
+  await page.locator("[data-cartridge='7']").click();
+  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
 
   await page.locator("[data-terminal-open]").click();
   await expect(page.locator("[data-terminal]")).toBeVisible();
@@ -381,13 +381,13 @@ test("pressing a bay twice still leaves the product in the tray", async ({
   page,
 }) => {
   await openBooted(page);
-  await page.locator("[data-cartridge='3']").dblclick();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "3");
+  await page.locator("[data-cartridge='7']").dblclick();
+  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
   await page.waitForTimeout(1800);
   await expect(
     page.locator("[data-tray]"),
     "a second release timer would have copied an empty selection over the tray",
-  ).toHaveAttribute("data-tray", "3");
+  ).toHaveAttribute("data-tray", "7");
   await expect(page.locator("[data-screen]")).toContainText("DELIVERED");
 });
 
@@ -443,7 +443,7 @@ test("the renderer lights the bays a guest may take, and paints them", async ({
 }) => {
   await page.goto("/");
   const bays = await page.evaluate(() =>
-    ["1", "3"].map((bay) => {
+    ["2", "7"].map((bay) => {
       const light = document.querySelector<HTMLElement>(
         `[data-bay="${bay}"] [data-backlight]`,
       )!;
@@ -510,7 +510,9 @@ test("a delivered cartridge gives the tray a real control", async ({
     await page.setViewportSize(viewport);
     await openBooted(page);
     await page.evaluate(async () => {
-      document.querySelector<HTMLElement>("[data-tray]")!.dataset.tray = "3";
+      const tray = document.querySelector<HTMLElement>("[data-tray]")!;
+      tray.dataset.tray = "7";
+      tray.dataset.trayShape = "wide";
       const result = document.querySelector<HTMLElement>(".tray-result")!;
       await Promise.all(
         result.getAnimations().map((animation) => animation.finished),
@@ -530,9 +532,14 @@ test("the tray keeps the two products apart by shape", async ({ page }) => {
   await openBooted(page);
   const widths: number[] = [];
   const silhouettes: string[] = [];
-  for (const bay of ["1", "3"]) {
-    const shape = await page.evaluate(async (code) => {
-      document.querySelector<HTMLElement>("[data-tray]")!.dataset.tray = code;
+  for (const bay of [
+    ["2", "tall"],
+    ["7", "wide"],
+  ]) {
+    const shape = await page.evaluate(async ([code, form]) => {
+      const tray = document.querySelector<HTMLElement>("[data-tray]")!;
+      tray.dataset.tray = code;
+      tray.dataset.trayShape = form;
       const result = document.querySelector<HTMLElement>(".tray-result")!;
       await Promise.all(
         result.getAnimations().map((animation) => animation.finished),
@@ -559,8 +566,12 @@ test("each product leaves its bay by its own motion", async ({ page }) => {
     const root = getComputedStyle(document.documentElement);
     const sequence = root.getPropertyValue("--pw-t6").trim();
     const rows: { name: string; duration: string; count: string }[] = [];
-    for (const bay of ["1", "3"]) {
+    for (const [bay, form] of [
+      ["2", "tall"],
+      ["7", "wide"],
+    ]) {
       falling.dataset.falling = bay;
+      falling.dataset.fallingShape = form;
       const style = getComputedStyle(falling);
       rows.push({
         name: style.animationName,
@@ -569,6 +580,7 @@ test("each product leaves its bay by its own motion", async ({ page }) => {
       });
     }
     falling.dataset.falling = "none";
+    falling.dataset.fallingShape = "none";
     return { rows, sequence, resting: getComputedStyle(falling).animationName };
   });
   expect(new Set(seen.rows.map((row) => row.name)).size).toBe(2);
@@ -607,9 +619,12 @@ test("nothing on the machine animates forever", async ({ page }) => {
     };
     machine.dataset.access = "owner";
     machine.dataset.status = "dispensing";
-    tray.dataset.tray = "1";
-    falling.dataset.falling = "1";
-    transfer.dataset.transfer = "1";
+    tray.dataset.tray = "2";
+    tray.dataset.trayShape = "tall";
+    falling.dataset.falling = "2";
+    falling.dataset.fallingShape = "tall";
+    transfer.dataset.transfer = "2";
+    transfer.dataset.transferShape = "tall";
     sweep();
     machine.dataset.status = "reading";
     sweep();
@@ -664,8 +679,9 @@ test("the bridge stays out of the way until a cartridge is taken", async ({
   await expect(cancel).toBeHidden();
 
   await page.evaluate(() => {
-    document.querySelector<HTMLElement>("[data-transfer]")!.dataset.transfer =
-      "3";
+    const transfer = document.querySelector<HTMLElement>("[data-transfer]")!;
+    transfer.dataset.transfer = "7";
+    transfer.dataset.transferShape = "wide";
   });
   await expect(page.locator("[data-transfer]")).toBeVisible();
   await expect(cancel).toBeVisible();
@@ -707,7 +723,8 @@ async function openTheBridge(
   await openBooted(page);
   const seen = await page.evaluate(async () => {
     const overlay = document.querySelector<HTMLElement>("[data-transfer]")!;
-    overlay.dataset.transfer = "1";
+    overlay.dataset.transfer = "2";
+    overlay.dataset.transferShape = "tall";
     await new Promise((settled) => {
       requestAnimationFrame(() => requestAnimationFrame(settled));
     });
@@ -774,7 +791,9 @@ test("a full tray stays inside the cabinet it is bolted to", async ({
     await page.setViewportSize(viewport);
     await openBooted(page);
     const fit = await page.evaluate(async () => {
-      document.querySelector<HTMLElement>("[data-tray]")!.dataset.tray = "3";
+      const slot = document.querySelector<HTMLElement>("[data-tray]")!;
+      slot.dataset.tray = "7";
+      slot.dataset.trayShape = "wide";
       const result = document.querySelector<HTMLElement>(".tray-result")!;
       await Promise.all(
         result.getAnimations().map((animation) => animation.finished),
@@ -825,8 +844,8 @@ test("every route the machine offers is reachable from here", async ({
   }
 
   expect(links.hrefs).toEqual([
-    localWorkerOrigin("link", links.host),
-    localViteOrigin("portfolio", links.host),
+    `http://${links.host}:8790`,
+    `http://${links.host}:8791`,
   ]);
 });
 
@@ -870,12 +889,12 @@ test("the cabinet still wears its cap and its side rails", async ({ page }) => {
   expect(Number.parseFloat(protrusions.clipMargin)).toBeGreaterThan(7);
 });
 
-test("a guest is told to insert a pass and cannot take LINK", async ({
+test("a guest is told to insert a pass and cannot take NOTE", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page.locator("[data-screen]")).toHaveText("INSERT PASS");
-  await page.locator("[data-cartridge='1']").click();
+  await page.locator("[data-cartridge='2']").click();
   await expect(page.locator("[data-screen]")).toContainText("PASS REQUIRED");
   await expect(page.locator("[data-tray]")).toHaveAttribute(
     "data-tray",
@@ -883,10 +902,10 @@ test("a guest is told to insert a pass and cannot take LINK", async ({
   );
 });
 
-test("a guest can take PORTFOLIO without a pass", async ({ page }) => {
+test("a guest can take MANUAL without a pass", async ({ page }) => {
   await page.goto("/");
-  await page.locator("[data-cartridge='3']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "3");
+  await page.locator("[data-cartridge='7']").click();
+  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
   await expect(page.locator("[data-screen]")).toContainText("DELIVERED");
 });
 
@@ -894,35 +913,35 @@ test("number entry and GO reach the same place as tapping", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.keyboard.press("Digit3");
-  await expect(page.locator("[data-screen]")).toContainText("3 SELECTED");
+  await page.keyboard.press("Digit7");
+  await expect(page.locator("[data-screen]")).toContainText("7 SELECTED");
   await page.keyboard.press("Enter");
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "3");
+  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
 });
 
 test("the keypad keys dispense the same way the physical keys do", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.locator("[data-key='3']").click();
+  await page.locator("[data-key='7']").click();
   await page.locator("[data-key='GO']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "3");
+  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
 });
 
 test("taking the delivery opens a real modal bridge that escape can leave", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.locator("[data-cartridge='3']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "3");
+  await page.locator("[data-cartridge='7']").click();
+  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
 
   await page.locator("[data-tray-action]").click();
   const bridge = page.locator("[data-transfer]");
-  await expect(bridge).toHaveAttribute("data-transfer", "3");
+  await expect(bridge).toHaveAttribute("data-transfer", "7");
   const sealed = await page.evaluate(() => {
     const overlay = document.querySelector<HTMLElement>("[data-transfer]")!;
     const cartridge = document.querySelector<HTMLElement>(
-      "[data-cartridge='3']",
+      "[data-cartridge='7']",
     )!;
     cartridge.focus();
     return {
@@ -945,12 +964,12 @@ test("the cancel button leaves the bridge the same way escape does", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.locator("[data-cartridge='3']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "3");
+  await page.locator("[data-cartridge='7']").click();
+  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
   await page.locator("[data-tray-action]").click();
   await expect(page.locator("[data-transfer]")).toHaveAttribute(
     "data-transfer",
-    "3",
+    "7",
   );
   await page.locator("[data-transfer-cancel]").click();
   await expect(page.locator("[data-transfer]")).toHaveAttribute(
@@ -980,7 +999,7 @@ test("a blocked sessionStorage says so instead of forgetting in silence", async 
     });
   });
   await page.goto("/");
-  await page.locator("[data-cartridge='1']").click();
+  await page.locator("[data-cartridge='2']").click();
   await expect(page.locator("[data-screen]")).toContainText("PASS REQUIRED");
 
   await page.locator("[data-terminal-open]").click();
@@ -1029,7 +1048,7 @@ test.describe("with a real pass in the machine", () => {
       "OWNER MODE",
     );
     await signedIn.evaluate(() =>
-      sessionStorage.setItem("pawl:machine-request", "1"),
+      sessionStorage.setItem("pawl:machine-request", "2"),
     );
     let sessions = 0;
     await signedIn.route("**/api/session", async (route) => {
@@ -1048,7 +1067,7 @@ test.describe("with a real pass in the machine", () => {
     await signedIn.locator("[data-key='GO']").click();
     await expect(signedIn.locator("[data-tray]")).toHaveAttribute(
       "data-tray",
-      "1",
+      "2",
       { timeout: 20_000 },
     );
     expect(
@@ -1066,18 +1085,18 @@ test.describe("with a real pass in the machine", () => {
     const guest = await guestContext.newPage();
     await guest.goto(GATEWAY);
     await expect(
-      guest.locator("[data-cartridge='1']"),
+      guest.locator("[data-cartridge='2']"),
       "the guest half must read a painted label, not the static markup",
     ).toHaveAttribute(
       "aria-label",
-      "Select Link, bay 1, visitor pass required",
+      "Select Notes, bay 2, visitor pass required",
     );
     await expect(guest.locator("[data-cabinet-state]")).toHaveText(
       "GUEST MODE",
     );
     const guestLamp = await lampColour(guest);
     const guestBays = await guest.evaluate(() =>
-      ["1", "3"].map(
+      ["2", "7"].map(
         (bay) =>
           document.querySelector<HTMLElement>(
             `[data-bay="${bay}"] [data-backlight]`,
@@ -1096,14 +1115,14 @@ test.describe("with a real pass in the machine", () => {
     );
     await expect(
       signedIn.getByRole("button", {
-        name: "Select Link, bay 1, ready",
+        name: "Select Notes, bay 2, ready",
         exact: true,
       }),
       "an owner must not be told they need an owner pass",
     ).toHaveCount(1);
     const ownerLamp = await lampColour(signedIn);
     const ownerBays = await signedIn.evaluate(() =>
-      ["1", "3"].map(
+      ["2", "7"].map(
         (bay) =>
           document.querySelector<HTMLElement>(
             `[data-bay="${bay}"] [data-backlight]`,
@@ -1121,12 +1140,12 @@ test.describe("with a real pass in the machine", () => {
     await expect(signedIn.locator("[data-cabinet-state]")).toHaveText(
       "OWNER MODE",
     );
-    await signedIn.locator("[data-cartridge='1']").click();
+    await signedIn.locator("[data-cartridge='2']").click();
     await expect(signedIn.locator("[data-tray]")).toHaveAttribute(
       "data-tray",
-      "1",
+      "2",
     );
-    await expect(signedIn.locator("[data-screen]")).toContainText("LINK");
+    await expect(signedIn.locator("[data-screen]")).toContainText("NOTE");
   });
 
   test("the pass terminal cannot walk a signed-in owner back into the sign-in chooser", async () => {
@@ -1205,16 +1224,16 @@ test.describe("with a real pass in the machine", () => {
       "data-access",
       "owner",
     );
-    await expect(signedIn.locator("[data-cartridge='1']")).toHaveAttribute(
+    await expect(signedIn.locator("[data-cartridge='2']")).toHaveAttribute(
       "aria-label",
-      "Select Link, bay 1, ready",
+      "Select Notes, bay 2, ready",
     );
 
-    await signedIn.locator("[data-cartridge='1']").click();
+    await signedIn.locator("[data-cartridge='2']").click();
     await expect(
       signedIn.locator("[data-tray]"),
       "the reducer must hold the pass too, not just the model the lamps read",
-    ).toHaveAttribute("data-tray", "1", { timeout: 20_000 });
+    ).toHaveAttribute("data-tray", "2", { timeout: 20_000 });
 
     await signedIn.unroute("**/api/session");
   });
@@ -1467,7 +1486,7 @@ test.describe("codes typed on the machine keypad", () => {
     );
 
     await page.goto(GATEWAY);
-    await page.locator("[data-cartridge='1']").click();
+    await page.locator("[data-cartridge='2']").click();
     await expect(page.locator("[data-screen]")).toContainText("PASS REQUIRED");
     await reachOtpMode(page);
     await typeCode(page, "123456");
@@ -1476,7 +1495,7 @@ test.describe("codes typed on the machine keypad", () => {
       .poll(() =>
         page.evaluate(() => sessionStorage.getItem("pawl:machine-request")),
       )
-      .toBe("1");
+      .toBe("2");
     await fresh.close();
   });
 
@@ -1519,11 +1538,11 @@ test("a fault holds the screen until the next touch, then the estate line comes 
   await expect(page.locator("[data-dock-screen]")).toHaveText("INSERT PASS");
 
   await page.evaluate(() => {
-    document.querySelector<HTMLElement>("[data-cartridge='3']")!.dataset.href =
+    document.querySelector<HTMLElement>("[data-cartridge='7']")!.dataset.href =
       "http://";
   });
-  await page.locator("[data-cartridge='3']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "3");
+  await page.locator("[data-cartridge='7']").click();
+  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
   await page.locator("[data-tray-action]").click();
 
   await expect(page.locator("[data-dock-screen]")).toHaveText(
@@ -1547,15 +1566,15 @@ test("cancel still leaves the bridge after the transfer has resolved", async ({
 }) => {
   await page.goto(GATEWAY);
   await page.evaluate(() => {
-    document.querySelector<HTMLElement>("[data-cartridge='3']")!.dataset.href =
+    document.querySelector<HTMLElement>("[data-cartridge='7']")!.dataset.href =
       "#stay";
   });
 
-  await page.locator("[data-cartridge='3']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "3");
+  await page.locator("[data-cartridge='7']").click();
+  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
   await page.locator("[data-tray-action]").click();
   const bridge = page.locator("[data-transfer]");
-  await expect(bridge).toHaveAttribute("data-transfer", "3");
+  await expect(bridge).toHaveAttribute("data-transfer", "7");
 
   await expect(page).toHaveURL(/#stay$/, { timeout: 10_000 });
 
@@ -1583,12 +1602,12 @@ test.describe("with a visitor pass in the machine", () => {
 
   test("a visitor's bays and cartridge names follow the pass they hold", async () => {
     await visitor.goto(GATEWAY);
-    await expect(visitor.locator("[data-cartridge='1']")).toHaveAttribute(
+    await expect(visitor.locator("[data-cartridge='2']")).toHaveAttribute(
       "aria-label",
-      "Select Link, bay 1, ready",
+      "Select Notes, bay 2, ready",
     );
     const bays = await visitor.evaluate(() =>
-      ["1", "3"].map(
+      ["2", "7"].map(
         (bay) =>
           document.querySelector<HTMLElement>(
             `[data-bay="${bay}"] [data-backlight]`,
@@ -1600,11 +1619,11 @@ test.describe("with a visitor pass in the machine", () => {
 
   test("a visitor can still take the bay their pass opens", async () => {
     await visitor.goto(GATEWAY);
-    await visitor.locator("[data-cartridge='1']").click();
+    await visitor.locator("[data-cartridge='2']").click();
     await expect(visitor.locator("[data-tray]")).toHaveAttribute(
       "data-tray",
-      "1",
+      "2",
     );
-    await expect(visitor.locator("[data-screen]")).toContainText("LINK");
+    await expect(visitor.locator("[data-screen]")).toContainText("NOTE");
   });
 });

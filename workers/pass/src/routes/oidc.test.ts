@@ -22,9 +22,9 @@ const DES_CB = "https://des.product.test/callback";
 const ACCESS_CB = "https://team.cloudflareaccess.com/cdn-cgi/access/callback";
 const SPA_CB = "https://spa.product.test/cb";
 const VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
-const SECRETS = { desmyx: "desmyx-secret", "krynodes-access": "access-secret" };
+const SECRETS = { notes: "notes-secret", "docs-access": "access-secret" };
 
-type ClientId = "desmyx" | "krynodes-access" | "spa";
+type ClientId = "notes" | "docs-access" | "spa";
 
 let signingKey: string;
 let challenge: string;
@@ -77,18 +77,18 @@ beforeEach(async () => {
   });
   seedUser(db, { id: "user-2", email: "new@product.test", verified: false });
   seedClient(db, {
-    id: "desmyx",
-    name: "Desmyx",
+    id: "notes",
+    name: "Notes",
     redirectUris: [DES_CB],
     firstParty: true,
-    secretHash: await hashToken(SECRETS.desmyx),
+    secretHash: await hashToken(SECRETS.notes),
   });
   seedClient(db, {
-    id: "krynodes-access",
-    name: "Krynodes",
+    id: "docs-access",
+    name: "Docs",
     redirectUris: [ACCESS_CB],
     firstParty: false,
-    secretHash: await hashToken(SECRETS["krynodes-access"]),
+    secretHash: await hashToken(SECRETS["docs-access"]),
     sector: "cloudflareaccess.com",
   });
   seedClient(db, {
@@ -118,8 +118,8 @@ function call(path: string, init?: RequestInit, override?: Partial<Env>) {
 }
 
 const callbacks: Record<ClientId, string> = {
-  desmyx: DES_CB,
-  "krynodes-access": ACCESS_CB,
+  notes: DES_CB,
+  "docs-access": ACCESS_CB,
   spa: SPA_CB,
 };
 
@@ -171,7 +171,7 @@ async function codeFor(
   userId = "user-1",
   params: Record<string, string> = {},
 ): Promise<string> {
-  if (client === "krynodes-access") {
+  if (client === "docs-access") {
     await consent(client, "allow", userId, params);
   }
   const response = await signedInAuthorize(client, params, userId);
@@ -212,7 +212,7 @@ async function exchange(options: {
   redirectUri?: string;
   secret?: string | null;
 }) {
-  const client = options.client ?? "desmyx";
+  const client = options.client ?? "notes";
   const code = options.code ?? (await codeFor(client));
   const secret =
     options.secret === undefined
@@ -238,7 +238,7 @@ async function exchange(options: {
 
 async function refreshResponse(
   token: string,
-  client: ClientId = "krynodes-access",
+  client: ClientId = "docs-access",
 ) {
   return call("/oauth/token", {
     method: "POST",
@@ -256,7 +256,7 @@ async function refreshResponse(
   });
 }
 
-async function grantRevoked(client = "krynodes-access"): Promise<boolean> {
+async function grantRevoked(client = "docs-access"): Promise<boolean> {
   return (await findGrant(env, "user-1", client)) === null;
 }
 
@@ -317,7 +317,7 @@ describe("jwks", () => {
 describe("/oauth/authorize", () => {
   it("refuses to redirect to an unregistered uri", async () => {
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("desmyx", { redirect_uri: "https://evil.test/cb" })}`,
+      `/oauth/authorize?${authorizeQuery("notes", { redirect_uri: "https://evil.test/cb" })}`,
     );
     expect(response.status).toBe(400);
     expect(response.headers.get("location")).toBeNull();
@@ -325,7 +325,7 @@ describe("/oauth/authorize", () => {
 
   it("refuses an unknown client without redirecting anywhere", async () => {
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("desmyx", { client_id: "nobody" })}`,
+      `/oauth/authorize?${authorizeQuery("notes", { client_id: "nobody" })}`,
     );
     expect(response.status).toBe(400);
     expect(response.headers.get("location")).toBeNull();
@@ -333,7 +333,7 @@ describe("/oauth/authorize", () => {
 
   it("rejects plain PKCE", async () => {
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("desmyx", { code_challenge_method: "plain", code_challenge: VERIFIER })}`,
+      `/oauth/authorize?${authorizeQuery("notes", { code_challenge_method: "plain", code_challenge: VERIFIER })}`,
     );
     expect(response.status).toBe(302);
     expect(location(response).searchParams.get("error")).toBe(
@@ -342,7 +342,7 @@ describe("/oauth/authorize", () => {
   });
 
   it("rejects a request with no PKCE at all", async () => {
-    const query = new URLSearchParams(authorizeQuery("desmyx"));
+    const query = new URLSearchParams(authorizeQuery("notes"));
     query.delete("code_challenge");
     query.delete("code_challenge_method");
     const response = await call(`/oauth/authorize?${query}`);
@@ -353,21 +353,21 @@ describe("/oauth/authorize", () => {
 
   it("requires the openid scope", async () => {
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("desmyx", { scope: "email" })}`,
+      `/oauth/authorize?${authorizeQuery("notes", { scope: "email" })}`,
     );
     expect(location(response).searchParams.get("error")).toBe("invalid_scope");
   });
 
   it("refuses a scope the client was not allowed", async () => {
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("desmyx", { scope: "openid admin" })}`,
+      `/oauth/authorize?${authorizeQuery("notes", { scope: "openid admin" })}`,
     );
     expect(location(response).searchParams.get("error")).toBe("invalid_scope");
   });
 
   it("answers login_required on the redirect uri when prompt=none and no session exists", async () => {
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("desmyx", { prompt: "none" })}`,
+      `/oauth/authorize?${authorizeQuery("notes", { prompt: "none" })}`,
     );
     expect(response.status).toBe(302);
     const target = location(response);
@@ -377,25 +377,25 @@ describe("/oauth/authorize", () => {
   });
 
   it("sends a signed-out person to sign in, and back to this request afterwards", async () => {
-    const response = await call(`/oauth/authorize?${authorizeQuery("desmyx")}`);
+    const response = await call(`/oauth/authorize?${authorizeQuery("notes")}`);
     expect(response.status).toBe(302);
     const target = location(response);
     expect(target.origin).toBe(ISSUER);
     const back = new URL(target.searchParams.get("returnTo") ?? "");
     expect(back.origin + back.pathname).toBe(`${ISSUER}/oauth/authorize`);
-    expect(back.searchParams.get("client_id")).toBe("desmyx");
+    expect(back.searchParams.get("client_id")).toBe("notes");
   });
 
   it("passes state through untouched", async () => {
     const state = "a b&c=d";
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("desmyx", { prompt: "none", state })}`,
+      `/oauth/authorize?${authorizeQuery("notes", { prompt: "none", state })}`,
     );
     expect(location(response).searchParams.get("state")).toBe(state);
   });
 
   it("hands a signed-in person's first-party client a code without asking", async () => {
-    const response = await signedInAuthorize("desmyx");
+    const response = await signedInAuthorize("notes");
     expect(response.status).toBe(302);
     const target = location(response);
     expect(target.origin + target.pathname).toBe(DES_CB);
@@ -406,23 +406,23 @@ describe("/oauth/authorize", () => {
 
 describe("consent", () => {
   it("is shown for a third-party client with no grant", async () => {
-    const response = await signedInAuthorize("krynodes-access");
+    const response = await signedInAuthorize("docs-access");
     expect(response.status).toBe(200);
     const body = await response.text();
     expect(body).toContain("cloudflareaccess.com");
-    expect(body).toContain("Krynodes");
+    expect(body).toContain("Docs");
     expect(body).not.toContain("code=");
   });
 
   it("names the client's registered domain, not a value from the query", async () => {
-    const response = await signedInAuthorize("krynodes-access", {
+    const response = await signedInAuthorize("docs-access", {
       client_name: "Totally Safe",
     });
     expect(await response.text()).not.toContain("Totally Safe");
   });
 
   it("answers consent_required instead of a page when prompt=none", async () => {
-    const response = await signedInAuthorize("krynodes-access", {
+    const response = await signedInAuthorize("docs-access", {
       prompt: "none",
     });
     expect(location(response).searchParams.get("error")).toBe(
@@ -431,26 +431,26 @@ describe("consent", () => {
   });
 
   it("records the grant and issues a code when allowed", async () => {
-    const response = await consent("krynodes-access", "allow");
+    const response = await consent("docs-access", "allow");
     expect(response.status).toBe(302);
     expect(location(response).searchParams.get("code")).toBeTruthy();
     expect(await grantRevoked()).toBe(false);
   });
 
   it("is skipped on a later sign-in once the grant exists", async () => {
-    await consent("krynodes-access", "allow");
-    const response = await signedInAuthorize("krynodes-access");
+    await consent("docs-access", "allow");
+    const response = await signedInAuthorize("docs-access");
     expect(location(response).searchParams.get("code")).toBeTruthy();
   });
 
   it("is asked again when the client wants more than was granted", async () => {
-    await consent("krynodes-access", "allow", "user-1", { scope: "openid" });
-    const response = await signedInAuthorize("krynodes-access");
+    await consent("docs-access", "allow", "user-1", { scope: "openid" });
+    const response = await signedInAuthorize("docs-access");
     expect(response.status).toBe(200);
   });
 
   it("tells the client access_denied when refused, and grants nothing", async () => {
-    const response = await consent("krynodes-access", "deny");
+    const response = await consent("docs-access", "deny");
     expect(location(response).searchParams.get("error")).toBe("access_denied");
     expect(location(response).searchParams.get("code")).toBeNull();
     expect(await grantRevoked()).toBe(true);
@@ -458,7 +458,7 @@ describe("consent", () => {
 
   it("refuses a consent posted from another site", async () => {
     const response = await consent(
-      "krynodes-access",
+      "docs-access",
       "allow",
       "user-1",
       {},
@@ -469,7 +469,7 @@ describe("consent", () => {
   });
 
   it("validates the request it carries from scratch", async () => {
-    const response = await consent("krynodes-access", "allow", "user-1", {
+    const response = await consent("docs-access", "allow", "user-1", {
       redirect_uri: "https://evil.test/cb",
     });
     expect(response.status).toBe(400);
@@ -484,7 +484,7 @@ describe("consent", () => {
         origin: ISSUER,
       },
       body: new URLSearchParams({
-        request: authorizeQuery("krynodes-access"),
+        request: authorizeQuery("docs-access"),
         decision: "allow",
       }).toString(),
     });
@@ -501,7 +501,7 @@ describe("/oauth/token", () => {
     expect(body).toMatchObject({ token_type: "Bearer", expires_in: 600 });
     expect(payloadOf(body.id_token ?? "")).toMatchObject({
       iss: ISSUER,
-      aud: "desmyx",
+      aud: "notes",
       sub: "user-1",
       nonce: "n-1",
       email: "owner@product.test",
@@ -509,9 +509,9 @@ describe("/oauth/token", () => {
       preferred_username: "owner",
     });
     expect(payloadOf(body.access_token ?? "")).toMatchObject({
-      aud: ["desmyx", ISSUER],
+      aud: ["notes", ISSUER],
       sub: "user-1",
-      client_id: "desmyx",
+      client_id: "notes",
     });
   });
 
@@ -533,11 +533,9 @@ describe("/oauth/token", () => {
   });
 
   it("revokes the grant when a code is replayed", async () => {
-    const code = await codeFor("krynodes-access");
-    expect((await exchange({ client: "krynodes-access", code })).status).toBe(
-      200,
-    );
-    const second = await exchange({ client: "krynodes-access", code });
+    const code = await codeFor("docs-access");
+    expect((await exchange({ client: "docs-access", code })).status).toBe(200);
+    const second = await exchange({ client: "docs-access", code });
     expect(second.status).toBe(400);
     expect(await grantRevoked()).toBe(true);
   });
@@ -551,7 +549,7 @@ describe("/oauth/token", () => {
   });
 
   it("accepts a confidential client's secret in the form body too", async () => {
-    const code = await codeFor("desmyx");
+    const code = await codeFor("notes");
     const response = await call("/oauth/token", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -560,34 +558,34 @@ describe("/oauth/token", () => {
         code,
         redirect_uri: DES_CB,
         code_verifier: VERIFIER,
-        client_id: "desmyx",
-        client_secret: SECRETS.desmyx,
+        client_id: "notes",
+        client_secret: SECRETS.notes,
       }).toString(),
     });
     expect(response.status).toBe(200);
   });
 
   it("refuses a client that authenticates two ways at once", async () => {
-    const code = await codeFor("desmyx");
+    const code = await codeFor("notes");
     const response = await call("/oauth/token", {
       method: "POST",
       headers: {
         "content-type": "application/x-www-form-urlencoded",
-        authorization: basic("desmyx", SECRETS.desmyx),
+        authorization: basic("notes", SECRETS.notes),
       },
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code,
         redirect_uri: DES_CB,
         code_verifier: VERIFIER,
-        client_secret: SECRETS.desmyx,
+        client_secret: SECRETS.notes,
       }).toString(),
     });
     expect(response.status).toBe(401);
   });
 
   it("rejects a wrong secret in the form body", async () => {
-    const code = await codeFor("desmyx");
+    const code = await codeFor("notes");
     const response = await call("/oauth/token", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -596,7 +594,7 @@ describe("/oauth/token", () => {
         code,
         redirect_uri: DES_CB,
         code_verifier: VERIFIER,
-        client_id: "desmyx",
+        client_id: "notes",
         client_secret: "guess",
       }).toString(),
     });
@@ -610,7 +608,7 @@ describe("/oauth/token", () => {
   it("refuses a code issued to another client", async () => {
     const code = await codeFor("spa");
     expect(
-      (await exchange({ client: "desmyx", code, redirectUri: SPA_CB })).status,
+      (await exchange({ client: "notes", code, redirectUri: SPA_CB })).status,
     ).toBe(400);
   });
 
@@ -620,7 +618,7 @@ describe("/oauth/token", () => {
   });
 
   it("gives a third-party client a pairwise sub and a refresh token", async () => {
-    const response = await exchange({ client: "krynodes-access" });
+    const response = await exchange({ client: "docs-access" });
     const body = (await response.json()) as Record<string, string>;
     expect(payloadOf(body.id_token ?? "").sub).not.toBe("user-1");
     expect(typeof body.refresh_token).toBe("string");
@@ -632,7 +630,7 @@ describe("/oauth/token", () => {
   });
 
   it("lets no unverified email leave the provider", async () => {
-    const code = await codeFor("desmyx", "user-2");
+    const code = await codeFor("notes", "user-2");
     const body = (await (await exchange({ code })).json()) as Record<
       string,
       string
@@ -649,7 +647,7 @@ describe("/oauth/token", () => {
         lines.push(args);
       }),
     );
-    const code = await codeFor("desmyx");
+    const code = await codeFor("notes");
     await exchange({
       code,
       verifier: "wrong-verifier-wrong-verifier-wrong-verifier",
@@ -664,9 +662,7 @@ describe("/oauth/token", () => {
 
 describe("refresh", () => {
   async function firstRefresh(): Promise<string> {
-    const body = (await (
-      await exchange({ client: "krynodes-access" })
-    ).json()) as {
+    const body = (await (await exchange({ client: "docs-access" })).json()) as {
       refresh_token: string;
     };
     return body.refresh_token;
@@ -695,7 +691,7 @@ describe("refresh", () => {
   });
 
   it("is refused to a first-party client", async () => {
-    const response = await refreshResponse("anything", "desmyx");
+    const response = await refreshResponse("anything", "notes");
     expect(response.status).toBe(400);
     expect(((await response.json()) as { error: string }).error).toBe(
       "unauthorized_client",
@@ -704,7 +700,7 @@ describe("refresh", () => {
 });
 
 describe("/oauth/userinfo", () => {
-  async function accessToken(client: ClientId = "desmyx"): Promise<string> {
+  async function accessToken(client: ClientId = "notes"): Promise<string> {
     const body = (await (await exchange({ client })).json()) as {
       access_token: string;
     };
@@ -729,7 +725,7 @@ describe("/oauth/userinfo", () => {
       audience: "https://somewhere.else.test",
       sub: "user-1",
       scopes: ["openid", "email"],
-      clientId: "desmyx",
+      clientId: "notes",
     });
     const response = await call("/oauth/userinfo", {
       headers: { authorization: `Bearer ${token}` },
@@ -738,8 +734,8 @@ describe("/oauth/userinfo", () => {
   });
 
   it("stops answering once the grant is revoked", async () => {
-    const token = await accessToken("krynodes-access");
-    const grant = await findGrant(env, "user-1", "krynodes-access");
+    const token = await accessToken("docs-access");
+    const grant = await findGrant(env, "user-1", "docs-access");
     db.sqlite
       .prepare(
         "UPDATE oauth_grants SET revoked_at = datetime('now') WHERE id = ?",
@@ -764,16 +760,14 @@ describe("revocation", () => {
       method: "POST",
       headers: {
         "content-type": "application/x-www-form-urlencoded",
-        authorization: basic("krynodes-access", SECRETS["krynodes-access"]),
+        authorization: basic("docs-access", SECRETS["docs-access"]),
       },
       body: new URLSearchParams({ token }).toString(),
     });
   }
 
   it("revokes the grant behind a refresh token", async () => {
-    const body = (await (
-      await exchange({ client: "krynodes-access" })
-    ).json()) as {
+    const body = (await (await exchange({ client: "docs-access" })).json()) as {
       refresh_token: string;
     };
     expect((await revoke(body.refresh_token)).status).toBe(200);
@@ -781,9 +775,7 @@ describe("revocation", () => {
   });
 
   it("revokes the grant behind an access token", async () => {
-    const body = (await (
-      await exchange({ client: "krynodes-access" })
-    ).json()) as {
+    const body = (await (await exchange({ client: "docs-access" })).json()) as {
       access_token: string;
     };
     expect((await revoke(body.access_token)).status).toBe(200);
@@ -798,7 +790,7 @@ describe("revocation", () => {
 describe("the provider's own guards", () => {
   it("refuses to serve Pawl in production without a signing key", async () => {
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("desmyx")}`,
+      `/oauth/authorize?${authorizeQuery("notes")}`,
       undefined,
       { OIDC_SIGNING_KEY: undefined },
     );
@@ -810,7 +802,7 @@ describe("the provider's own guards", () => {
 
   it("answers 429 when the authorize rate limit is spent", async () => {
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("desmyx")}`,
+      `/oauth/authorize?${authorizeQuery("notes")}`,
       undefined,
       {
         AUTHORIZE_RATE_LIMIT: {

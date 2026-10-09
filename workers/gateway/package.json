@@ -8,12 +8,13 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1"
+    "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1 && tsc -p tsconfig.test.json --noEmit --checkers 1"
   },
   "dependencies": {
     "@pawl/auth": "workspace:*",
     "@pawl/config": "workspace:*",
     "@pawl/core": "workspace:*",
+    "@pawl/registry": "workspace:*",
     "@pawl/topology": "workspace:*",
     "@pawl/web-app": "workspace:*",
     "hono": "catalog:"
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
     "@pawl/typescript": "workspace:*",
+    "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

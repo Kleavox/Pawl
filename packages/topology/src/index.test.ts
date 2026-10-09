@@ -13,6 +13,14 @@ import {
 } from "./index";
 
 describe("Pawl topology", () => {
+  it("knows only Pawl's own two applications", () => {
+    expect(Object.keys(PUBLIC_SUBDOMAINS)).toEqual(["gateway", "pass"]);
+    expect(Object.keys(LOCAL_WORKER_PORTS)).toEqual(["gateway", "pass"]);
+    expect(Object.keys(LOCAL_VITE_PORTS)).toEqual(["gateway", "pass"]);
+    expect(Object.keys(INTERNAL_HOSTS)).toEqual(["PASS", "GATEWAY"]);
+    expect(INTERNAL_URLS).not.toHaveProperty("LINK_PURGE");
+  });
+
   it("assigns every local process a unique port", () => {
     const ports = [
       ...Object.values(LOCAL_WORKER_PORTS),
@@ -23,11 +31,10 @@ describe("Pawl topology", () => {
 
   it("derives public and local locations", () => {
     expect(publicHost("example.test", "gateway")).toBe("example.test");
-    expect(publicHost("example.test", "link")).toBe("link.example.test");
     expect(publicHost("example.test", "pass")).toBe("paw.example.test");
     expect(applicationForSubdomain("paw")).toBe("pass");
     expect(localWorkerOrigin("pass")).toBe("http://127.0.0.1:8787");
-    expect(applicationForSubdomain("port")).toBe("portfolio");
+    expect(applicationForSubdomain("port")).toBeUndefined();
     expect(workerName("pawl", "pass")).toBe("pawl-pass");
   });
 
@@ -35,7 +42,6 @@ describe("Pawl topology", () => {
     expect(new URL(INTERNAL_URLS.SESSION_VERIFY).host).toBe(
       INTERNAL_HOSTS.PASS,
     );
-    expect(new URL(INTERNAL_URLS.LINK_PURGE).host).toBe(INTERNAL_HOSTS.LINK);
   });
 
   it("names no application that left the platform", () => {

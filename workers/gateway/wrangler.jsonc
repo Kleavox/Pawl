@@ -18,16 +18,8 @@
   },
   "services": [
     {
-      "binding": "LINK",
-      "service": "local-link",
-    },
-    {
       "binding": "PASS",
       "service": "local-pass",
-    },
-    {
-      "binding": "PORTFOLIO",
-      "service": "local-portfolio",
     },
   ],
   "observability": {

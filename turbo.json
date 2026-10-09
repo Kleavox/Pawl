@@ -4,12 +4,13 @@
     "Cargo.lock",
     "Cargo.toml",
     "tsconfig.base.json",
-    "tooling/typescript/*.json"
+    "tooling/typescript/*.json",
+    "estate.json"
   ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": ["VITE_*", "PUBLIC_*"],
+      "env": ["VITE_*", "PUBLIC_*", "ESTATE_MANIFEST"],
       "outputs": ["dist/**", "pkg/**"]
     },
     "@pawl/crypto#build": {
@@ -22,6 +23,44 @@
         "../../Cargo.lock"
       ],
       "outputs": ["dist/**", "pkg/**"]
+    },
+    "@pawl/oidc#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../../crates/oidc/src/**",
+        "../../crates/oidc/Cargo.toml",
+        "../../Cargo.toml",
+        "../../Cargo.lock"
+      ],
+      "outputs": ["dist/**", "pkg/**"]
+    },
+    "@pawl/oidc#test": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "@pawl/oidc#typecheck": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "@pawl/registry#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../../crates/registry/src/**",
+        "../../crates/registry/Cargo.toml",
+        "../../Cargo.toml",
+        "../../Cargo.lock"
+      ],
+      "outputs": ["dist/**", "pkg/**"]
+    },
+    "@pawl/registry#test": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "@pawl/registry#typecheck": {
+      "dependsOn": ["build"],
+      "outputs": []
     },
     "dev": {
       "cache": false,

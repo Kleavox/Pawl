@@ -8,7 +8,7 @@ export function AppFooter({ product, rootOrigin }: AppFooterProps) {
     <footer className="pw-footer">
       <div className="pw-footer-inner">
         <span className="pw-footer-wm">
-          KLEAV<span>OX</span>
+          PA<span>WL</span>
           {product ? <span> / {product}</span> : null}
         </span>
         {rootOrigin ? (

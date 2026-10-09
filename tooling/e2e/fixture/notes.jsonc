@@ -1,0 +1,17 @@
+{
+  "name": "local-notes",
+  "main": "worker.ts",
+  "compatibility_date": "2026-06-05",
+  "dev": {
+    "port": 8790,
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "APP_KEY": "notes",
+    "PUBLIC_ORIGIN": "http://127.0.0.1:8790",
+    "PROVIDER": "http://127.0.0.1:8787",
+    "CLIENT_ID": "fixture-notes",
+    "REDIRECT_URI": "http://localhost:8790/callback",
+  },
+}

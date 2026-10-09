@@ -11,7 +11,8 @@
     "test": "tsc -p tsconfig.test.json --noEmit --checkers 1 && vitest run --exclude \"dist/**\""
   },
   "dependencies": {
-    "@pawl/topology": "workspace:*"
+    "@pawl/topology": "workspace:*",
+    "@pawl/registry": "workspace:*"
   },
   "devDependencies": {
     "@pawl/typescript": "workspace:*",

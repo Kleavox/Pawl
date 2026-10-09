@@ -4,7 +4,6 @@ export interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   SESSIONS: KVNamespace;
-  LINK?: Fetcher;
   GATEWAY?: Fetcher;
   ENVIRONMENT: DeployEnvironment;
   PUBLIC_ORIGIN: string;
@@ -22,4 +21,6 @@ export interface Env {
   OIDC_SUB_SECRET?: string;
   AUTHORIZE_RATE_LIMIT?: RateLimit;
   TOKEN_RATE_LIMIT?: RateLimit;
+  ESTATE_MANIFEST?: string;
+  [binding: string]: unknown;
 }

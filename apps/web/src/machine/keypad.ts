@@ -19,14 +19,10 @@ export type Keypad = {
 };
 
 const OTP_LENGTH = 6;
-const BAY_CODES: readonly BayCode[] = ["1", "3"];
 const DIGIT = /^[0-9]$/u;
 
-function isBayCode(key: string): key is BayCode {
-  return (BAY_CODES as readonly string[]).includes(key);
-}
-
-export function createKeypad(): Keypad {
+export function createKeypad(codes: readonly BayCode[]): Keypad {
+  const isBayCode = (key: string): key is BayCode => codes.includes(key);
   let mode: KeypadMode = "selector";
   let pendingBay: BayCode | null = null;
   let buffer = "";

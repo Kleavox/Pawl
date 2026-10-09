@@ -16,10 +16,20 @@
     "packages/crypto": {
       "ignoreUnresolved": ["../pkg/crypto.js"]
     },
+    "packages/oidc": {
+      "ignoreUnresolved": ["../pkg/oidc.js"]
+    },
+    "packages/registry": {
+      "ignoreUnresolved": ["../pkg/registry.js"]
+    },
     "tooling/e2e": {
-      "entry": ["playwright.config.ts", "tests/**/*.ts"],
-      "playwright": false,
-      "ignore": ["repos.d.mts"]
+      "entry": [
+        "playwright.config.ts",
+        "prepare.mjs",
+        "tests/**/*.ts",
+        "fixture/worker.ts"
+      ],
+      "playwright": false
     },
     "workers/gateway": {
       "ignoreDependencies": ["@pawl/web-app"]

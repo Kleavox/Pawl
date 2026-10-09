@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "./render";
 import { initialState, reduce } from "./state";
 import type { MachineState } from "./state";
+import { CATALOG } from "./catalog.testkit";
 import type { MachineModel } from "../estate-adapter";
 
 if (typeof HTMLDialogElement.prototype.showModal !== "function") {
@@ -95,7 +96,7 @@ function sub(element: HTMLElement): string {
 
 function otpAt(digits: string): MachineState {
   return {
-    ...initialState("guest"),
+    ...initialState("guest", CATALOG),
     authStep: "otp-machine",
     busy: true,
     authDigits: digits,
@@ -105,7 +106,7 @@ function otpAt(digits: string): MachineState {
 describe("render", () => {
   it("lights only what policy permits", () => {
     const element = root();
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
     expect(attr(element, "[data-bay='3'] [data-backlight]", "data-lit")).toBe(
       "true",
     );
@@ -113,7 +114,7 @@ describe("render", () => {
       "false",
     );
 
-    render(element, initialState("owner"), ownerModel);
+    render(element, initialState("owner", CATALOG), ownerModel);
     expect(attr(element, "[data-bay='1'] [data-backlight]", "data-lit")).toBe(
       "true",
     );
@@ -124,10 +125,10 @@ describe("render", () => {
 
   it("writes the screen as text, never as colour alone", () => {
     const element = root();
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
     expect(main(element)).toBe("INSERT PASS");
 
-    render(element, initialState("owner"), ownerModel);
+    render(element, initialState("owner", CATALOG), ownerModel);
     expect(main(element)).toBe("2 NEED ATTENTION");
   });
 
@@ -135,7 +136,7 @@ describe("render", () => {
     const element = root();
     render(
       element,
-      { ...initialState("guest"), status: "denied", selection: "1" },
+      { ...initialState("guest", CATALOG), status: "denied", selection: "1" },
       model,
     );
     expect(main(element)).toBe("1 DENIED, VISITOR PASS REQUIRED");
@@ -143,30 +144,30 @@ describe("render", () => {
 
   it("labels each cartridge for the person standing at the machine, not for a fixed role", () => {
     const element = root();
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
     expect(attr(element, "[data-cartridge='1']", "aria-label")).toBe(
-      "Select Link, bay 1, visitor pass required",
+      "Select Notes, bay 1, visitor pass required",
     );
     expect(attr(element, "[data-cartridge='3']", "aria-label")).toBe(
-      "Select Portfolio, bay 3, ready",
+      "Select Docs, bay 3, ready",
     );
 
-    render(element, initialState("owner"), ownerModel);
+    render(element, initialState("owner", CATALOG), ownerModel);
     expect(attr(element, "[data-cartridge='1']", "aria-label")).toBe(
-      "Select Link, bay 1, ready",
+      "Select Notes, bay 1, ready",
     );
   });
 
   it("offers a way back when the estate could not be read", () => {
     const element = root();
-    render(element, initialState("owner"), {
+    render(element, initialState("owner", CATALOG), {
       ...ownerModel,
       screen: "ESTATE UNREADABLE",
     });
     expect(main(element)).toBe("ESTATE UNREADABLE");
     expect(sub(element)).toBe("PRESS GO TO RETRY");
 
-    render(element, initialState("owner"), ownerModel);
+    render(element, initialState("owner", CATALOG), ownerModel);
     expect(main(element)).toBe("2 NEED ATTENTION");
     expect(sub(element)).toBe("SELECT A BAY");
   });
@@ -177,13 +178,13 @@ describe("render", () => {
       render(element, otpAt(digits), model);
       expect(main(element)).toBe(`EMAIL CODE ${digits.length}/6`);
     }
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
     expect(main(element)).toBe("INSERT PASS");
   });
 
   it("changes the screen words when the keypad changes mode", () => {
     const element = root();
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
     const selecting = { main: main(element), sub: sub(element) };
     render(element, otpAt(""), model);
     const entering = { main: main(element), sub: sub(element) };
@@ -210,21 +211,25 @@ describe("render", () => {
 
   it("projects the keypad mode from authStep and nothing else", () => {
     const element = root();
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
     expect(attr(element, "[data-machine]", "data-input")).toBe("selector");
 
     render(element, otpAt("123"), model);
     expect(attr(element, "[data-machine]", "data-input")).toBe("otp");
 
     for (const step of ["closed", "methods", "oauth", "issuing"] as const) {
-      render(element, { ...initialState("guest"), authStep: step }, model);
+      render(
+        element,
+        { ...initialState("guest", CATALOG), authStep: step },
+        model,
+      );
       expect(attr(element, "[data-machine]", "data-input")).toBe("selector");
     }
   });
 
   it("tells the truth about who is standing at the machine", () => {
     const element = root();
-    render(element, initialState("owner"), ownerModel);
+    render(element, initialState("owner", CATALOG), ownerModel);
     expect(attr(element, "[data-machine]", "data-access")).toBe("owner");
     expect(attr(element, "[data-cabinet-state]", "data-cabinet-state")).toBe(
       "owner",
@@ -236,7 +241,7 @@ describe("render", () => {
       "OWNER",
     );
 
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
     expect(attr(element, "[data-cabinet-state]", "data-cabinet-state")).toBe(
       "guest",
     );
@@ -250,7 +255,7 @@ describe("render", () => {
 
   it("moves the cartridge, the tray and the bridge with the state", () => {
     const element = root();
-    const releasing = reduce(initialState("owner"), {
+    const releasing = reduce(initialState("owner", CATALOG), {
       type: "select",
       bay: "1",
     });
@@ -258,14 +263,14 @@ describe("render", () => {
     expect(attr(element, "[data-machine]", "data-status")).toBe("dispensing");
     expect(attr(element, "[data-falling]", "data-falling")).toBe("1");
     expect(element.querySelector("[data-falling-name]")?.textContent).toBe(
-      "LINK",
+      "NOTE",
     );
 
     const delivered = reduce(releasing, { type: "tray-ready" });
     render(element, delivered, ownerModel);
     expect(attr(element, "[data-falling]", "data-falling")).toBe("none");
     expect(attr(element, "[data-tray]", "data-tray")).toBe("1");
-    expect(element.querySelector("[data-tray-name]")?.textContent).toBe("LINK");
+    expect(element.querySelector("[data-tray-name]")?.textContent).toBe("NOTE");
 
     const bridging = reduce(delivered, { type: "activate-tray" });
     render(element, bridging, ownerModel);
@@ -280,11 +285,11 @@ describe("render", () => {
     const first = root();
     const second = root();
     const state = reduce(
-      reduce(initialState("owner"), { type: "select", bay: "1" }),
+      reduce(initialState("owner", CATALOG), { type: "select", bay: "1" }),
       { type: "tray-ready" },
     );
     render(first, state, ownerModel);
-    render(second, initialState("guest"), model);
+    render(second, initialState("guest", CATALOG), model);
     render(second, otpAt("12"), model);
     render(second, state, ownerModel);
     expect(second.innerHTML).toBe(first.innerHTML);
@@ -297,9 +302,12 @@ describe("render", () => {
 
 describe("render owns the bridge", () => {
   function delivered(): MachineState {
-    return reduce(reduce(initialState("owner"), { type: "select", bay: "1" }), {
-      type: "tray-ready",
-    });
+    return reduce(
+      reduce(initialState("owner", CATALOG), { type: "select", bay: "1" }),
+      {
+        type: "tray-ready",
+      },
+    );
   }
 
   it("opens the bridge with showModal, never as an ordinary panel", () => {
@@ -346,22 +354,22 @@ describe("render owns the bridge", () => {
     const element = root();
     const bridge = element.querySelector<HTMLDialogElement>("[data-transfer]")!;
     const closed = vi.spyOn(bridge, "close");
-    render(element, initialState("guest"), model);
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
+    render(element, initialState("guest", CATALOG), model);
     expect(closed).not.toHaveBeenCalled();
   });
 });
 
 describe("render owns the console", () => {
   const sheetOpen: MachineState = {
-    ...initialState("guest"),
+    ...initialState("guest", CATALOG),
     consoleLayout: "sheet",
     consoleOpen: true,
   };
 
   it("projects the sheet's open state onto every attribute that carries it", () => {
     const element = root();
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
     expect(attr(element, "[data-console]", "data-console")).toBe("closed");
     expect(attr(element, "[data-dock]", "aria-expanded")).toBe("false");
     expect(attr(element, "[data-console]", "aria-hidden")).toBe("true");
@@ -397,7 +405,7 @@ describe("render owns the console", () => {
       element.querySelector("[data-terminal]")?.hasAttribute("inert"),
     ).toBe(false);
 
-    render(element, initialState("guest"), model);
+    render(element, initialState("guest", CATALOG), model);
     expect(element.querySelector(".cabinet")?.hasAttribute("inert")).toBe(
       false,
     );
@@ -409,7 +417,7 @@ describe("render owns the console", () => {
   it("is a landmark, not a modal, once the console is a column", () => {
     const element = root();
     const column: MachineState = {
-      ...initialState("guest"),
+      ...initialState("guest", CATALOG),
       consoleLayout: "column",
     };
     render(element, sheetOpen, model);
@@ -434,10 +442,39 @@ describe("render owns the console", () => {
     const element = root();
     render(
       element,
-      { ...initialState("guest"), consoleLayout: "column", consoleOpen: false },
+      {
+        ...initialState("guest", CATALOG),
+        consoleLayout: "column",
+        consoleOpen: false,
+      },
       model,
     );
     expect(attr(element, "[data-console]", "data-console")).toBe("open");
     expect(attr(element, "[data-dock]", "aria-expanded")).toBe("true");
+  });
+});
+
+describe("the cartridge's shape follows the catalog", () => {
+  it("drops, delivers and bridges a wide cartridge as wide", () => {
+    const element = root();
+    const dispensing = reduce(initialState("guest", CATALOG), {
+      type: "select",
+      bay: "3",
+    });
+    render(element, dispensing, model);
+    expect(attr(element, "[data-falling]", "data-falling-shape")).toBe("wide");
+    expect(element.querySelector("[data-falling-name]")?.textContent).toBe(
+      "MANUAL",
+    );
+
+    const delivered = reduce(dispensing, { type: "tray-ready" });
+    render(element, delivered, model);
+    expect(attr(element, "[data-tray]", "data-tray-shape")).toBe("wide");
+
+    const bridging = reduce(delivered, { type: "activate-tray" });
+    render(element, bridging, model);
+    expect(attr(element, "[data-transfer]", "data-transfer-shape")).toBe(
+      "wide",
+    );
   });
 });
