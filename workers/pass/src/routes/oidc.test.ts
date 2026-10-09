@@ -1,0 +1,838 @@
+import { SESSION_COOKIE } from "@pawl/auth";
+import { decodeBase64Url } from "@pawl/crypto";
+import { Hono } from "hono";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { Env } from "../env";
+import { hashToken } from "../lib/crypto";
+import {
+  migratedDb,
+  seedClient,
+  seedUser,
+  type TestDb,
+} from "../oidc/db.testkit";
+import { findGrant } from "../oidc/grants";
+import { mintAccessToken } from "../oidc/tokens";
+import { createSession } from "../lib/session";
+import { registerOidcRoutes } from "./oidc";
+import type { AppEnv } from "./shared";
+
+const ISSUER = "https://paw.product.test";
+const DES_CB = "https://des.product.test/callback";
+const ACCESS_CB = "https://team.cloudflareaccess.com/cdn-cgi/access/callback";
+const SPA_CB = "https://spa.product.test/cb";
+const VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+const SECRETS = { desmyx: "desmyx-secret", "krynodes-access": "access-secret" };
+
+type ClientId = "desmyx" | "krynodes-access" | "spa";
+
+let signingKey: string;
+let challenge: string;
+let db: TestDb;
+let env: Env;
+let app: Hono<AppEnv>;
+
+function kv() {
+  const store = new Map<string, string>();
+  return {
+    get: async (key: string, type?: string) => {
+      const value = store.get(key) ?? null;
+      return value !== null && type === "json" ? JSON.parse(value) : value;
+    },
+    put: async (key: string, value: string) => void store.set(key, value),
+    delete: async (key: string) => void store.delete(key),
+    list: async ({ prefix }: { prefix: string }) => ({
+      keys: [...store.keys()]
+        .filter((name) => name.startsWith(prefix))
+        .map((name) => ({ name, metadata: {} })),
+    }),
+  };
+}
+
+function payloadOf(token: string): Record<string, unknown> {
+  return JSON.parse(
+    new TextDecoder().decode(decodeBase64Url(token.split(".")[1] ?? "")),
+  ) as Record<string, unknown>;
+}
+
+beforeAll(async () => {
+  const pair = (await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  )) as CryptoKeyPair;
+  const pkcs8 = await crypto.subtle.exportKey("pkcs8", pair.privateKey);
+  signingKey = btoa(
+    String.fromCharCode(...new Uint8Array(pkcs8 as ArrayBuffer)),
+  );
+  challenge = await hashToken(VERIFIER);
+});
+
+beforeEach(async () => {
+  db = migratedDb();
+  seedUser(db, {
+    id: "user-1",
+    email: "owner@product.test",
+    username: "owner",
+  });
+  seedUser(db, { id: "user-2", email: "new@product.test", verified: false });
+  seedClient(db, {
+    id: "desmyx",
+    name: "Desmyx",
+    redirectUris: [DES_CB],
+    firstParty: true,
+    secretHash: await hashToken(SECRETS.desmyx),
+  });
+  seedClient(db, {
+    id: "krynodes-access",
+    name: "Krynodes",
+    redirectUris: [ACCESS_CB],
+    firstParty: false,
+    secretHash: await hashToken(SECRETS["krynodes-access"]),
+    sector: "cloudflareaccess.com",
+  });
+  seedClient(db, {
+    id: "spa",
+    redirectUris: [SPA_CB],
+    firstParty: true,
+    confidential: false,
+  });
+  env = {
+    ENVIRONMENT: "production",
+    PUBLIC_ORIGIN: ISSUER,
+    ROOT_DOMAIN: "product.test",
+    DB: db.DB,
+    SESSIONS: kv(),
+    OIDC_SIGNING_KEY: signingKey,
+    OIDC_SUB_SECRET: "pairwise-secret",
+  } as unknown as Env;
+  app = new Hono<AppEnv>();
+  registerOidcRoutes(app);
+});
+
+function call(path: string, init?: RequestInit, override?: Partial<Env>) {
+  return app.request(new URL(path, ISSUER).toString(), init, {
+    ...env,
+    ...override,
+  } as Env);
+}
+
+const callbacks: Record<ClientId, string> = {
+  desmyx: DES_CB,
+  "krynodes-access": ACCESS_CB,
+  spa: SPA_CB,
+};
+
+function authorizeQuery(
+  client: ClientId,
+  params: Record<string, string> = {},
+): string {
+  return new URLSearchParams({
+    client_id: client,
+    redirect_uri: callbacks[client],
+    response_type: "code",
+    scope: "openid email profile",
+    state: "s-1",
+    nonce: "n-1",
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    ...params,
+  }).toString();
+}
+
+async function cookieFor(userId = "user-1"): Promise<string> {
+  const row = db.sqlite
+    .prepare("SELECT email, username, role FROM users WHERE id = ?")
+    .get(userId) as { email: string; username: string | null; role: "USER" };
+  const { token } = await createSession(
+    env,
+    { id: userId, email: row.email, username: row.username, role: row.role },
+    1,
+  );
+  return `${SESSION_COOKIE}=${token}`;
+}
+
+async function signedInAuthorize(
+  client: ClientId,
+  params: Record<string, string> = {},
+  userId = "user-1",
+) {
+  return call(`/oauth/authorize?${authorizeQuery(client, params)}`, {
+    headers: { cookie: await cookieFor(userId) },
+  });
+}
+
+function location(response: Response): URL {
+  return new URL(response.headers.get("location") ?? "about:blank");
+}
+
+async function codeFor(
+  client: ClientId,
+  userId = "user-1",
+  params: Record<string, string> = {},
+): Promise<string> {
+  if (client === "krynodes-access") {
+    await consent(client, "allow", userId, params);
+  }
+  const response = await signedInAuthorize(client, params, userId);
+  const code = location(response).searchParams.get("code");
+  if (!code) throw new Error(`no code: ${response.status}`);
+  return code;
+}
+
+async function consent(
+  client: ClientId,
+  decision: "allow" | "deny",
+  userId = "user-1",
+  params: Record<string, string> = {},
+  origin = ISSUER,
+) {
+  return call("/oauth/consent", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin,
+      cookie: await cookieFor(userId),
+    },
+    body: new URLSearchParams({
+      request: authorizeQuery(client, params),
+      decision,
+    }).toString(),
+  });
+}
+
+function basic(client: string, secret: string): string {
+  return `Basic ${btoa(`${encodeURIComponent(client)}:${encodeURIComponent(secret)}`)}`;
+}
+
+async function exchange(options: {
+  client?: ClientId;
+  code?: string;
+  verifier?: string;
+  redirectUri?: string;
+  secret?: string | null;
+}) {
+  const client = options.client ?? "desmyx";
+  const code = options.code ?? (await codeFor(client));
+  const secret =
+    options.secret === undefined
+      ? (SECRETS as Record<string, string>)[client]
+      : options.secret;
+  const form = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: options.redirectUri ?? callbacks[client],
+    code_verifier: options.verifier ?? VERIFIER,
+  });
+  const headers: Record<string, string> = {
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  if (secret) headers.authorization = basic(client, secret);
+  else form.set("client_id", client);
+  return call("/oauth/token", {
+    method: "POST",
+    headers,
+    body: form.toString(),
+  });
+}
+
+async function refreshResponse(
+  token: string,
+  client: ClientId = "krynodes-access",
+) {
+  return call("/oauth/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      authorization: basic(
+        client,
+        (SECRETS as Record<string, string>)[client] ?? "",
+      ),
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: token,
+    }).toString(),
+  });
+}
+
+async function grantRevoked(client = "krynodes-access"): Promise<boolean> {
+  return (await findGrant(env, "user-1", client)) === null;
+}
+
+describe("discovery", () => {
+  it("advertises the issuer and every endpoint a client needs", async () => {
+    const response = await call("/.well-known/openid-configuration");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      issuer: ISSUER,
+      authorization_endpoint: `${ISSUER}/oauth/authorize`,
+      token_endpoint: `${ISSUER}/oauth/token`,
+      userinfo_endpoint: `${ISSUER}/oauth/userinfo`,
+      jwks_uri: `${ISSUER}/oauth/jwks.json`,
+      revocation_endpoint: `${ISSUER}/oauth/revoke`,
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      subject_types_supported: ["public", "pairwise"],
+      id_token_signing_alg_values_supported: ["ES256"],
+      code_challenge_methods_supported: ["S256"],
+      scopes_supported: ["openid", "email", "profile"],
+      claims_supported: [
+        "sub",
+        "email",
+        "email_verified",
+        "preferred_username",
+      ],
+      token_endpoint_auth_methods_supported: [
+        "client_secret_basic",
+        "client_secret_post",
+        "none",
+      ],
+    });
+  });
+});
+
+describe("jwks", () => {
+  it("publishes public keys only, cacheably", async () => {
+    const response = await call("/oauth/jwks.json");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("max-age");
+    const { keys } = (await response.json()) as { keys: object[] };
+    expect(keys).toHaveLength(1);
+    expect(keys[0]).not.toHaveProperty("d");
+  });
+
+  it("answers a named 503 rather than an empty key set when no key exists", async () => {
+    const response = await call("/oauth/jwks.json", undefined, {
+      ENVIRONMENT: "development",
+      OIDC_SIGNING_KEY: undefined,
+    });
+    expect(response.status).toBe(503);
+    expect(((await response.json()) as { code: string }).code).toBe(
+      "signing_key_unavailable",
+    );
+  });
+});
+
+describe("/oauth/authorize", () => {
+  it("refuses to redirect to an unregistered uri", async () => {
+    const response = await call(
+      `/oauth/authorize?${authorizeQuery("desmyx", { redirect_uri: "https://evil.test/cb" })}`,
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("refuses an unknown client without redirecting anywhere", async () => {
+    const response = await call(
+      `/oauth/authorize?${authorizeQuery("desmyx", { client_id: "nobody" })}`,
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("rejects plain PKCE", async () => {
+    const response = await call(
+      `/oauth/authorize?${authorizeQuery("desmyx", { code_challenge_method: "plain", code_challenge: VERIFIER })}`,
+    );
+    expect(response.status).toBe(302);
+    expect(location(response).searchParams.get("error")).toBe(
+      "invalid_request",
+    );
+  });
+
+  it("rejects a request with no PKCE at all", async () => {
+    const query = new URLSearchParams(authorizeQuery("desmyx"));
+    query.delete("code_challenge");
+    query.delete("code_challenge_method");
+    const response = await call(`/oauth/authorize?${query}`);
+    expect(location(response).searchParams.get("error")).toBe(
+      "invalid_request",
+    );
+  });
+
+  it("requires the openid scope", async () => {
+    const response = await call(
+      `/oauth/authorize?${authorizeQuery("desmyx", { scope: "email" })}`,
+    );
+    expect(location(response).searchParams.get("error")).toBe("invalid_scope");
+  });
+
+  it("refuses a scope the client was not allowed", async () => {
+    const response = await call(
+      `/oauth/authorize?${authorizeQuery("desmyx", { scope: "openid admin" })}`,
+    );
+    expect(location(response).searchParams.get("error")).toBe("invalid_scope");
+  });
+
+  it("answers login_required on the redirect uri when prompt=none and no session exists", async () => {
+    const response = await call(
+      `/oauth/authorize?${authorizeQuery("desmyx", { prompt: "none" })}`,
+    );
+    expect(response.status).toBe(302);
+    const target = location(response);
+    expect(target.origin + target.pathname).toBe(DES_CB);
+    expect(target.searchParams.get("error")).toBe("login_required");
+    expect(target.searchParams.get("state")).toBe("s-1");
+  });
+
+  it("sends a signed-out person to sign in, and back to this request afterwards", async () => {
+    const response = await call(`/oauth/authorize?${authorizeQuery("desmyx")}`);
+    expect(response.status).toBe(302);
+    const target = location(response);
+    expect(target.origin).toBe(ISSUER);
+    const back = new URL(target.searchParams.get("returnTo") ?? "");
+    expect(back.origin + back.pathname).toBe(`${ISSUER}/oauth/authorize`);
+    expect(back.searchParams.get("client_id")).toBe("desmyx");
+  });
+
+  it("passes state through untouched", async () => {
+    const state = "a b&c=d";
+    const response = await call(
+      `/oauth/authorize?${authorizeQuery("desmyx", { prompt: "none", state })}`,
+    );
+    expect(location(response).searchParams.get("state")).toBe(state);
+  });
+
+  it("hands a signed-in person's first-party client a code without asking", async () => {
+    const response = await signedInAuthorize("desmyx");
+    expect(response.status).toBe(302);
+    const target = location(response);
+    expect(target.origin + target.pathname).toBe(DES_CB);
+    expect(target.searchParams.get("code")).toBeTruthy();
+    expect(target.searchParams.get("state")).toBe("s-1");
+  });
+});
+
+describe("consent", () => {
+  it("is shown for a third-party client with no grant", async () => {
+    const response = await signedInAuthorize("krynodes-access");
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain("cloudflareaccess.com");
+    expect(body).toContain("Krynodes");
+    expect(body).not.toContain("code=");
+  });
+
+  it("names the client's registered domain, not a value from the query", async () => {
+    const response = await signedInAuthorize("krynodes-access", {
+      client_name: "Totally Safe",
+    });
+    expect(await response.text()).not.toContain("Totally Safe");
+  });
+
+  it("answers consent_required instead of a page when prompt=none", async () => {
+    const response = await signedInAuthorize("krynodes-access", {
+      prompt: "none",
+    });
+    expect(location(response).searchParams.get("error")).toBe(
+      "consent_required",
+    );
+  });
+
+  it("records the grant and issues a code when allowed", async () => {
+    const response = await consent("krynodes-access", "allow");
+    expect(response.status).toBe(302);
+    expect(location(response).searchParams.get("code")).toBeTruthy();
+    expect(await grantRevoked()).toBe(false);
+  });
+
+  it("is skipped on a later sign-in once the grant exists", async () => {
+    await consent("krynodes-access", "allow");
+    const response = await signedInAuthorize("krynodes-access");
+    expect(location(response).searchParams.get("code")).toBeTruthy();
+  });
+
+  it("is asked again when the client wants more than was granted", async () => {
+    await consent("krynodes-access", "allow", "user-1", { scope: "openid" });
+    const response = await signedInAuthorize("krynodes-access");
+    expect(response.status).toBe(200);
+  });
+
+  it("tells the client access_denied when refused, and grants nothing", async () => {
+    const response = await consent("krynodes-access", "deny");
+    expect(location(response).searchParams.get("error")).toBe("access_denied");
+    expect(location(response).searchParams.get("code")).toBeNull();
+    expect(await grantRevoked()).toBe(true);
+  });
+
+  it("refuses a consent posted from another site", async () => {
+    const response = await consent(
+      "krynodes-access",
+      "allow",
+      "user-1",
+      {},
+      "https://evil.test",
+    );
+    expect(response.status).toBe(403);
+    expect(await grantRevoked()).toBe(true);
+  });
+
+  it("validates the request it carries from scratch", async () => {
+    const response = await consent("krynodes-access", "allow", "user-1", {
+      redirect_uri: "https://evil.test/cb",
+    });
+    expect(response.status).toBe(400);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("refuses a consent without a live session", async () => {
+    const response = await call("/oauth/consent", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: ISSUER,
+      },
+      body: new URLSearchParams({
+        request: authorizeQuery("krynodes-access"),
+        decision: "allow",
+      }).toString(),
+    });
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("/oauth/token", () => {
+  it("exchanges a code for tokens a first-party client can trust", async () => {
+    const response = await exchange({});
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    const body = (await response.json()) as Record<string, string>;
+    expect(body).toMatchObject({ token_type: "Bearer", expires_in: 600 });
+    expect(payloadOf(body.id_token ?? "")).toMatchObject({
+      iss: ISSUER,
+      aud: "desmyx",
+      sub: "user-1",
+      nonce: "n-1",
+      email: "owner@product.test",
+      email_verified: true,
+      preferred_username: "owner",
+    });
+    expect(payloadOf(body.access_token ?? "")).toMatchObject({
+      aud: ["desmyx", ISSUER],
+      sub: "user-1",
+      client_id: "desmyx",
+    });
+  });
+
+  it("rejects a code whose verifier does not match the challenge", async () => {
+    const response = await exchange({
+      verifier: "wrong-verifier-wrong-verifier-wrong-verifier",
+    });
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toBe(
+      "invalid_grant",
+    );
+  });
+
+  it("rejects a code presented for a different redirect uri", async () => {
+    const response = await exchange({
+      redirectUri: "https://des.product.test/other",
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it("revokes the grant when a code is replayed", async () => {
+    const code = await codeFor("krynodes-access");
+    expect((await exchange({ client: "krynodes-access", code })).status).toBe(
+      200,
+    );
+    const second = await exchange({ client: "krynodes-access", code });
+    expect(second.status).toBe(400);
+    expect(await grantRevoked()).toBe(true);
+  });
+
+  it("requires a secret from a confidential client", async () => {
+    const response = await exchange({ secret: null });
+    expect(response.status).toBe(401);
+    expect(((await response.json()) as { error: string }).error).toBe(
+      "invalid_client",
+    );
+  });
+
+  it("accepts a confidential client's secret in the form body too", async () => {
+    const code = await codeFor("desmyx");
+    const response = await call("/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: DES_CB,
+        code_verifier: VERIFIER,
+        client_id: "desmyx",
+        client_secret: SECRETS.desmyx,
+      }).toString(),
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it("refuses a client that authenticates two ways at once", async () => {
+    const code = await codeFor("desmyx");
+    const response = await call("/oauth/token", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        authorization: basic("desmyx", SECRETS.desmyx),
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: DES_CB,
+        code_verifier: VERIFIER,
+        client_secret: SECRETS.desmyx,
+      }).toString(),
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects a wrong secret in the form body", async () => {
+    const code = await codeFor("desmyx");
+    const response = await call("/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: DES_CB,
+        code_verifier: VERIFIER,
+        client_id: "desmyx",
+        client_secret: "guess",
+      }).toString(),
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects a wrong secret", async () => {
+    expect((await exchange({ secret: "guess" })).status).toBe(401);
+  });
+
+  it("refuses a code issued to another client", async () => {
+    const code = await codeFor("spa");
+    expect(
+      (await exchange({ client: "desmyx", code, redirectUri: SPA_CB })).status,
+    ).toBe(400);
+  });
+
+  it("lets a public client exchange with PKCE alone", async () => {
+    const response = await exchange({ client: "spa", secret: null });
+    expect(response.status).toBe(200);
+  });
+
+  it("gives a third-party client a pairwise sub and a refresh token", async () => {
+    const response = await exchange({ client: "krynodes-access" });
+    const body = (await response.json()) as Record<string, string>;
+    expect(payloadOf(body.id_token ?? "").sub).not.toBe("user-1");
+    expect(typeof body.refresh_token).toBe("string");
+  });
+
+  it("never hands a first-party client a refresh token", async () => {
+    const body = (await (await exchange({})).json()) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("refresh_token");
+  });
+
+  it("lets no unverified email leave the provider", async () => {
+    const code = await codeFor("desmyx", "user-2");
+    const body = (await (await exchange({ code })).json()) as Record<
+      string,
+      string
+    >;
+    const claims = payloadOf(body.id_token ?? "");
+    expect(claims).not.toHaveProperty("email");
+    expect(claims).not.toHaveProperty("email_verified");
+  });
+
+  it("logs no secret material when an exchange fails", async () => {
+    const lines: unknown[][] = [];
+    const spies = (["error", "warn", "log", "info"] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        lines.push(args);
+      }),
+    );
+    const code = await codeFor("desmyx");
+    await exchange({
+      code,
+      verifier: "wrong-verifier-wrong-verifier-wrong-verifier",
+    });
+    await exchange({ code, secret: "s3cret-client-secret" });
+    for (const spy of spies) spy.mockRestore();
+    const logged = JSON.stringify(lines);
+    expect(logged).not.toContain("s3cret-client-secret");
+    expect(logged).not.toContain(code);
+  });
+});
+
+describe("refresh", () => {
+  async function firstRefresh(): Promise<string> {
+    const body = (await (
+      await exchange({ client: "krynodes-access" })
+    ).json()) as {
+      refresh_token: string;
+    };
+    return body.refresh_token;
+  }
+
+  it("rotates on use, and the old token stops working", async () => {
+    const first = await firstRefresh();
+    const response = await refreshResponse(first);
+    expect(response.status).toBe(200);
+    const second = ((await response.json()) as { refresh_token: string })
+      .refresh_token;
+    expect(second).not.toBe(first);
+    expect((await refreshResponse(first)).status).toBe(400);
+  });
+
+  it("revokes the whole grant when a retired token is replayed", async () => {
+    const first = await firstRefresh();
+    const second = (
+      (await (await refreshResponse(first)).json()) as {
+        refresh_token: string;
+      }
+    ).refresh_token;
+    await refreshResponse(first);
+    expect((await refreshResponse(second)).status).toBe(400);
+    expect(await grantRevoked()).toBe(true);
+  });
+
+  it("is refused to a first-party client", async () => {
+    const response = await refreshResponse("anything", "desmyx");
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toBe(
+      "unauthorized_client",
+    );
+  });
+});
+
+describe("/oauth/userinfo", () => {
+  async function accessToken(client: ClientId = "desmyx"): Promise<string> {
+    const body = (await (await exchange({ client })).json()) as {
+      access_token: string;
+    };
+    return body.access_token;
+  }
+
+  it("answers the claims the token's scopes allow", async () => {
+    const response = await call("/oauth/userinfo", {
+      headers: { authorization: `Bearer ${await accessToken()}` },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      sub: "user-1",
+      email: "owner@product.test",
+      email_verified: true,
+      preferred_username: "owner",
+    });
+  });
+
+  it("rejects an access token whose aud is another resource", async () => {
+    const token = await mintAccessToken(env, {
+      audience: "https://somewhere.else.test",
+      sub: "user-1",
+      scopes: ["openid", "email"],
+      clientId: "desmyx",
+    });
+    const response = await call("/oauth/userinfo", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it("stops answering once the grant is revoked", async () => {
+    const token = await accessToken("krynodes-access");
+    const grant = await findGrant(env, "user-1", "krynodes-access");
+    db.sqlite
+      .prepare(
+        "UPDATE oauth_grants SET revoked_at = datetime('now') WHERE id = ?",
+      )
+      .run(grant?.id ?? "");
+    const response = await call("/oauth/userinfo", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it("answers 401 with a named reason when no token is sent", async () => {
+    const response = await call("/oauth/userinfo");
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain("invalid_token");
+  });
+});
+
+describe("revocation", () => {
+  async function revoke(token: string) {
+    return call("/oauth/revoke", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        authorization: basic("krynodes-access", SECRETS["krynodes-access"]),
+      },
+      body: new URLSearchParams({ token }).toString(),
+    });
+  }
+
+  it("revokes the grant behind a refresh token", async () => {
+    const body = (await (
+      await exchange({ client: "krynodes-access" })
+    ).json()) as {
+      refresh_token: string;
+    };
+    expect((await revoke(body.refresh_token)).status).toBe(200);
+    expect(await grantRevoked()).toBe(true);
+  });
+
+  it("revokes the grant behind an access token", async () => {
+    const body = (await (
+      await exchange({ client: "krynodes-access" })
+    ).json()) as {
+      access_token: string;
+    };
+    expect((await revoke(body.access_token)).status).toBe(200);
+    expect(await grantRevoked()).toBe(true);
+  });
+
+  it("answers 200 for an unknown token, to leak nothing", async () => {
+    expect((await revoke("not-a-token")).status).toBe(200);
+  });
+});
+
+describe("the provider's own guards", () => {
+  it("refuses to serve Pawl in production without a signing key", async () => {
+    const response = await call(
+      `/oauth/authorize?${authorizeQuery("desmyx")}`,
+      undefined,
+      { OIDC_SIGNING_KEY: undefined },
+    );
+    expect(response.status).toBe(503);
+    expect(((await response.json()) as { code: string }).code).toBe(
+      "signing_key_unavailable",
+    );
+  });
+
+  it("answers 429 when the authorize rate limit is spent", async () => {
+    const response = await call(
+      `/oauth/authorize?${authorizeQuery("desmyx")}`,
+      undefined,
+      {
+        AUTHORIZE_RATE_LIMIT: {
+          limit: async () => ({ success: false }),
+        },
+      } as unknown as Partial<Env>,
+    );
+    expect(response.status).toBe(429);
+  });
+
+  it("answers 429 when the token rate limit is spent", async () => {
+    const response = await call(
+      "/oauth/token",
+      {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "grant_type=authorization_code",
+      },
+      {
+        TOKEN_RATE_LIMIT: { limit: async () => ({ success: false }) },
+      } as unknown as Partial<Env>,
+    );
+    expect(response.status).toBe(429);
+  });
+});

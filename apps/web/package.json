@@ -1,0 +1,25 @@
+{
+  "name": "@pawl/web-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1 && tsc -p tsconfig.test.json --noEmit --checkers 1"
+  },
+  "dependencies": {
+    "@pawl/config": "workspace:*",
+    "@pawl/core": "workspace:*",
+    "@pawl/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@pawl/typescript": "workspace:*",
+    "@pawl/vite-config": "workspace:*",
+    "jsdom": "^30.0.1",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

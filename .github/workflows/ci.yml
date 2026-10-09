@@ -1,0 +1,173 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      javascript: ${{ steps.filter.outputs.javascript }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            javascript:
+              - "apps/**"
+              - "workers/**"
+              - "packages/**"
+              - "crates/**"
+              - "tooling/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "tsconfig.base.json"
+              - "turbo.json"
+              - ".github/workflows/ci.yml"
+
+  javascript:
+    needs: changes
+    if: needs.changes.outputs.javascript == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.17.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache Turbo
+        uses: actions/cache@v6
+        with:
+          path: .turbo
+          key: turbo-${{ github.job }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ github.job }}-${{ github.ref_name }}-
+            turbo-${{ github.job }}-
+
+      - run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache wasm-pack binary
+        id: cache-wasm-pack
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/wasm-pack
+          key: wasm-pack-0.15.0-${{ runner.os }}
+
+      - run: cargo install wasm-pack --locked --version 0.15.0
+        if: steps.cache-wasm-pack.outputs.cache-hit != 'true'
+
+      - name: Cache Rust build artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cache/.wasm-pack
+            target
+          key: rust-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Warm wasm-bindgen-cli cache
+        run: wasm-pack build --target web --out-dir /tmp/wasm-pack-warmup --release crates/crypto --locked
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.javascript == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.17.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache Turbo
+        uses: actions/cache@v6
+        with:
+          path: .turbo
+          key: turbo-${{ github.job }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ github.job }}-${{ github.ref_name }}-
+            turbo-${{ github.job }}-
+
+      - run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache wasm-pack binary
+        id: cache-wasm-pack
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/wasm-pack
+          key: wasm-pack-0.15.0-${{ runner.os }}
+
+      - run: cargo install wasm-pack --locked --version 0.15.0
+        if: steps.cache-wasm-pack.outputs.cache-hit != 'true'
+
+      - name: Cache Rust build artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cache/.wasm-pack
+            target
+          key: rust-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Warm wasm-bindgen-cli cache
+        run: wasm-pack build --target web --out-dir /tmp/wasm-pack-warmup --release crates/crypto --locked
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - run: pnpm --filter @pawl/e2e exec playwright install --with-deps chromium
+
+      - run: pnpm e2e
+
+  validate:
+    name: validate
+    if: always()
+    needs:
+      - changes
+      - javascript
+      - e2e
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm required checks passed
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          JAVASCRIPT_RESULT: ${{ needs.javascript.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+        run: |
+          test "$CHANGES_RESULT" = "success"
+          test "$JAVASCRIPT_RESULT" = "success" || test "$JAVASCRIPT_RESULT" = "skipped"
+          test "$E2E_RESULT" = "success" || test "$E2E_RESULT" = "skipped"

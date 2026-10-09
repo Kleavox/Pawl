@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="How Pawl collects, uses, stores, and deletes account and service data."
+    />
+    <link rel="canonical" href="{{ROOT_ORIGIN}}/privacy" />
+    <title>Privacy Policy | Pawl</title>
+    <script type="module" src="/src/legal.ts"></script>
+  </head>
+  <body>
+    <header class="hdr">
+      <div class="shell hdr-inner">
+        <a class="wm" href="/" aria-label="Pawl home">Pa<b>wl</b></a>
+        <a class="btn-nav" href="/">Home</a>
+      </div>
+    </header>
+
+    <main class="legal-main">
+      <p class="section-label">POLICY / PRIVACY</p>
+      <h1>Privacy, without ambiguity.</h1>
+      <p class="legal-intro">
+        This policy explains what Pawl processes when you create an account,
+        authenticate through Google or GitHub, create links, share files, or
+        monitor infrastructure. Effective June 7, 2026.
+      </p>
+
+      <section class="legal-section">
+        <h2>Data we process</h2>
+        <ul>
+          <li>
+            Account name, email address, authentication provider, and security
+            events.
+          </li>
+          <li>
+            Short-link destinations, settings, access counters, and expiration
+            data.
+          </li>
+          <li>
+            Temporary files, file metadata, download limits, and deletion
+            schedules.
+          </li>
+          <li>
+            Infrastructure metrics, checks, incidents, and enrolled node
+            identifiers.
+          </li>
+          <li>
+            Contact-form names, email addresses, messages, and abuse-prevention
+            signals.
+          </li>
+        </ul>
+      </section>
+
+      <section class="legal-section">
+        <h2>Google and GitHub sign-in</h2>
+        <p>
+          Pawl requests only basic identity information needed to create and
+          secure an account: an account identifier, verified email address, and
+          profile name. OAuth credentials are used for sign-in and are not sold
+          or used for advertising.
+        </p>
+      </section>
+
+      <section class="legal-section">
+        <h2>Storage and service providers</h2>
+        <p>
+          Cloudflare Workers, D1, KV, and R2 process application traffic and
+          stored service data. Resend processes transactional email and
+          portfolio contact messages. Google and GitHub process authentication
+          according to their own policies.
+        </p>
+        <p>
+          Sensitive actions such as registration, password resets, and guest
+          uploads are protected by Cloudflare Turnstile, which runs invisibly
+          and processes a limited set of signals to verify that a visitor is
+          human. Cloudflare's handling of this data is described in its
+          <a
+            href="https://www.cloudflare.com/turnstile-privacy-policy/"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Turnstile Privacy Policy Addendum</a
+          >, which supplements Cloudflare's general privacy policy.
+        </p>
+      </section>
+
+      <section class="legal-section">
+        <h2>Retention and deletion</h2>
+        <p>
+          Temporary files are removed when their configured expiration or
+          download limit is reached. Other service records are retained while
+          needed to provide, secure, and troubleshoot the service. Account and
+          related data deletion requests can be submitted through the operator's
+          contact form.
+        </p>
+      </section>
+
+      <section class="legal-section">
+        <h2>Sharing and security</h2>
+        <p>
+          Personal data is not sold. It is shared only with service providers
+          required to operate Pawl, when you direct the service to share
+          content, or when disclosure is legally required. Reasonable technical
+          safeguards are used, but no online service can guarantee absolute
+          security.
+        </p>
+      </section>
+
+      <section class="legal-section">
+        <h2>Contact and changes</h2>
+        <p>
+          Questions, access requests, and deletion requests can be sent through
+          the operator's contact form. Material policy changes will be reflected
+          on this page with an updated effective date.
+        </p>
+      </section>
+    </main>
+
+    <footer class="legal-footer">
+      <span>(c) {{YEAR}} Pawl</span>
+      <a href="/terms">Terms of Service</a>
+    </footer>
+  </body>
+</html>

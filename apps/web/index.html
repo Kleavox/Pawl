@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Pawl is a focused ecosystem for routes, temporary files, identity, and infrastructure monitoring."
+    />
+    <meta name="theme-color" content="#070908" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content="Pawl | Focused systems" />
+    <meta
+      property="og:description"
+      content="Routes, temporary files, identity, and infrastructure monitoring under one deliberate system."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="{{ROOT_ORIGIN}}" />
+    <link rel="canonical" href="{{ROOT_ORIGIN}}" />
+    <title>Pawl | Focused systems</title>
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <header data-app-header></header>
+    <template data-header-account>
+      <div class="account" data-account>
+        <a class="btn-nav" href="{{PASS_SIGNIN_HREF}}" data-signin> Sign in </a>
+        <div class="account-menu" data-account-menu hidden>
+          <button
+            type="button"
+            class="account-trigger"
+            data-account-trigger
+            aria-expanded="false"
+          >
+            <span data-account-name></span>
+          </button>
+          <div class="account-dropdown" data-account-dropdown hidden>
+            <button type="button" data-logout>Sign out</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <main class="machine-room">
+      <section class="stage" aria-label="Pawl software vending machine">
+        <div
+          class="machine"
+          data-machine
+          data-access="guest"
+          data-status="idle"
+          data-input="selector"
+        >
+          <section class="cabinet" aria-label="Application inventory">
+            <div class="door">
+              <div class="inventory">
+                <header class="inventory-header">
+                  <h1 class="machine-wordmark">PAWL</h1>
+                  <span class="cabinet-state" data-cabinet-state="guest"
+                    >GUEST MODE</span
+                  >
+                </header>
+
+                <div
+                  class="shelf shelf--primary"
+                  data-shelf
+                  role="group"
+                  aria-label="Bays 1 to 3, two applications"
+                >
+                  <div class="slot" data-bay="1">
+                    <span class="bay-backlight" data-backlight></span>
+                    <span class="coil"
+                      ><i></i><i></i><i></i><i></i><i></i
+                    ></span>
+                    <button
+                      class="cartridge cartridge--link"
+                      type="button"
+                      data-cartridge="1"
+                      data-href="{{LINK_HREF}}"
+                      aria-label="Select Link, bay 1"
+                    >
+                      <span class="cartridge__detail"></span>
+                      <span class="cartridge__name">LINK</span>
+                    </button>
+                    <span class="slot-code">
+                      <span>1 &middot; <strong>LINK</strong></span>
+                      <span class="slot-code__scope">Visitor</span>
+                    </span>
+                  </div>
+
+                  <div class="slot slot--empty" data-bay="2" aria-hidden="true">
+                    <span class="coil"
+                      ><i></i><i></i><i></i><i></i><i></i
+                    ></span>
+                    <span class="empty-stop"></span>
+                    <span class="slot-code">2 &middot; EMPTY</span>
+                  </div>
+
+                  <div class="slot" data-bay="3">
+                    <span class="bay-backlight" data-backlight></span>
+                    <span class="coil"
+                      ><i></i><i></i><i></i><i></i><i></i
+                    ></span>
+                    <button
+                      class="cartridge cartridge--portfolio"
+                      type="button"
+                      data-cartridge="3"
+                      data-href="{{PORT_HREF}}"
+                      aria-label="Select Portfolio, bay 3"
+                    >
+                      <span class="cartridge__detail"></span>
+                      <span class="cartridge__name">PORT</span>
+                    </button>
+                    <span class="slot-code">
+                      <span>3 &middot; <strong>PORT</strong></span>
+                      <span class="slot-code__scope">Public</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  class="shelf"
+                  data-shelf
+                  role="group"
+                  aria-label="Bays 4 to 6, three empty bays"
+                >
+                  <div class="slot slot--empty" data-bay="4" aria-hidden="true">
+                    <span class="coil"
+                      ><i></i><i></i><i></i><i></i><i></i
+                    ></span>
+                    <span class="empty-stop"></span>
+                    <span class="slot-code">4 &middot; EMPTY</span>
+                  </div>
+                  <div class="slot slot--empty" data-bay="5" aria-hidden="true">
+                    <span class="coil"
+                      ><i></i><i></i><i></i><i></i><i></i
+                    ></span>
+                    <span class="empty-stop"></span>
+                    <span class="slot-code">5 &middot; EMPTY</span>
+                  </div>
+                  <div class="slot slot--empty" data-bay="6" aria-hidden="true">
+                    <span class="coil"
+                      ><i></i><i></i><i></i><i></i><i></i
+                    ></span>
+                    <span class="empty-stop"></span>
+                    <span class="slot-code">6 &middot; EMPTY</span>
+                  </div>
+                </div>
+
+                <div
+                  class="shelf"
+                  data-shelf
+                  role="group"
+                  aria-label="Bays 7 to 9, three empty bays"
+                >
+                  <div class="slot slot--empty" data-bay="7" aria-hidden="true">
+                    <span class="coil"
+                      ><i></i><i></i><i></i><i></i><i></i
+                    ></span>
+                    <span class="empty-stop"></span>
+                    <span class="slot-code">7 &middot; EMPTY</span>
+                  </div>
+                  <div class="slot slot--empty" data-bay="8" aria-hidden="true">
+                    <span class="coil"
+                      ><i></i><i></i><i></i><i></i><i></i
+                    ></span>
+                    <span class="empty-stop"></span>
+                    <span class="slot-code">8 &middot; EMPTY</span>
+                  </div>
+                  <div class="slot slot--empty" data-bay="9" aria-hidden="true">
+                    <span class="coil"
+                      ><i></i><i></i><i></i><i></i><i></i
+                    ></span>
+                    <span class="empty-stop"></span>
+                    <span class="slot-code">9 &middot; EMPTY</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="dispense-zone">
+              <span
+                class="falling-cartridge"
+                data-falling="none"
+                aria-hidden="true"
+              >
+                <span class="falling-cartridge__hardware"
+                  ><i></i><i></i><i></i
+                ></span>
+                <strong data-falling-name></strong>
+              </span>
+
+              <div class="tray" data-tray="none">
+                <span class="tray-shutter" aria-hidden="true"
+                  ><i></i><i></i
+                ></span>
+                <span class="tray-label">DELIVERY BAY</span>
+                <div class="tray-result">
+                  <span class="tray-item" aria-hidden="true">
+                    <strong data-tray-code></strong>
+                    <small data-tray-name></small>
+                  </span>
+                  <button class="tray-action" type="button" data-tray-action>
+                    TAKE DELIVERY
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <button
+            class="console-dock"
+            type="button"
+            data-dock
+            aria-controls="machine-console"
+            aria-expanded="false"
+          >
+            <span class="console-dock__screen" aria-hidden="true">
+              <span data-dock-screen>INSERT PASS</span>
+              <small data-dock-sub>SELECT A BAY</small>
+            </span>
+            <span class="console-dock__action">
+              <small>ACCESS CONSOLE</small>
+              <strong>OPEN</strong>
+            </span>
+          </button>
+
+          <div class="console-scrim" data-scrim aria-hidden="true"></div>
+
+          <aside
+            class="control-column"
+            id="machine-console"
+            data-console="closed"
+            aria-label="Machine control panel"
+          >
+            <div class="console-header">
+              <span><i aria-hidden="true"></i> ACCESS CONSOLE</span>
+              <button class="console-close" type="button" data-console-close>
+                CLOSE
+              </button>
+            </div>
+
+            <div class="vent" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+
+            <section class="control-plate" aria-label="Access and selection">
+              <span class="screw screw--tl" aria-hidden="true"></span>
+              <span class="screw screw--tr" aria-hidden="true"></span>
+              <span class="screw screw--bl" aria-hidden="true"></span>
+              <span class="screw screw--br" aria-hidden="true"></span>
+
+              <div class="screen-bezel">
+                <div
+                  class="screen"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  <span class="screen-main" data-screen>INSERT PASS</span>
+                  <span class="screen-sub" data-screen-sub>SELECT A BAY</span>
+                </div>
+              </div>
+
+              <div
+                class="keypad"
+                role="group"
+                aria-label="Bay selector and email code keypad"
+              >
+                <span class="keypad-mode">
+                  <span data-keypad-mode="selector">BAY SELECT</span>
+                  <span data-keypad-mode="otp">EMAIL CODE</span>
+                </span>
+                <button class="key" type="button" data-key="1">1</button>
+                <button class="key" type="button" data-key="2">2</button>
+                <button class="key" type="button" data-key="3">3</button>
+                <button class="key" type="button" data-key="4">4</button>
+                <button class="key" type="button" data-key="5">5</button>
+                <button class="key" type="button" data-key="6">6</button>
+                <button class="key" type="button" data-key="7">7</button>
+                <button class="key" type="button" data-key="8">8</button>
+                <button class="key" type="button" data-key="9">9</button>
+                <button class="key" type="button" data-key="CLR">CLR</button>
+                <button class="key" type="button" data-key="0">0</button>
+                <button class="key key--go" type="button" data-key="GO">
+                  GO
+                </button>
+              </div>
+
+              <div class="pass-module">
+                <button
+                  class="pass-reader"
+                  type="button"
+                  data-reader
+                  aria-label="Tap your Pawl pass to sign in"
+                >
+                  <span class="contactless-mark" aria-hidden="true"
+                    ><i></i><i></i><i></i
+                  ></span>
+                  <span class="pass-reader__label">TAP PASS</span>
+                </button>
+                <div class="pawl-card" aria-hidden="true">
+                  <span class="pawl-card__brand">PAWL</span>
+                  <span class="pawl-card__role">ACCESS PASS</span>
+                </div>
+              </div>
+
+              <div class="status-bank" aria-hidden="true">
+                <span class="led led--ready" data-led="ready"></span>
+                <span>READY</span>
+                <span class="led led--reading" data-led="reading"></span>
+                <span>READING</span>
+                <span class="led led--denied" data-led="denied"></span>
+                <span>DENIED</span>
+              </div>
+
+              <div class="service-controls">
+                <button
+                  class="service-control"
+                  type="button"
+                  data-terminal-open
+                >
+                  PASS TERMINAL
+                  <span data-terminal-state>SIGN IN</span>
+                </button>
+              </div>
+            </section>
+
+            <div class="service-line" aria-hidden="true">
+              <span class="speaker">
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </span>
+              <span class="service-led"></span>
+            </div>
+
+            <div class="serial-plate">
+              PAWL-GW-01
+              <small>GATEWAY SERVICE PANEL</small>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <dialog
+      class="screen-transfer"
+      data-transfer="none"
+      aria-label="Opening the selected application"
+    >
+      <span class="screen-transfer__grid" aria-hidden="true"></span>
+      <div class="screen-transfer__cartridge">
+        <div class="screen-transfer__copy">
+          <span>ROUTE ESTABLISHED</span>
+          <strong data-transfer-name>PAWL</strong>
+          <small>DECODING INTERFACE, PAWL-GW-01</small>
+        </div>
+        <span class="screen-transfer__rail" aria-hidden="true"
+          ><i></i><i></i><i></i
+        ></span>
+      </div>
+      <button
+        class="screen-transfer__cancel"
+        type="button"
+        data-transfer-cancel
+      >
+        CANCEL
+      </button>
+    </dialog>
+
+    <dialog class="terminal" data-terminal aria-labelledby="terminal-title">
+      <header class="terminal__header">
+        <span>PASS IDENTITY TERMINAL</span>
+        <button
+          class="terminal__close"
+          type="button"
+          data-terminal-close
+          aria-label="Close the terminal"
+        >
+          CLOSE
+        </button>
+      </header>
+
+      <div class="terminal__body">
+        <section class="terminal__summary" aria-label="Access request">
+          <span class="terminal__kicker">ACCESS REQUEST</span>
+          <h2 id="terminal-title">CABINET ACCESS</h2>
+          <p>A Pawl pass unlocks the bays your role can take.</p>
+          <dl>
+            <dt>TERMINAL</dt>
+            <dd>PAWL-GW-01</dd>
+            <dt>PASS</dt>
+            <dd data-terminal-access>NONE</dd>
+          </dl>
+        </section>
+
+        <section class="terminal__workspace">
+          <h3>Choose an identity method</h3>
+          <p>
+            Google and GitHub open a full page. An email code comes back to the
+            machine keypad.
+          </p>
+
+          <div class="provider-stack">
+            <button
+              class="provider-button"
+              type="button"
+              data-terminal-provider="google"
+            >
+              <span class="provider-mark" aria-hidden="true">G</span>
+              <span>Continue with Google</span>
+            </button>
+            <button
+              class="provider-button"
+              type="button"
+              data-terminal-provider="github"
+            >
+              <span class="provider-mark" aria-hidden="true">GH</span>
+              <span>Continue with GitHub</span>
+            </button>
+          </div>
+
+          <div class="terminal__divider">OR USE EMAIL</div>
+
+          <div class="email-form">
+            <label class="terminal__label" for="terminal-email"
+              >EMAIL ADDRESS</label
+            >
+            <input
+              class="pw-input"
+              id="terminal-email"
+              type="email"
+              autocomplete="email"
+              placeholder="name@example.com"
+              data-terminal-email
+            />
+            <p class="terminal__error" role="alert" data-terminal-error></p>
+            <button
+              class="pw-button pw-button-primary"
+              type="button"
+              data-terminal-send
+            >
+              Send the code
+            </button>
+            <p class="terminal__note">
+              The code is six digits. Enter it on the machine keypad.
+            </p>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
+    <footer class="ftr">
+      <div class="shell ftr-inner">
+        <span class="ftr-wm">Kleav<b>ox</b></span>
+        <div class="ftr-links">
+          <a href="{{LINK_HREF}}">Link</a>
+          <a href="{{PASS_HREF}}">Pawl</a>
+          <a href="{{PORT_HREF}}">Port</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </div>
+        <span class="ftr-copy">&copy; {{YEAR}} Pawl</span>
+      </div>
+    </footer>
+  </body>
+</html>

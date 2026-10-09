@@ -1,0 +1,10 @@
+{
+  "extends": "@pawl/typescript/library.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM"],
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["vitest/globals"]
+  },
+  "include": ["src/**/*.ts"]
+}

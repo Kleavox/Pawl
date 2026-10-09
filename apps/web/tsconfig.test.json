@@ -1,0 +1,7 @@
+{
+  "extends": "@pawl/typescript/browser.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}

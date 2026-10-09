@@ -1,0 +1,36 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "local-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-05",
+  "dev": { "port": 8786 },
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "ENVIRONMENT": "development",
+    "PUBLIC_ORIGIN": "https://example.test",
+  },
+  "assets": {
+    "directory": "../../apps/web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": true,
+  },
+  "services": [
+    {
+      "binding": "LINK",
+      "service": "local-link",
+    },
+    {
+      "binding": "PASS",
+      "service": "local-pass",
+    },
+    {
+      "binding": "PORTFOLIO",
+      "service": "local-portfolio",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@pawl/pass-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1"
+  },
+  "dependencies": {
+    "@marsidev/react-turnstile": "catalog:",
+    "@pawl/core": "workspace:*",
+    "@pawl/crypto": "workspace:*",
+    "@pawl/protocol": "workspace:*",
+    "@pawl/ui": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@pawl/typescript": "workspace:*",
+    "@pawl/vite-config": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

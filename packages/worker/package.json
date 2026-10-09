@@ -1,0 +1,31 @@
+{
+  "name": "@pawl/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --checkers 1"
+  },
+  "dependencies": {
+    "@pawl/auth": "workspace:*",
+    "@pawl/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "hono": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@pawl/typescript": "workspace:*",
+    "hono": "catalog:",
+    "typescript": "catalog:"
+  }
+}

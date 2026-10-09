@@ -1,0 +1,45 @@
+{
+  "name": "pawl",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "pnpm format:check && pnpm knip && pnpm lint:async && pnpm lint:ports && pnpm lint:patterns && pnpm lint:legacy && pnpm lint:palette && pnpm lint:type && pnpm lint:name",
+    "lint:async": "node tooling/lint/unhandled-async.mjs",
+    "lint:palette": "node tooling/lint/palette.mjs",
+    "lint:type": "node tooling/lint/type-floor.mjs",
+    "lint:ports": "node tooling/lint/worker-ports.mjs",
+    "lint:patterns": "node tooling/lint/html-patterns.mjs",
+    "lint:legacy": "node tooling/lint/legacy-chrome.mjs",
+    "lint:name": "node --test tooling/lint/legacy-name.test.mjs && node tooling/lint/legacy-name.mjs",
+    "test": "turbo run test && pnpm rust:test",
+    "typecheck": "turbo run typecheck && tsc -p tsconfig.tooling.json --noEmit --checkers 1",
+    "rust:fmt": "cargo fmt --all --check",
+    "rust:test": "cargo test --workspace --locked",
+    "native:check": "pnpm rust:fmt && pnpm rust:test",
+    "deploy:render": "node tooling/deploy/dist/cli.js render",
+    "e2e": "pnpm --filter @pawl/topology build && pnpm --filter @pawl/e2e e2e",
+    "health:check": "pnpm --filter @pawl/topology build && pnpm --filter @pawl/health check",
+    "admin:promote": "pnpm --filter @pawl/topology build && node tooling/deploy/promote-admin.mjs",
+    "admin:client": "pnpm --filter @pawl/deploy... build && node tooling/deploy/register-client.mjs",
+    "check": "pnpm lint && turbo run typecheck test build && pnpm native:check",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "knip": "knip --no-config-hints"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@types/node": "catalog:",
+    "knip": "^6.29.0",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.6",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

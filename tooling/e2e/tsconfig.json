@@ -1,0 +1,7 @@
+{
+  "extends": "@pawl/typescript/node.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM"]
+  },
+  "include": ["playwright.config.ts", "tests"]
+}

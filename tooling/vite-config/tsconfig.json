@@ -1,0 +1,4 @@
+{
+  "extends": "@pawl/typescript/node.json",
+  "include": ["index.ts"]
+}

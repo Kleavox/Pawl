@@ -1,0 +1,22 @@
+{
+  "name": "@pawl/deploy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "deploy-config": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --checkers 1",
+    "test": "tsc -p tsconfig.test.json --noEmit --checkers 1 && vitest run --exclude \"dist/**\""
+  },
+  "dependencies": {
+    "@pawl/topology": "workspace:*"
+  },
+  "devDependencies": {
+    "@pawl/typescript": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

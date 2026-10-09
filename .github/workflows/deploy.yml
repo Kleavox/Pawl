@@ -1,0 +1,110 @@
+name: Deploy Pawl
+
+on:
+  workflow_dispatch:
+    inputs:
+      domains:
+        description: Domain attachment stage
+        required: true
+        type: choice
+        default: none
+        options:
+          - none
+          - canonical
+      apply_migrations:
+        description: Apply pending D1 migrations before deployment
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      APP_ROOT_DOMAIN: ${{ vars.APP_ROOT_DOMAIN }}
+      WORKER_PREFIX: ${{ vars.WORKER_PREFIX }}
+      PASS_D1_ID: ${{ secrets.PASS_D1_ID }}
+      PASS_KV_ID: ${{ secrets.PASS_KV_ID }}
+      AUTH_FROM_EMAIL: ${{ vars.AUTH_FROM_EMAIL }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+      IP_HASH_SECRET: ${{ secrets.IP_HASH_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
+      GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
+      OIDC_SIGNING_KEY: ${{ secrets.OIDC_SIGNING_KEY }}
+      OIDC_PREVIOUS_SIGNING_KEY: ${{ secrets.OIDC_PREVIOUS_SIGNING_KEY }}
+      OIDC_SUB_SECRET: ${{ secrets.OIDC_SUB_SECRET }}
+      VITE_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
+      PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
+      VITE_ROOT_ORIGIN: https://${{ vars.APP_ROOT_DOMAIN }}
+      VITE_PASS_ORIGIN: https://paw.${{ vars.APP_ROOT_DOMAIN }}
+      VITE_LINK_ORIGIN: https://link.${{ vars.APP_ROOT_DOMAIN }}
+      PUBLIC_ROOT_ORIGIN: https://${{ vars.APP_ROOT_DOMAIN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.17.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache wasm-pack binary
+        id: cache-wasm-pack
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/wasm-pack
+          key: wasm-pack-0.15.0-${{ runner.os }}
+
+      - run: cargo install wasm-pack --locked --version 0.15.0
+        if: steps.cache-wasm-pack.outputs.cache-hit != 'true'
+
+      - name: Cache Rust build artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cache/.wasm-pack
+            target
+          key: rust-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: node tooling/deploy/dist/cli.js render --domains "${{ inputs.domains }}"
+      - run: node tooling/deploy/dist/cli.js secrets
+
+      - name: Apply D1 migrations
+        if: inputs.apply_migrations
+        run: pnpm exec wrangler d1 migrations apply DB --remote --config .wrangler/deploy/pass.json
+
+      - name: Deploy Pass
+        run: pnpm exec wrangler deploy --strict --config .wrangler/deploy/pass.json --secrets-file .wrangler/deploy/pass.secrets.json
+
+      - name: Deploy Gateway
+        run: pnpm exec wrangler deploy --strict --config .wrangler/deploy/gateway.json
+
+      - name: Verify public services
+        if: inputs.domains != 'none'
+        env:
+          HEALTH_ATTEMPTS: "8"
+          HEALTH_DELAY_MS: "15000"
+        run: pnpm health:check

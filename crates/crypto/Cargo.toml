@@ -1,0 +1,20 @@
+[package]
+name = "crypto"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+aead-stream.workspace = true
+aes-gcm.workspace = true
+argon2.workspace = true
+wasm-bindgen.workspace = true
+
+[dev-dependencies]
+wasm-bindgen-test.workspace = true
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

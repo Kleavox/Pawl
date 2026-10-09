@@ -1,0 +1,144 @@
+import type { Identity } from "@pawl/core";
+import { describe, expect, it } from "vitest";
+import type { Env } from "../env";
+import {
+  createSession,
+  deleteSession,
+  deleteSessionById,
+  getSession,
+  invalidateUserSessions,
+  listSessions,
+  putIdentityOverride,
+} from "./session";
+
+class MemoryKv {
+  readonly values = new Map<string, string>();
+  readonly metadata = new Map<string, unknown>();
+
+  async get(
+    key: string,
+    type?: "text" | "json",
+  ): Promise<string | unknown | null> {
+    const value = this.values.get(key);
+    if (value === undefined) return null;
+    return type === "json" ? JSON.parse(value) : value;
+  }
+
+  async put(
+    key: string,
+    value: string,
+    options?: { metadata?: unknown },
+  ): Promise<void> {
+    this.values.set(key, value);
+    if (options?.metadata !== undefined) {
+      this.metadata.set(key, options.metadata);
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    this.values.delete(key);
+    this.metadata.delete(key);
+  }
+
+  async list({ prefix = "" }: { prefix?: string } = {}) {
+    return {
+      keys: [...this.values.keys()]
+        .filter((name) => name.startsWith(prefix))
+        .map((name) => ({ name, metadata: this.metadata.get(name) })),
+    };
+  }
+}
+
+const identity: Identity = {
+  id: "user-1",
+  email: "person@example.com",
+  username: "person",
+  role: "USER",
+};
+
+describe("sessions", () => {
+  it("stores only a hash of the opaque browser token", async () => {
+    const kv = new MemoryKv();
+    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const created = await createSession(env, identity, 1);
+
+    expect([...kv.values.keys()]).not.toContain(`session:${created.token}`);
+    await expect(getSession(env, created.token)).resolves.toMatchObject({
+      identity,
+    });
+  });
+
+  it("invalidates every old session when auth version changes", async () => {
+    const kv = new MemoryKv();
+    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const created = await createSession(env, identity, 1);
+
+    await invalidateUserSessions(env, identity.id, 2);
+    await expect(getSession(env, created.token)).resolves.toBeNull();
+  });
+
+  it("deletes an individual session", async () => {
+    const kv = new MemoryKv();
+    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const created = await createSession(env, identity, 1);
+
+    await deleteSession(env, created.token);
+    await expect(getSession(env, created.token)).resolves.toBeNull();
+  });
+
+  it("propagates identity changes to every existing session", async () => {
+    const kv = new MemoryKv();
+    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const deviceA = await createSession(env, identity, 1);
+    const deviceB = await createSession(env, identity, 1);
+
+    await putIdentityOverride(env, { ...identity, username: "renamed_person" });
+
+    await expect(getSession(env, deviceA.token)).resolves.toMatchObject({
+      identity: { username: "renamed_person" },
+    });
+    await expect(getSession(env, deviceB.token)).resolves.toMatchObject({
+      identity: { username: "renamed_person" },
+    });
+  });
+
+  it("keeps the stored identity when no override exists", async () => {
+    const kv = new MemoryKv();
+    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const created = await createSession(env, identity, 1);
+
+    await expect(getSession(env, created.token)).resolves.toMatchObject({
+      identity: { username: "person" },
+    });
+  });
+
+  it("lists devices and revokes a single session", async () => {
+    const kv = new MemoryKv();
+    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const laptop = await createSession(env, identity, 1, {
+      userAgent: "Laptop UA",
+      ip: "10.0.0.1",
+    });
+    const phone = await createSession(env, identity, 1, {
+      userAgent: "Phone UA",
+      ip: "10.0.0.2",
+    });
+
+    const devices = await listSessions(env, identity.id);
+    expect(devices).toHaveLength(2);
+    expect(devices.map((device) => device.userAgent).sort()).toEqual([
+      "Laptop UA",
+      "Phone UA",
+    ]);
+
+    const phoneId = devices.find(
+      (device) => device.userAgent === "Phone UA",
+    )!.sessionId;
+    await expect(deleteSessionById(env, identity.id, phoneId)).resolves.toBe(
+      true,
+    );
+    await expect(getSession(env, phone.token)).resolves.toBeNull();
+    await expect(getSession(env, laptop.token)).resolves.not.toBeNull();
+    await expect(listSessions(env, identity.id)).resolves.toHaveLength(1);
+  });
+});

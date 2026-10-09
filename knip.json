@@ -1,0 +1,31 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": ["wasm-pack"],
+  "workspaces": {
+    "apps/web": {
+      "entry": [
+        "index.html",
+        "privacy.html",
+        "terms.html",
+        "src/legal.ts",
+        "src/main.ts",
+        "vite.config.ts"
+      ],
+      "vite": false
+    },
+    "packages/crypto": {
+      "ignoreUnresolved": ["../pkg/crypto.js"]
+    },
+    "tooling/e2e": {
+      "entry": ["playwright.config.ts", "tests/**/*.ts"],
+      "playwright": false,
+      "ignore": ["repos.d.mts"]
+    },
+    "workers/gateway": {
+      "ignoreDependencies": ["@pawl/web-app"]
+    },
+    "workers/pass": {
+      "ignoreDependencies": ["@pawl/pass-app"]
+    }
+  }
+}
