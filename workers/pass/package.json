@@ -19,6 +19,7 @@
     "@pawl/pass-app": "workspace:*",
     "@pawl/protocol": "workspace:*",
     "@pawl/registry": "workspace:*",
+    "@pawl/topology": "workspace:*",
     "@pawl/worker": "workspace:*",
     "hono": "catalog:",
     "zod": "catalog:"

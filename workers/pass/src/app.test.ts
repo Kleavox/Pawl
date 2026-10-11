@@ -5,6 +5,7 @@ import { hashToken } from "./lib/crypto";
 import { fakeOtpDb } from "./lib/otp-db.testkit";
 import { migratedDb } from "./oidc/db.testkit";
 import { issueOtp } from "./lib/otp";
+import { createSession } from "./lib/session";
 
 const baseEnv = {
   ENVIRONMENT: "production",
@@ -69,6 +70,85 @@ function dbStub(rows: Record<string, unknown>) {
 }
 
 describe("Pass HTTP boundary", () => {
+  it("counts a person's signed-in devices for a service, and only for a service", async () => {
+    const sessions = {
+      ...baseEnv.SESSIONS,
+      list: async ({ prefix }: { prefix: string }) => ({
+        keys:
+          prefix === "usersession:user-1:"
+            ? [
+                { name: "usersession:user-1:a", metadata: {} },
+                { name: "usersession:user-1:b", metadata: {} },
+              ]
+            : [],
+      }),
+    };
+    const env = { ...baseEnv, SESSIONS: sessions } as unknown as Env;
+    const internal = await app.request(
+      "http://pass.internal/internal/devices?id=user-1",
+      {},
+      env,
+    );
+    expect(await internal.json()).toEqual({ devices: 2 });
+    const outside = await app.request(
+      "https://pass.product.test/internal/devices?id=user-1",
+      {},
+      env,
+    );
+    expect(outside.status).toBe(404);
+  });
+
+  it("tells the gateway who is asking for the estate, and drops what a browser claimed", async () => {
+    const forwarded: Request[] = [];
+    const store = new Map<string, string>();
+    const sessions = {
+      get: async (key: string, type?: string) => {
+        const value = store.get(key) ?? null;
+        return value !== null && type === "json" ? JSON.parse(value) : value;
+      },
+      put: async (key: string, value: string) => void store.set(key, value),
+      delete: async (key: string) => void store.delete(key),
+    };
+    const env = {
+      ...baseEnv,
+      SESSIONS: sessions,
+      GATEWAY: {
+        fetch: async (request: Request) => {
+          forwarded.push(request);
+          return Response.json({ role: "USER", tools: {}, attention: [] });
+        },
+      },
+    } as unknown as Env;
+    const { token } = await createSession(
+      env,
+      { id: "user-1", email: "o@product.test", username: "o", role: "ADMIN" },
+      1,
+    );
+    await app.request(
+      "https://pass.product.test/api/estate",
+      {
+        headers: {
+          cookie: `__Secure-pawl_session=${token}`,
+          "x-pawl-user": "victim",
+        },
+      },
+      env,
+    );
+    await app.request(
+      "https://pass.product.test/api/estate",
+      { headers: { "x-pawl-user": "victim", "x-pawl-role": "ADMIN" } },
+      env,
+    );
+    expect(forwarded.map((request) => request.url)).toEqual([
+      "http://gateway.internal/api/estate",
+      "http://gateway.internal/api/estate",
+    ]);
+    expect(forwarded[0]!.headers.get("x-pawl-user")).toBe("user-1");
+    expect(forwarded[0]!.headers.get("x-pawl-role")).toBe("ADMIN");
+    expect(forwarded[1]!.headers.get("x-pawl-user")).toBeNull();
+    expect(forwarded[1]!.headers.get("x-pawl-role")).toBeNull();
+  });
+
   it("names the Worker that answered in health and readiness, as tooling/health asserts", async () => {
     const health = await app.request(
       "https://pass.product.test/health",
@@ -202,45 +282,18 @@ describe("Pass HTTP boundary", () => {
     expect(response.status).toBe(415);
   });
 
-  it("does not expose the internal session endpoint publicly", async () => {
-    const response = await app.request(
-      "https://pass.product.test/internal/session",
-      {},
-      baseEnv,
-    );
-
-    expect(response.status).toBe(404);
-  });
-
-  it("allows Service Binding shaped requests to reach session validation", async () => {
-    const response = await app.request(
-      "http://pass.internal/internal/session",
-      {},
-      baseEnv,
-    );
-
-    expect(response.status).toBe(401);
-  });
-
-  it("reads the session a service sends in x-pawl-session", async () => {
-    const asked: string[] = [];
-    const response = await app.request(
-      "http://pass.internal/internal/session",
-      { headers: { "x-pawl-session": "abc" } },
-      {
-        ...baseEnv,
-        SESSIONS: {
-          ...baseEnv.SESSIONS,
-          get: (key: string) => {
-            asked.push(key);
-            return Promise.resolve(null);
-          },
-        },
-      },
-    );
-
-    expect(response.status).toBe(401);
-    expect(asked.some((key) => key.startsWith("session:"))).toBe(true);
+  it("no longer answers another Worker's questions about a session", async () => {
+    for (const [path, method] of [
+      ["/internal/session", "GET"],
+      ["/internal/logout", "POST"],
+    ] as const) {
+      const response = await app.request(
+        `http://pass.internal${path}`,
+        { method, headers: { "x-pawl-session": "abc" } },
+        baseEnv,
+      );
+      expect(await response.text(), path).toBe("asset");
+    }
   });
 
   it("reads the challenge a service sends in x-pawl-verification", async () => {
@@ -716,7 +769,7 @@ describe("POST /api/auth/otp/verify", () => {
     ).toBe(true);
   });
 
-  it("scopes the session cookie to the whole root domain when the gateway proxies the call on a public Pass hostname", async () => {
+  it("keeps the session a code mints on Pawl's own host", async () => {
     const store = kvStore();
     const email = "proxied@example.com";
     const db = dbStub({
@@ -741,8 +794,9 @@ describe("POST /api/auth/otp/verify", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Set-Cookie")).toContain(
-      "Domain=.product.test",
+      "__Secure-pawl_session=",
     );
+    expect(response.headers.get("Set-Cookie")).not.toContain("Domain=");
   });
 
   it("cannot scope the session cookie at all when it is handed an internal hostname", async () => {
@@ -841,5 +895,88 @@ describe("POST /api/auth/otp/verify", () => {
         /update users.*email_verified_at/is.test(call[0] as string),
       ),
     ).toBe(true);
+  });
+});
+
+describe("the cabinet's code routes", () => {
+  const CABINET = "https://product.test";
+
+  function fromCabinet(origin = CABINET): RequestInit {
+    return {
+      method: "POST",
+      headers: { "content-type": "application/json", origin },
+      body: JSON.stringify({ email: "person@example.com", code: "000000" }),
+    };
+  }
+
+  it("let the cabinet on the root origin send a code, and let it read the answer", async () => {
+    const response = await app.request(
+      "https://pass.product.test/api/auth/otp/verify",
+      fromCabinet(),
+      { ...baseEnv, DB: otpDb(vi.fn()) } as unknown as Env,
+    );
+    expect(response.status).toBe(401);
+    expect(response.headers.get("access-control-allow-origin")).toBe(CABINET);
+    expect(response.headers.get("access-control-allow-credentials")).toBe(
+      "true",
+    );
+  });
+
+  it("answer the cabinet's preflight, and nobody else's", async () => {
+    const preflight = (origin: string) =>
+      app.request(
+        "https://pass.product.test/api/auth/otp/start",
+        {
+          method: "OPTIONS",
+          headers: {
+            origin,
+            "access-control-request-method": "POST",
+            "access-control-request-headers": "content-type",
+          },
+        },
+        baseEnv,
+      );
+    const cabinet = await preflight(CABINET);
+    expect(cabinet.status).toBe(204);
+    expect(cabinet.headers.get("access-control-allow-origin")).toBe(CABINET);
+    expect(cabinet.headers.get("access-control-allow-headers")).toBe(
+      "content-type",
+    );
+    expect(cabinet.headers.get("access-control-allow-methods")).toBe("POST");
+    const stranger = await preflight("https://attacker.example");
+    expect(stranger.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("open no other API to the root origin", async () => {
+    const response = await app.request(
+      "https://pass.product.test/api/login",
+      fromCabinet(),
+      baseEnv,
+    );
+    expect(response.status).toBe(403);
+    expect(response.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("trust a local cabinet under either loopback name", async () => {
+    const response = await app.request(
+      "http://127.0.0.1:8787/api/auth/otp/verify",
+      fromCabinet("http://localhost:8786"),
+      { ...baseEnv, DB: otpDb(vi.fn()) } as unknown as Env,
+    );
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "http://localhost:8786",
+    );
+  });
+
+  it("trust the local cabinet beside a local Pawl", async () => {
+    const response = await app.request(
+      "http://127.0.0.1:8787/api/auth/otp/verify",
+      fromCabinet("http://127.0.0.1:8786"),
+      { ...baseEnv, DB: otpDb(vi.fn()) } as unknown as Env,
+    );
+    expect(response.status).toBe(401);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "http://127.0.0.1:8786",
+    );
   });
 });

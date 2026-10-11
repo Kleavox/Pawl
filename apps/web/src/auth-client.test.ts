@@ -1,15 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
-import { startOtp, verifyOtpCode, OtpVerifyError } from "./auth-client";
+import { PASS_ORIGIN } from "@pawl/ui";
+import {
+  OtpVerifyError,
+  silentSignInPath,
+  startOtp,
+  verifyOtpCode,
+} from "./auth-client";
 
 describe("startOtp", () => {
-  it("calls its own origin, never the pass host", async () => {
+  it("sends the address to Pawl itself, with credentials", async () => {
     const fetchMock = vi.fn(
       async (..._args: unknown[]) =>
         new Response('{"ok":true}', { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
     await startOtp("a@example.com");
-    expect(String(fetchMock.mock.calls[0]![0])).toBe("/api/auth/otp/start");
+    expect(String(fetchMock.mock.calls[0]![0])).toBe(
+      `${PASS_ORIGIN}/api/auth/otp/start`,
+    );
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).credentials).toBe(
+      "include",
+    );
   });
 
   it("surfaces a rate limit as a message the screen can show", async () => {
@@ -26,7 +37,7 @@ describe("startOtp", () => {
 });
 
 describe("verifyOtpCode", () => {
-  it("calls its own origin, never the pass host", async () => {
+  it("sends the code to Pawl itself, so the Pawl session lands on Pawl", async () => {
     const fetchMock = vi.fn(
       async (..._args: unknown[]) =>
         new Response('{"authenticated":true,"needsSetup":false}', {
@@ -35,7 +46,9 @@ describe("verifyOtpCode", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     await verifyOtpCode("a@example.com", "246810");
-    expect(String(fetchMock.mock.calls[0]![0])).toBe("/api/auth/otp/verify");
+    expect(String(fetchMock.mock.calls[0]![0])).toBe(
+      `${PASS_ORIGIN}/api/auth/otp/verify`,
+    );
   });
 
   it("reports that setup is still needed for a fresh account", async () => {
@@ -161,5 +174,13 @@ describe("verifyOtpCode", () => {
       (error: unknown) => error,
     );
     expect((rejection as OtpVerifyError).attemptsLeft).toBe(0);
+  });
+});
+
+describe("silentSignInPath", () => {
+  it("asks the gateway to sign in silently and come back to this page", () => {
+    expect(silentSignInPath({ pathname: "/", search: "?bay=2" })).toBe(
+      "/auth/signin?returnTo=%2F%3Fbay%3D2&prompt=none",
+    );
   });
 });

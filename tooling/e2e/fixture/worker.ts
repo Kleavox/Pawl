@@ -3,7 +3,16 @@ interface Env {
   PUBLIC_ORIGIN: string;
   PROVIDER: string;
   CLIENT_ID: string;
-  REDIRECT_URI: string;
+}
+
+function redirectUri(url: URL): string {
+  return new URL("/callback", url.origin).toString();
+}
+
+function payload(token: string): Record<string, unknown> {
+  return JSON.parse(
+    atob(token.split(".")[1]!.replaceAll("-", "+").replaceAll("_", "/")),
+  ) as Record<string, unknown>;
 }
 
 const purged = new Set<string>();
@@ -35,11 +44,7 @@ export default {
       return Response.json({ service: env.APP_KEY, status: "ok" });
     if (url.pathname === "/.well-known/pawl/estate") {
       if (!internal(request, env)) return new Response(null, { status: 404 });
-      if (
-        !(request.headers.get("cookie") ?? "").includes(
-          "__Secure-pawl_session=",
-        )
-      )
+      if (!request.headers.get("x-pawl-user"))
         return new Response(null, { status: 401 });
       const origin = new URL(env.PUBLIC_ORIGIN);
       origin.hostname =
@@ -91,16 +96,18 @@ export default {
     if (url.pathname === "/login") {
       const { verifier, challenge } = await pkce();
       const state = crypto.randomUUID();
+      const prompt = url.searchParams.get("prompt");
       const target = new URL("/oauth/authorize", env.PROVIDER);
       for (const [name, value] of Object.entries({
         client_id: env.CLIENT_ID,
-        redirect_uri: env.REDIRECT_URI,
+        redirect_uri: redirectUri(url),
         response_type: "code",
         scope: "openid email profile",
         state,
         nonce: state,
         code_challenge: challenge,
         code_challenge_method: "S256",
+        ...(prompt ? { prompt } : {}),
       })) {
         target.searchParams.set(name, value);
       }
@@ -113,6 +120,11 @@ export default {
       });
     }
     if (url.pathname === "/callback") {
+      const refused = url.searchParams.get("error");
+      if (refused)
+        return new Response(`<h1>guest</h1><p data-error>${refused}</p>`, {
+          headers: { "content-type": "text/html" },
+        });
       const [state, verifier] = (
         request.headers.get("cookie")?.match(/rp=([^;]+)/u)?.[1] ?? "."
       ).split(".");
@@ -124,22 +136,29 @@ export default {
         body: new URLSearchParams({
           grant_type: "authorization_code",
           code: url.searchParams.get("code") ?? "",
-          redirect_uri: env.REDIRECT_URI,
+          redirect_uri: redirectUri(url),
           code_verifier: verifier ?? "",
           client_id: env.CLIENT_ID,
         }),
       });
       if (!token.ok)
         return new Response(`token ${token.status}`, { status: 502 });
-      const { id_token } = (await token.json()) as { id_token: string };
-      const claims = JSON.parse(
-        atob(id_token.split(".")[1]!.replaceAll("-", "+").replaceAll("_", "/")),
-      ) as Record<string, unknown>;
+      const { id_token, access_token } = (await token.json()) as {
+        id_token: string;
+        access_token: string;
+      };
+      const claims = payload(id_token);
+      const access = payload(access_token);
       return new Response(
-        `<h1>signed in as ${String(claims.preferred_username)}</h1><p data-sub>${String(claims.sub)}</p><p data-aud>${String(claims.aud)}</p>`,
+        `<h1>signed in as ${String(claims.preferred_username)}</h1><p data-sub>${String(claims.sub)}</p><p data-aud>${String(claims.aud)}</p><p data-role>${String(access.role)}</p>`,
         { headers: { "content-type": "text/html" } },
       );
     }
+    if (url.pathname === "/signout")
+      return new Response(
+        `<form method="post" action="${new URL("/oauth/logout", env.PROVIDER)}"><input type="hidden" name="client_id" value="${env.CLIENT_ID}"><input type="hidden" name="post_logout_redirect_uri" value="${url.origin}/"><button>sign out</button></form>`,
+        { headers: { "content-type": "text/html" } },
+      );
     return new Response(`<h1>${env.APP_KEY}</h1>`, {
       headers: { "content-type": "text/html" },
     });

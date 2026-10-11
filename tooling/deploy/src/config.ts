@@ -13,6 +13,7 @@ export interface DeployEnvironment {
   PASS_D1_ID: string;
   PASS_KV_ID: string;
   AUTH_FROM_EMAIL: string;
+  GATEWAY_CLIENT_ID: string;
 }
 
 interface Route {
@@ -126,6 +127,8 @@ export function productionConfigs(
         ENVIRONMENT: "production",
         PUBLIC_ORIGIN: rootOrigin,
         ESTATE_MANIFEST: manifest,
+        OIDC_ISSUER: `https://${publicHost(rootDomain, "pass")}`,
+        OIDC_CLIENT_ID: env.GATEWAY_CLIENT_ID.trim(),
       },
       assets: {
         directory: "../../apps/web/dist",
@@ -191,8 +194,8 @@ export function localConfigs(
         { binding: "GATEWAY", service: "local-gateway" },
       ],
       ratelimits: [
-        rateLimit("AUTHORIZE_RATE_LIMIT", "3401", 30),
-        rateLimit("TOKEN_RATE_LIMIT", "3402", 60),
+        rateLimit("AUTHORIZE_RATE_LIMIT", "3401", 1000),
+        rateLimit("TOKEN_RATE_LIMIT", "3402", 1000),
       ],
       kv_namespaces: [
         { binding: "SESSIONS", id: "00000000000000000000000000000000" },
@@ -214,6 +217,9 @@ export function localConfigs(
         ENVIRONMENT: "development",
         PUBLIC_ORIGIN: "https://example.test",
         ESTATE_MANIFEST: manifest,
+        OIDC_ISSUER: "http://127.0.0.1:8787",
+        OIDC_CLIENT_ID: "gateway",
+        OIDC_CLIENT_SECRET: "local-gateway-secret",
       },
       assets: {
         directory: fromRoot("apps/web/dist"),
@@ -228,6 +234,7 @@ export function localConfigs(
 
 export function productionSecrets(env: NodeJS.ProcessEnv): {
   pass: Record<string, string>;
+  gateway: Record<string, string>;
 } {
   const previous = env.OIDC_PREVIOUS_SIGNING_KEY;
   return {
@@ -244,6 +251,10 @@ export function productionSecrets(env: NodeJS.ProcessEnv): {
         "OIDC_SUB_SECRET",
       ]),
       ...(previous ? { OIDC_PREVIOUS_SIGNING_KEY: previous } : {}),
+    },
+    gateway: {
+      OIDC_CLIENT_SECRET: selectSecrets(env, ["GATEWAY_CLIENT_SECRET"])
+        .GATEWAY_CLIENT_SECRET!,
     },
   };
 }
@@ -268,6 +279,7 @@ function validateEnvironment(env: DeployEnvironment) {
     "PASS_D1_ID",
     "PASS_KV_ID",
     "AUTH_FROM_EMAIL",
+    "GATEWAY_CLIENT_ID",
   ] as const satisfies readonly (keyof DeployEnvironment)[];
 
   for (const key of requiredKeys) {

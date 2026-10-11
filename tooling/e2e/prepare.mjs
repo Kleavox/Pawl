@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,6 +39,17 @@ execSync(
   { cwd: repoRoot, env, stdio: "inherit" },
 );
 execSync(
-  `pnpm exec wrangler d1 execute DB --local --config workers/pass/wrangler.jsonc --command "INSERT INTO oauth_clients (id, name, redirect_uris, allowed_scopes, confidential, first_party, sector, approved_at) VALUES ('fixture-notes', 'Notes', '[\\"http://localhost:8790/callback\\"]', '[\\"openid\\",\\"email\\",\\"profile\\"]', 0, 1, 'localhost', datetime('now'))"`,
+  `pnpm exec wrangler d1 execute DB --local --config workers/pass/wrangler.jsonc --command "INSERT INTO oauth_clients (id, name, redirect_uris, allowed_scopes, confidential, first_party, sector, approved_at) VALUES ('fixture-notes', 'Notes', '[\\"http://localhost:8790/callback\\",\\"http://127.0.0.1:8790/callback\\"]', '[\\"openid\\",\\"email\\",\\"profile\\"]', 0, 1, 'localhost', datetime('now'))"`,
+  { cwd: repoRoot, env, stdio: "inherit" },
+);
+execSync(
+  `pnpm exec wrangler d1 execute DB --local --config workers/pass/wrangler.jsonc --command "INSERT INTO oauth_clients (id, name, redirect_uris, allowed_scopes, confidential, first_party, sector, approved_at) VALUES ('fixture-docs', 'Docs', '[\\"http://localhost:8791/callback\\",\\"http://127.0.0.1:8791/callback\\"]', '[\\"openid\\",\\"email\\",\\"profile\\"]', 0, 0, 'docs.fixture.test', datetime('now'))"`,
+  { cwd: repoRoot, env, stdio: "inherit" },
+);
+const gatewaySecretHash = createHash("sha256")
+  .update("local-gateway-secret")
+  .digest("base64url");
+execSync(
+  `pnpm exec wrangler d1 execute DB --local --config workers/pass/wrangler.jsonc --command "INSERT INTO oauth_clients (id, name, redirect_uris, allowed_scopes, confidential, first_party, secret_hash, sector, approved_at) VALUES ('gateway', 'Cabinet', '[\\"http://localhost:8786/auth/callback\\",\\"http://127.0.0.1:8786/auth/callback\\"]', '[\\"openid\\",\\"email\\",\\"profile\\"]', 1, 1, '${gatewaySecretHash}', 'localhost', datetime('now'))"`,
   { cwd: repoRoot, env, stdio: "inherit" },
 );

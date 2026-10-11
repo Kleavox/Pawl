@@ -4,6 +4,8 @@ import type { Context } from "hono";
 import { pkceS256 } from "@pawl/oidc";
 
 import type { Env } from "../env";
+import { clearSessionCookie } from "../lib/cookies";
+import { deleteSession, getSession, readSessionToken } from "../lib/session";
 import { claimsFor, findClaimsUser, type ClaimsUser } from "../oidc/claims";
 import {
   findClient,
@@ -35,6 +37,7 @@ import {
   clientIp,
   currentSession,
   rateLimitError,
+  safeAudit,
   type AppEnv,
   type PassApp,
 } from "./shared";
@@ -271,6 +274,9 @@ async function tokenSet(
       sub,
       scopes,
       clientId: client.id,
+      ...(client.firstParty
+        ? { identity: { ...claimsFor(user, scopes), role: user.role } }
+        : {}),
     }),
     token_type: "Bearer",
     expires_in: TOKEN_TTL_SECONDS,
@@ -393,6 +399,23 @@ async function revokeToken(
   if (grantId) await revokeGrant(env, grantId);
 }
 
+function logoutTarget(
+  env: Env,
+  client: OidcClient | null,
+  requested: string | null,
+): string {
+  const home = new URL("/", env.PUBLIC_ORIGIN).toString();
+  if (!client || !requested) return home;
+  try {
+    const origin = new URL(requested).origin;
+    return client.redirectUris.some((uri) => new URL(uri).origin === origin)
+      ? requested
+      : home;
+  } catch {
+    return home;
+  }
+}
+
 export function registerOidcRoutes(app: PassApp): void {
   app.use("/oauth/*", async (context, next) => {
     if (
@@ -417,6 +440,18 @@ export function registerOidcRoutes(app: PassApp): void {
       limiter &&
       !(await limiter.limit({ key: clientIp(context.req.raw) })).success
     ) {
+      if (path === "/oauth/authorize") {
+        const read = await readAuthorize(
+          context.env,
+          new URL(context.req.url).searchParams,
+        );
+        if (read.kind === "ok") {
+          return context.redirect(
+            refusal(read.request, "temporarily_unavailable"),
+            302,
+          );
+        }
+      }
       return rateLimitError(context, 60);
     }
     return next();
@@ -432,6 +467,7 @@ export function registerOidcRoutes(app: PassApp): void {
       userinfo_endpoint: `${issuer}/oauth/userinfo`,
       jwks_uri: `${issuer}/oauth/jwks.json`,
       revocation_endpoint: `${issuer}/oauth/revoke`,
+      end_session_endpoint: `${issuer}/oauth/logout`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code", "refresh_token"],
       subject_types_supported: ["public", "pairwise"],
@@ -563,5 +599,28 @@ export function registerOidcRoutes(app: PassApp): void {
     if (!client) return tokenError(context, 401, "invalid_client");
     await revokeToken(context.env, client, form.get("token") ?? "");
     return context.body(null, 200);
+  });
+
+  app.post("/oauth/logout", async (context) => {
+    const form = new URLSearchParams(await context.req.text());
+    const token = readSessionToken(context.req.raw);
+    const session = token ? await getSession(context.env, token) : null;
+    if (token) await deleteSession(context.env, token);
+    if (session) {
+      await safeAudit(context.env, {
+        userId: session.identity.id,
+        type: "logout",
+        request: context.req.raw,
+      });
+    }
+    const client = await findClient(context.env, form.get("client_id") ?? "");
+    context.header(
+      "Set-Cookie",
+      clearSessionCookie(context.req.raw, context.env),
+    );
+    return context.redirect(
+      logoutTarget(context.env, client, form.get("post_logout_redirect_uri")),
+      303,
+    );
   });
 }

@@ -25,8 +25,6 @@ export const INTERNAL_HOSTS = {
 } as const;
 
 export const INTERNAL_URLS = {
-  SESSION_VERIFY: `http://${INTERNAL_HOSTS.PASS}/internal/session`,
-  SESSION_LOGOUT: `http://${INTERNAL_HOSTS.PASS}/internal/logout`,
   VERIFICATION_CHECK: `http://${INTERNAL_HOSTS.PASS}/internal/challenge`,
   IDENTITY_LOOKUP: `http://${INTERNAL_HOSTS.PASS}/internal/identity`,
   ADMINS_LOOKUP: `http://${INTERNAL_HOSTS.PASS}/internal/admins`,

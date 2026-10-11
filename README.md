@@ -8,7 +8,25 @@ deployment tooling.
 The apps it fronts live in their own repositories and are registered through a
 manifest; see [Registering apps](#registering-apps).
 
-## Runtime architecture
+## Layout
+
+| Path                                                         | Contents                                                          |
+| ------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `apps/web`                                                   | Static Vite + TypeScript vending-machine home                     |
+| `apps/pass`                                                  | React account and authentication application                      |
+| `workers/gateway`                                            | Root-domain router and application gateway                        |
+| `workers/pass`                                               | Identity API backed by D1 and KV                                  |
+| `packages/protocol`                                          | Runtime-validated messages shared across application seams        |
+| `packages/topology`                                          | Canonical Worker names, hosts, origins, and local ports           |
+| `packages/auth`, `config`, `core`, `testing`, `ui`, `worker` | Shared TypeScript capabilities                                    |
+| `packages/crypto`, `crates/crypto`                           | Rust/WASM password derivation and streaming encryption            |
+| `packages/oidc`, `crates/oidc`                               | Rust/WASM ES256 signing and verification, PKCE, pairwise subjects |
+| `packages/registry`, `crates/registry`                       | Rust/WASM manifest validation and routing                         |
+| `crates/cli`                                                 | The `pawl` operator binary                                        |
+| `tooling`                                                    | Deployment, E2E, health-check, lint, TypeScript, and Vite tooling |
+
+`workers/pass/src/account/lifecycle.ts` owns credential rotation, session
+invalidation, and cross-service account deletion.
 
 ```text
 Browser
@@ -28,6 +46,198 @@ Pawl names no app of its own. Every app it fronts arrives through a manifest:
 the gateway binds each one as `APP_<KEY>`, reaches it on `<key>.internal`, and
 the cabinet, the header and the footer are built from the same list. A service
 binding resolves by Worker name, so an app can live in any repository.
+
+- TypeScript 7 native compiler, React, Vite, Hono, and Cloudflare Workers
+- D1 for relational state and KV for sessions
+- Rust compiled to WebAssembly for cryptography
+- pnpm workspaces and Turborepo for orchestration
+
+## Develop
+
+### Requirements
+
+- Node.js 22.13 or newer
+- pnpm 11.17
+- Rust stable with the `wasm32-unknown-unknown` target
+- `wasm-pack` 0.15
+- Chromium installed through Playwright for E2E tests
+
+### Setup
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack --locked --version 0.15.0
+pnpm install
+pnpm --filter @pawl/e2e e2e:install
+```
+
+Source-controlled Wrangler configurations use local placeholder resources.
+Local development does not require production credentials. Put browser
+overrides in `.env.local` and Worker secrets in `.dev.vars`; both are ignored by
+Git. Each app's `.env.example` already carries the local origins from
+`packages/topology`, so `cp .env.example .env.local` in `apps/*` is enough.
+
+Those origins are baked in at build time and each Worker serves its app from
+`dist/`, so an app built without them points at the production hostnames and
+signs nobody in locally. `tooling/e2e/prepare.mjs` builds with the right values;
+so does a plain `pnpm build` once `.env.local` exists.
+
+### Running Workers
+
+Run all workspace development tasks:
+
+```bash
+pnpm dev
+```
+
+Build an application and run its Worker individually when working on one
+service:
+
+```bash
+pnpm --filter @pawl/pass-app build
+pnpm --dir workers/pass exec wrangler dev --port 8787
+```
+
+Wrangler's local service registry connects Workers started in separate
+terminals. The canonical local ports and service names are maintained in
+`packages/topology`, and each Worker's `wrangler.jsonc` pins its own `dev.port`
+to match. Without that pin every Worker takes Wrangler's default 8787, all of
+them bind the same socket, and only one of them answers, so `pnpm lint:ports`
+fails the build if the two ever disagree.
+
+Restart `wrangler dev` after any build: it serves stale assets from `dist`
+otherwise.
+
+### With apps
+
+Render local Worker configs from your manifest, then start the Workers with
+them:
+
+```bash
+pnpm --filter @pawl/deploy exec deploy-config render-local --manifest estate.json --out .wrangler/local
+pnpm exec wrangler dev --config .wrangler/local/pass.json --port 8787 --persist-to workers/pass/.wrangler/state
+pnpm exec wrangler dev --config .wrangler/local/gateway.json --port 8786
+```
+
+The rendered pass config carries a throwaway signing key made for that run.
+Start each app's own Worker on the `local.port` its manifest entry names.
+
+## Check
+
+| Command                                                             | Purpose                                                                      |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `pnpm build`                                                        | Build all TypeScript applications, Workers, and packages                     |
+| `pnpm test`                                                         | Run workspace unit tests                                                     |
+| `pnpm typecheck`                                                    | Type-check runtime and tooling interfaces with TypeScript 7                  |
+| `pnpm lint`                                                         | Verify formatting, unused files and exports, and async error handling        |
+| `pnpm lint:async`                                                   | Reject async event handlers that discard their failure                       |
+| `pnpm lint:ports`                                                   | Reject a Worker dev port that drifts from `packages/topology`                |
+| `pnpm format:check`                                                 | Verify repository formatting                                                 |
+| `pnpm native:check`                                                 | Validate Rust formatting and tests                                           |
+| `pnpm check`                                                        | Run the complete static, unit, native, and build verification gate           |
+| `pnpm e2e`                                                          | Reset local Wrangler state and test Gateway, Pass and the fixture apps       |
+| `pnpm health:check`                                                 | Verify deployed public service health endpoints                              |
+| `pnpm pawl keygen`                                                  | Make the provider signing key and pairwise subject secret, printed once      |
+| `pnpm pawl manifest check estate.json`                              | Validate a manifest and print where each app sits in the cabinet             |
+| `pnpm pawl manifest pin estate.json`                                | Write the current bay placement into the manifest so it never moves          |
+| `pnpm admin:client -- --id <id> --name <name> --redirect-uri <uri>` | Register an OpenID Connect client; a confidential one prints its secret once |
+| `pnpm admin:promote -- --email <email>`                             | Promote an existing verified account to admin                                |
+
+`pnpm e2e` registers two fixture apps from `tooling/e2e/fixture/estate.json` and
+boots them as a fixture Worker. Each Worker has a health check, so the run stops
+before any test when one of them is down rather than passing by not testing.
+
+Authentication protocol changes must pass both verification gates:
+
+```bash
+pnpm check
+pnpm e2e
+```
+
+## Production
+
+Pull requests run the `Validate` workflow, including unit, native, build, and
+E2E checks selected by changed paths.
+
+Production deployment is manual through `.github/workflows/deploy.yml` and the
+protected GitHub `production` environment. Run it first with `domains=none`,
+verify migrations and Workers, then run it with `domains=canonical` to attach
+public domains. The workflow is the source of truth for required variables,
+secrets, deployment order, migrations, and health checks.
+
+No production credential is required to build or test this repository.
+
+Before the gateway is deployed with its client, register it (see
+[Apps as clients](#apps-as-clients)) and set `GATEWAY_CLIENT_ID` and
+`GATEWAY_CLIENT_SECRET`; deploy-config refuses to render a gateway without them.
+
+## The OpenID Connect provider
+
+Pass is an OpenID Connect provider on `paw.<root>`: Authorization Code with
+PKCE (`S256` only), ES256-signed tokens, admin-registered clients with exact
+redirect URIs, and no dynamic registration.
+
+| Endpoint                                | Purpose                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `GET /.well-known/openid-configuration` | Discovery                                                               |
+| `GET /oauth/authorize`                  | Sign-in, then consent for third-party clients; `prompt=none` never asks |
+| `POST /oauth/consent`                   | The consent form's answer                                               |
+| `POST /oauth/token`                     | Code for tokens; refresh for third-party clients                        |
+| `GET /oauth/userinfo`                   | Claims for the access token's scopes                                    |
+| `GET /oauth/jwks.json`                  | The current and previous public signing keys                            |
+| `POST /oauth/revoke`                    | Revoke an access or refresh token, and with it the grant                |
+| `POST /oauth/logout`                    | End this browser's Pawl session (`end_session_endpoint`)                |
+
+`/oauth/logout` is a form POST, so a cross-site page cannot sign anyone out: the
+`SameSite=Lax` session cookie never rides a cross-site POST. It returns to
+`post_logout_redirect_uri` only when that URI's origin is the origin of one of
+the client's registered redirect URIs, and to Pawl's own page otherwise.
+
+A client registered `--first-party` skips consent, receives the account id as
+`sub`, gets no refresh token, and finds the person in its access token: `role`,
+`preferred_username` with the `profile` scope, and `email` with
+`email_verified` under the `email` scope when the address is verified. A
+third-party client's access token carries its pairwise `sub` and `scope` only.
+Every client must check that `aud` contains its own client id.
+
+The cabinet's origin may call `/api/auth/otp/start` and `/api/auth/otp/verify`
+with credentials, so codes typed on the machine reach Pass directly. No other
+route and no other origin is opened.
+
+### Apps as clients
+
+The gateway and every first-party app sign people in through the provider and
+keep their own session; nothing is shared across subdomains.
+
+- `GET /auth/signin?returnTo=/path[&prompt=none]` starts Authorization Code with
+  PKCE, keeping state, nonce and verifier in a ten-minute `__Host-signin`
+  cookie. `returnTo` is a path on the app's own origin and never carries a URL
+  fragment.
+- `GET /auth/callback` exchanges the code over the `PASS` binding, checks the ID
+  token's nonce, verifies the access token (`iss`, `aud` containing the app's
+  own client id, `exp`) and keeps it in `__Host-session` on the app's origin.
+- Every request reads `__Host-session` against the provider's keys, cached for
+  an hour by `kid`; an unknown `kid` is looked up once a minute at most, and
+  unreachable keys answer `503 IDENTITY_UNAVAILABLE`, never a guest.
+- A browser that arrives at `/` with no session is sent through
+  `/auth/signin?prompt=none` once per browser session (`__Host-silent`), so a
+  person signed in at Pawl arrives signed in. An ended session asks again; an
+  API call made with one answers `401 SESSION_EXPIRED`, and the page renews
+  silently.
+- `POST /auth/signout` clears the app's session and answers the form the page
+  posts to `POST /oauth/logout`, which ends the Pawl session too.
+
+The cabinet sends e-mailed codes to Pawl itself, so the Pawl session lands on
+`paw.`, and then makes the silent round trip. Register each first-party app
+once:
+
+```bash
+pnpm admin:client -- --id gateway --name "Cabinet" --redirect-uri https://<root>/auth/callback --first-party
+```
+
+and store the printed secret as that Worker's `OIDC_CLIENT_SECRET` (the gateway
+reads it from the `GATEWAY_CLIENT_SECRET` repository secret, and its id from the
+`GATEWAY_CLIENT_ID` variable).
 
 ## Registering apps
 
@@ -94,8 +304,13 @@ Where the manifest lives:
 
 ## The app contract
 
-Every call goes through the app's service binding to `<key>.internal`, carrying
-the viewer's `cookie` and `x-pawl-public-host` headers.
+Every call goes through the app's service binding to `<key>.internal`. The
+gateway states who is asking in `x-pawl-user` (the account id) and
+`x-pawl-role`, and names the viewer's host in `x-pawl-public-host`. No cookie
+travels: each app keeps its own session on its own origin, and a browser can
+never state an identity, because the gateway removes every `x-pawl-*` header a
+client sent. Believe `x-pawl-user` only on `<key>.internal` and only on the
+contract paths.
 
 **Estate**, `GET /.well-known/pawl/estate`:
 
@@ -118,6 +333,7 @@ the viewer's `cookie` and `x-pawl-public-host` headers.
 ```
 
 - `count` is a non-negative integer; `severity` is `warn`, `danger` or `null`.
+- No `x-pawl-user` means nobody is signed in: answer `401`.
 - `401` or `403` means the viewer may not see the app: its indicator is locked.
 - Any other status, a network failure or a wrong-shaped body means unknown,
   never zero.
@@ -142,130 +358,6 @@ it with its host rewritten to `<key>.internal`.
 An app that serves static assets first must let `/.well-known/*` reach its
 Worker (Wrangler's `assets.run_worker_first`).
 
-## Local development with apps
-
-Render local Worker configs from your manifest, then start the Workers with
-them:
-
-```bash
-pnpm --filter @pawl/deploy exec deploy-config render-local --manifest estate.json --out .wrangler/local
-pnpm exec wrangler dev --config .wrangler/local/pass.json --port 8787 --persist-to workers/pass/.wrangler/state
-pnpm exec wrangler dev --config .wrangler/local/gateway.json --port 8786
-```
-
-The rendered pass config carries a throwaway signing key made for that run.
-Start each app's own Worker on the `local.port` its manifest entry names.
-
-## Repository layout
-
-| Path                                                         | Contents                                                          |
-| ------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `apps/web`                                                   | Static Vite + TypeScript vending-machine home                     |
-| `apps/pass`                                                  | React account and authentication application                      |
-| `workers/gateway`                                            | Root-domain router and application gateway                        |
-| `workers/pass`                                               | Identity API backed by D1 and KV                                  |
-| `packages/pawl-protocol`                                     | Runtime-validated messages shared across application seams        |
-| `packages/topology`                                          | Canonical Worker names, hosts, origins, and local ports           |
-| `packages/auth`, `config`, `core`, `testing`, `ui`, `worker` | Shared TypeScript capabilities                                    |
-| `packages/crypto`, `crates/crypto`                           | Rust/WASM password derivation and streaming encryption            |
-| `tooling`                                                    | Deployment, E2E, health-check, lint, TypeScript, and Vite tooling |
-
-`workers/pass/src/account/lifecycle.ts` owns credential rotation, session
-invalidation, and cross-service account deletion.
-
-## Technology
-
-- TypeScript 7 native compiler, React, Vite, Hono, and Cloudflare Workers
-- D1 for relational state and KV for sessions
-- Rust compiled to WebAssembly for cryptography
-- pnpm workspaces and Turborepo for orchestration
-
-## Requirements
-
-- Node.js 22.13 or newer
-- pnpm 11.17
-- Rust stable with the `wasm32-unknown-unknown` target
-- `wasm-pack` 0.15
-- Chromium installed through Playwright for E2E tests
-
-## Setup
-
-```bash
-rustup target add wasm32-unknown-unknown
-cargo install wasm-pack --locked --version 0.15.0
-pnpm install
-pnpm --filter @pawl/e2e e2e:install
-```
-
-Source-controlled Wrangler configurations use local placeholder resources.
-Local development does not require production credentials. Put browser
-overrides in `.env.local` and Worker secrets in `.dev.vars`; both are ignored by
-Git. Each app's `.env.example` already carries the local origins from
-`packages/topology`, so `cp .env.example .env.local` in `apps/*` is enough.
-
-Those origins are baked in at build time and each Worker serves its app from
-`dist/`, so an app built without them points at the production hostnames and
-signs nobody in locally. `tooling/e2e/prepare.mjs` builds with the right values;
-so does a plain `pnpm build` once `.env.local` exists.
-
-## Development
-
-Run all workspace development tasks:
-
-```bash
-pnpm dev
-```
-
-Build an application and run its Worker individually when working on one
-service:
-
-```bash
-pnpm --filter @pawl/pass-app build
-pnpm --dir workers/pass exec wrangler dev --port 8787
-```
-
-Wrangler's local service registry connects Workers started in separate
-terminals. The canonical local ports and service names are maintained in
-`packages/topology`, and each Worker's `wrangler.jsonc` pins its own `dev.port`
-to match. Without that pin every Worker takes Wrangler's default 8787, all of
-them bind the same socket, and only one of them answers, so `pnpm lint:ports`
-fails the build if the two ever disagree.
-
-Restart `wrangler dev` after any build: it serves stale assets from `dist`
-otherwise.
-
-## Commands
-
-| Command                                                             | Purpose                                                                      |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `pnpm build`                                                        | Build all TypeScript applications, Workers, and packages                     |
-| `pnpm test`                                                         | Run workspace unit tests                                                     |
-| `pnpm typecheck`                                                    | Type-check runtime and tooling interfaces with TypeScript 7                  |
-| `pnpm lint`                                                         | Verify formatting, unused files and exports, and async error handling        |
-| `pnpm lint:async`                                                   | Reject async event handlers that discard their failure                       |
-| `pnpm lint:ports`                                                   | Reject a Worker dev port that drifts from `packages/topology`                |
-| `pnpm format:check`                                                 | Verify repository formatting                                                 |
-| `pnpm native:check`                                                 | Validate Rust formatting and tests                                           |
-| `pnpm check`                                                        | Run the complete static, unit, native, and build verification gate           |
-| `pnpm e2e`                                                          | Reset local Wrangler state and test Gateway, Pass and the fixture apps       |
-| `pnpm health:check`                                                 | Verify deployed public service health endpoints                              |
-| `pnpm pawl keygen`                                                  | Make the provider signing key and pairwise subject secret, printed once      |
-| `pnpm pawl manifest check estate.json`                              | Validate a manifest and print where each app sits in the cabinet             |
-| `pnpm pawl manifest pin estate.json`                                | Write the current bay placement into the manifest so it never moves          |
-| `pnpm admin:client -- --id <id> --name <name> --redirect-uri <uri>` | Register an OpenID Connect client; a confidential one prints its secret once |
-| `pnpm admin:promote -- --email <email>`                             | Promote an existing verified account to admin                                |
-
-`pnpm e2e` registers two fixture apps from `tooling/e2e/fixture/estate.json` and
-boots them as a fixture Worker. Each Worker has a health check, so the run stops
-before any test when one of them is down rather than passing by not testing.
-
-Authentication protocol changes must pass both verification gates:
-
-```bash
-pnpm check
-pnpm e2e
-```
-
 ## Security invariants
 
 - Passwords and Master Keys never cross the browser-to-Worker boundary.
@@ -276,31 +368,7 @@ pnpm e2e
   adds no credential path and carries no key material.
 - No admin account-deletion or role-promotion endpoint exists.
 
-## CI and deployment
-
-Pull requests run the `Validate` workflow, including unit, native, build, and
-E2E checks selected by changed paths.
-
-Production deployment is manual through `.github/workflows/deploy.yml` and the
-protected GitHub `production` environment. Run it first with `domains=none`,
-verify migrations and Workers, then run it with `domains=canonical` to attach
-public domains. The workflow is the source of truth for required variables,
-secrets, deployment order, migrations, and health checks.
-
-No production credential is required to build or test this repository.
-
-## TypeScript configuration
-
-Runtime-specific compiler presets live in `tooling/typescript` and are consumed
-through `@pawl/typescript`. Browser, Worker, Node, and emitted library
-projects do not share ambient types accidentally. TypeScript 7 runs one checker
-per workspace process while Turborepo controls parallelism across workspaces.
-
-Libraries built by `tsc` are checked during their build. Separate `typecheck`
-tasks are reserved for Vite applications, Wrangler Workers, tests, and tooling
-whose normal build step does not perform full type analysis.
-
-### Why there is no ESLint
+## Why there is no ESLint
 
 `typescript-eslint` refuses to load against TypeScript 7 and throws rather than
 warning, so no rule that needs a TypeScript parser can run here, including ones
@@ -314,3 +382,12 @@ dropped the rejection, leaving the control looking broken and the operator with
 no message. `tooling/lint/unhandled-async.mjs` stands in for them until the
 parser lands: it is narrower than the real rules and only guards that one class.
 Replace it with ESLint when TypeScript 7 is supported, not before.
+
+Runtime-specific compiler presets live in `tooling/typescript` and are consumed
+through `@pawl/typescript`. Browser, Worker, Node, and emitted library
+projects do not share ambient types accidentally. TypeScript 7 runs one checker
+per workspace process while Turborepo controls parallelism across workspaces.
+
+Libraries built by `tsc` are checked during their build. Separate `typecheck`
+tasks are reserved for Vite applications, Wrangler Workers, tests, and tooling
+whose normal build step does not perform full type analysis.

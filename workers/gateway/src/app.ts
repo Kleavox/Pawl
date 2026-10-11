@@ -1,5 +1,3 @@
-import { readCookie, requirePassInProduction, verifySession } from "@pawl/auth";
-import { INTERNAL_URLS, SESSION_COOKIE } from "@pawl/config";
 import { renderErrorPage, type DeployEnvironment } from "@pawl/core";
 import {
   EMPTY_MANIFEST,
@@ -11,12 +9,18 @@ import {
   INTERNAL_HOSTS,
   localWorkerOrigin,
   PUBLIC_SUBDOMAINS,
-  publicHost,
   publicOrigin,
 } from "@pawl/topology";
 import { Hono, type Context } from "hono";
 
 import { hostRedirect } from "./hosts";
+import { IdentityUnavailable } from "./session/keys";
+import {
+  requireProviderInProduction,
+  sessionState,
+  type SessionEnv,
+} from "./session/resolve";
+import { registerSessionRoutes, silentArrival } from "./session/routes";
 import {
   buildEstate,
   readEstate,
@@ -24,7 +28,7 @@ import {
   type PassSummary,
 } from "./overview";
 
-export interface Env {
+export interface Env extends SessionEnv {
   ENVIRONMENT: DeployEnvironment;
   ASSETS: Fetcher;
   PASS?: Fetcher;
@@ -55,12 +59,21 @@ function isLoopback(hostname: string): boolean {
 }
 
 app.use("*", async (context, next) => {
-  requirePassInProduction(context.env);
+  requireProviderInProduction(context.env);
   await next();
 });
 
 app.onError((error, context) => {
   console.error("[gateway]", error);
+  if (error instanceof IdentityUnavailable) {
+    return context.json(
+      {
+        code: "IDENTITY_UNAVAILABLE",
+        message: "The gateway cannot reach Pawl to check who you are.",
+      },
+      503,
+    );
+  }
   if (context.req.path.startsWith("/api")) {
     return context.json(
       {
@@ -90,43 +103,53 @@ app.get("/health", (context) =>
   context.json({ service: "gateway", status: "ok" }),
 );
 
-app.get("/api/session", async (context) => {
-  const session = await verifySession(context.req.raw, context.env.PASS);
-  return session
-    ? context.json({ authenticated: true, identity: session.identity })
-    : context.json({ authenticated: false });
+registerSessionRoutes(app);
+
+app.use("/", async (context, next) => {
+  const hostname = new URL(context.req.url).hostname;
+  if (
+    context.req.method === "GET" &&
+    (isLoopback(hostname) ||
+      hostname === new URL(context.env.PUBLIC_ORIGIN).hostname)
+  ) {
+    const hop = await silentArrival(context.req.raw, context.env);
+    if (hop) return hop;
+  }
+  await next();
 });
 
-async function part<T>(
-  fetcher: Fetcher | undefined,
-  url: string,
-  original: Request,
-  isValid?: (value: unknown) => value is T,
-): Promise<T | null> {
-  if (!fetcher) return null;
-  try {
-    const response = await fetcher.fetch(url, {
-      headers: { cookie: original.headers.get("cookie") ?? "" },
+app.get("/api/session", async (context) => {
+  const state = await sessionState(context.req.raw, context.env);
+  if (state.kind === "signed-in") {
+    return context.json({
+      authenticated: true,
+      identity: state.session.identity,
     });
+  }
+  return context.json(
+    state.kind === "expired"
+      ? { authenticated: false, reason: "expired" }
+      : { authenticated: false },
+  );
+});
+
+async function devicesOf(
+  pass: Fetcher | undefined,
+  userId: string,
+): Promise<PassSummary | null> {
+  if (!pass) return null;
+  try {
+    const response = await pass.fetch(
+      `http://${INTERNAL_HOSTS.PASS}/internal/devices?id=${encodeURIComponent(userId)}`,
+    );
     if (!response.ok) return null;
-    const body: unknown = await response.json();
-    if (isValid && !isValid(body)) return null;
-    return body as T;
+    const body = (await response.json()) as { devices?: unknown };
+    return typeof body.devices === "number" && Number.isInteger(body.devices)
+      ? { devices: body.devices }
+      : null;
   } catch {
     return null;
   }
-}
-
-interface PassSessions {
-  sessions: unknown[];
-}
-
-function isPassSessions(value: unknown): value is PassSessions {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    Array.isArray((value as { sessions?: unknown }).sessions)
-  );
 }
 
 function originsFor(
@@ -197,31 +220,30 @@ app.get("/api/estate", async (context) => {
   const { allowed, appOrigins } = originsFor(context.req.raw, context.env);
   const cors = corsHeaders(context.req.raw, allowed);
 
-  const session = await verifySession(context.req.raw, context.env.PASS);
-  if (!session) {
-    return context.json({ code: "UNAUTHENTICATED" }, 401, cors);
+  const state = await sessionState(context.req.raw, context.env);
+  if (state.kind !== "signed-in") {
+    return context.json(
+      {
+        code: state.kind === "expired" ? "SESSION_EXPIRED" : "UNAUTHENTICATED",
+      },
+      401,
+      cors,
+    );
   }
+  const session = state.session;
 
   const raw = context.req.raw;
-  const cookie = raw.headers.get("cookie") ?? "";
   const targets = registry(context.env).estateTargets();
-  const [sessions, ...answers] = await Promise.all([
-    part<PassSessions>(
-      context.env.PASS,
-      `http://${INTERNAL_HOSTS.PASS}/api/sessions`,
-      raw,
-      isPassSessions,
-    ),
+  const [pass, ...answers] = await Promise.all([
+    devicesOf(context.env.PASS, session.identity.id),
     ...targets.map((target) =>
       askEstate(context.env, target, appOrigins.get(target.key), {
-        cookie,
+        "x-pawl-user": session.identity.id,
+        "x-pawl-role": session.identity.role,
         "x-pawl-public-host": new URL(raw.url).hostname,
       }),
     ),
   ]);
-  const pass: PassSummary | null = sessions
-    ? { devices: sessions.sessions.length }
-    : null;
   const parts = Object.fromEntries(
     targets.map((target, index) => [target.key, answers[index] ?? null]),
   );
@@ -255,68 +277,28 @@ async function askEstate(
   }
 }
 
-app.post("/api/logout", async (context) => {
-  const token = readCookie(context.req.raw, SESSION_COOKIE);
-  if (token && context.env.PASS) {
-    const result = await context.env.PASS.fetch(INTERNAL_URLS.SESSION_LOGOUT, {
-      method: "POST",
-      headers: { "x-pawl-session": token },
-    });
-    if (result.ok) {
-      const body = await result.json<{ cookie?: string }>();
-      if (body.cookie) context.header("Set-Cookie", body.cookie);
-    }
+function withoutStatedIdentity(headers: Headers): Headers {
+  const copy = new Headers(headers);
+  for (const name of [...copy.keys()]) {
+    if (name.startsWith("x-pawl-")) copy.delete(name);
   }
-  return context.json({ ok: true });
-});
-
-const PASS_AUTH_ROUTES = ["/api/auth/otp/start", "/api/auth/otp/verify"];
-
-function passCookieUrl(requestUrl: string, publicOriginUrl: string): URL {
-  const url = new URL(requestUrl);
-  const rootDomain = new URL(publicOriginUrl).hostname.toLowerCase();
-  const hostname = url.hostname.toLowerCase();
-  if (hostname === rootDomain || hostname.endsWith(`.${rootDomain}`)) {
-    url.protocol = "https:";
-    url.hostname = publicHost(rootDomain, "pass");
-    url.port = "";
-  }
-  return url;
+  return copy;
 }
 
-app.on("POST", PASS_AUTH_ROUTES, async (context) => {
-  const origin = context.req.header("origin");
-  const requestOrigin = new URL(context.req.url).origin;
-  const trustedOrigins = new Set([context.env.PUBLIC_ORIGIN, requestOrigin]);
-  if (!origin || !trustedOrigins.has(origin)) {
-    return context.json({ code: "INVALID_ORIGIN" }, 403);
-  }
+function cleaned(request: Request): Request {
+  return new Request(request, {
+    headers: withoutStatedIdentity(request.headers),
+  });
+}
 
-  if (!context.env.PASS) {
-    return context.json(
-      {
-        code: "PASS_UNAVAILABLE",
-        message:
-          "This deployment has no identity provider to sign you in with.",
-      },
-      503,
-    );
-  }
-
-  const url = passCookieUrl(context.req.url, context.env.PUBLIC_ORIGIN);
-  const headers = new Headers(context.req.raw.headers);
-  headers.set("origin", url.origin);
-  headers.delete("referer");
-
-  return context.env.PASS.fetch(
-    new Request(url, {
-      method: context.req.method,
-      headers,
-      body: context.req.raw.body,
-      duplex: "half",
-    } as RequestInit & { duplex: "half" }),
-  );
-});
+async function withPerson(request: Request, env: Env): Promise<Request> {
+  const state = await sessionState(request, env);
+  if (state.kind !== "signed-in") return request;
+  const headers = new Headers(request.headers);
+  headers.set("x-pawl-user", state.session.identity.id);
+  headers.set("x-pawl-role", state.session.identity.role);
+  return new Request(request, { headers });
+}
 
 app.all("*", async (context) => {
   const url = new URL(context.req.url);
@@ -330,7 +312,7 @@ app.all("*", async (context) => {
       (subdomain === PUBLIC_SUBDOMAINS.pass || subdomain === "pass") &&
       context.env.PASS
     ) {
-      return context.env.PASS.fetch(context.req.raw);
+      return context.env.PASS.fetch(cleaned(context.req.raw));
     }
   }
 
@@ -343,7 +325,7 @@ app.all("*", async (context) => {
   if (route.kind === "subdomain") {
     const target = binding(context.env, route.binding);
     return target
-      ? target.fetch(context.req.raw)
+      ? target.fetch(cleaned(context.req.raw))
       : unavailable(context, route.key);
   }
   if (route.kind === "proxy") {
@@ -353,7 +335,12 @@ app.all("*", async (context) => {
     internal.hostname = route.host;
     internal.protocol = "http:";
     internal.port = "";
-    return target.fetch(new Request(internal, context.req.raw));
+    return target.fetch(
+      await withPerson(
+        new Request(internal, cleaned(context.req.raw)),
+        context.env,
+      ),
+    );
   }
 
   const redirect = hostRedirect(url, context.env.PUBLIC_ORIGIN);
@@ -369,7 +356,7 @@ app.all("*", async (context) => {
     !registry(context.env).isReserved(slug) &&
     ["GET", "HEAD", "POST"].includes(context.req.method)
   ) {
-    const headers = new Headers(context.req.raw.headers);
+    const headers = withoutStatedIdentity(context.req.raw.headers);
     headers.set("x-pawl-public-host", url.hostname);
     headers.set("x-pawl-trace-id", crypto.randomUUID());
     const response = await apexTarget.fetch(
@@ -390,11 +377,18 @@ app.all("*", async (context) => {
       slug.startsWith(apex.fileSlugPrefix) &&
       ["GET", "HEAD"].includes(context.req.method)
     ) {
+      const hop = await silentArrival(context.req.raw, context.env);
+      if (hop) return hop;
       const page = new URL(context.req.url);
       page.hostname = apex.host;
       page.protocol = "http:";
       page.port = "";
-      return apexTarget.fetch(new Request(page, context.req.raw));
+      return apexTarget.fetch(
+        await withPerson(
+          new Request(page, cleaned(context.req.raw)),
+          context.env,
+        ),
+      );
     }
   }
 

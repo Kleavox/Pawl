@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@pawl/auth": "workspace:*",
-    "@pawl/config": "workspace:*",
     "@pawl/core": "workspace:*",
+    "@pawl/oidc": "workspace:*",
     "@pawl/registry": "workspace:*",
     "@pawl/topology": "workspace:*",
     "@pawl/web-app": "workspace:*",

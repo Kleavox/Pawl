@@ -5,7 +5,7 @@ import { StatusLine, formatAge } from "@pawl/ui";
 import { type FormEvent, useEffect, useState } from "react";
 
 import { api, deviceLabel, redirectToFreshChallenge } from "./helpers";
-import type { DeviceSession, FormState } from "./types";
+import type { ConnectedApp, DeviceSession, FormState } from "./types";
 import { Field, Status } from "./ui";
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -29,6 +29,7 @@ export function Account({
   const [passwordInput, setPasswordInput] = useState("");
   const [confirmInput, setConfirmInput] = useState("");
   const [devices, setDevices] = useState<DeviceSession[]>();
+  const [connected, setConnected] = useState<ConnectedApp[]>();
   const [deleting, setDeleting] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState("");
   const [state, setState] = useState<FormState>({ status: "idle" });
@@ -48,7 +49,28 @@ export function Account({
       .catch((cause) =>
         setState({ status: "error", message: errorMessage(cause) }),
       );
+    void api<{ grants: ConnectedApp[] }>("/api/account/grants")
+      .then((result) => setConnected(result.grants))
+      .catch((cause) =>
+        setState({ status: "error", message: errorMessage(cause) }),
+      );
   }, []);
+
+  async function disconnect(app: ConnectedApp) {
+    setState({ status: "loading" });
+    try {
+      await apiFetch(
+        `/api/account/grants/${encodeURIComponent(app.clientId)}`,
+        { method: "DELETE" },
+      );
+      setConnected((current) =>
+        current?.filter((entry) => entry.clientId !== app.clientId),
+      );
+      setState({ status: "success", message: `${app.name} disconnected.` });
+    } catch (cause) {
+      setState({ status: "error", message: errorMessage(cause) });
+    }
+  }
 
   async function deleteAccount(event: FormEvent) {
     event.preventDefault();
@@ -327,6 +349,37 @@ export function Account({
                     onClick={() => void revokeDevice(device)}
                   >
                     {device.current ? "Sign out" : "Revoke"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {connected && connected.length > 0 && (
+        <div className="devices">
+          <p className="section-label">Connected apps</p>
+          <ul className="pw-rows">
+            {connected.map((app) => (
+              <li key={app.clientId}>
+                <div className="pw-row row-device">
+                  <span className="pw-row-state">{app.sector}</span>
+                  <span className="pw-row-title">
+                    {app.name}
+                    <small className="pw-row-detail">
+                      Reads {app.scopes.join(", ")} · connected{" "}
+                      {new Date(app.createdAt).toLocaleString()}
+                    </small>
+                  </span>
+                  <span className="pw-row-age">{formatAge(app.createdAt)}</span>
+                  <button
+                    className="pw-row-tool"
+                    type="button"
+                    aria-label={`Disconnect ${app.name}`}
+                    disabled={state.status === "loading"}
+                    onClick={() => void disconnect(app)}
+                  >
+                    Disconnect
                   </button>
                 </div>
               </li>

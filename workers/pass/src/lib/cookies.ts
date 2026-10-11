@@ -19,11 +19,12 @@ export function makeSessionCookie(
     SESSION_COOKIE,
     token,
     SESSION_TTL_SECONDS,
+    false,
   );
 }
 
 export function clearSessionCookie(request: Request, env: Env): string {
-  return serializeCookie(request, env, SESSION_COOKIE, "", 0);
+  return serializeCookie(request, env, SESSION_COOKIE, "", 0, false);
 }
 
 export function makeVerificationCookie(
@@ -32,7 +33,14 @@ export function makeVerificationCookie(
   token: string,
   maxAge: number,
 ): string {
-  return serializeCookie(request, env, VERIFICATION_COOKIE, token, maxAge);
+  return serializeCookie(
+    request,
+    env,
+    VERIFICATION_COOKIE,
+    token,
+    maxAge,
+    true,
+  );
 }
 
 function serializeCookie(
@@ -41,6 +49,7 @@ function serializeCookie(
   name: string,
   value: string,
   maxAge: number,
+  sharedAcrossApps: boolean,
 ): string {
   const host = new URL(request.url).hostname.toLowerCase();
   const rootDomain = env.ROOT_DOMAIN.toLowerCase();
@@ -53,7 +62,10 @@ function serializeCookie(
     `Max-Age=${maxAge}`,
   ];
 
-  if (host === rootDomain || host.endsWith(`.${rootDomain}`)) {
+  if (
+    sharedAcrossApps &&
+    (host === rootDomain || host.endsWith(`.${rootDomain}`))
+  ) {
     attributes.push(`Domain=.${rootDomain}`);
   }
 

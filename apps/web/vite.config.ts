@@ -7,6 +7,7 @@ import { initRegistryFromDisk, readManifest } from "@pawl/registry/node";
 import { sharedFavicon } from "@pawl/vite-config";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
+import { headersFile } from "./src/csp";
 import { renderShelves } from "./src/shelves";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -46,13 +47,30 @@ function htmlVars(
   };
 }
 
+function securityHeaders(passOrigin: string): Plugin {
+  return {
+    name: "security-headers",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "_headers",
+        source: headersFile(passOrigin),
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const rootOrigin = env.PUBLIC_ROOT_ORIGIN ?? "https://example.com";
   const passHref = getPublicOrigin(rootOrigin, PUBLIC_SUBDOMAINS.pass);
   const view = siteView(rootOrigin, passHref);
   return {
-    plugins: [htmlVars(rootOrigin, passHref, view), sharedFavicon()],
+    plugins: [
+      htmlVars(rootOrigin, passHref, view),
+      sharedFavicon(),
+      securityHeaders(env.VITE_PASS_ORIGIN ?? passHref),
+    ],
     define: { __SITE__: JSON.stringify(view) },
     build: {
       assetsInlineLimit: 0,

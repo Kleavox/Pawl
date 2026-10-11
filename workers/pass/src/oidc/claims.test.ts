@@ -10,6 +10,7 @@ function userWith(overrides: Partial<ClaimsUser>): ClaimsUser {
     email: "owner@product.test",
     username: "owner",
     email_verified_at: "2026-10-08T00:00:00.000Z",
+    role: "USER",
     ...overrides,
   };
 }

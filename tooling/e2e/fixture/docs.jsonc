@@ -12,6 +12,5 @@
     "PUBLIC_ORIGIN": "http://127.0.0.1:8791",
     "PROVIDER": "http://127.0.0.1:8787",
     "CLIENT_ID": "fixture-docs",
-    "REDIRECT_URI": "http://localhost:8791/callback",
   },
 }

@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   readCookie,
   type PassBinding,
-  requirePassInProduction,
+  STANDALONE_SESSION,
   verifyChallenge,
-  verifySession,
 } from "./index";
 
 describe("readCookie", () => {
@@ -26,38 +25,16 @@ describe("readCookie", () => {
 });
 
 describe("standalone mode", () => {
-  const request = new Request("https://link.product.test");
-
-  it("hands out an admin session when there is no Pass to ask", async () => {
-    const session = await verifySession(request, undefined);
-
-    expect(session?.identity.role).toBe("ADMIN");
-    expect(session?.identity.id).toBe("standalone");
+  it("names the admin a deployment with no Pass runs as", () => {
+    expect(STANDALONE_SESSION.identity).toMatchObject({
+      id: "standalone",
+      role: "ADMIN",
+    });
   });
 
   it("refuses a challenge when there is no Pass to ask", async () => {
+    const request = new Request("https://link.product.test");
     expect(await verifyChallenge(request, undefined, "basic")).toBe(false);
-  });
-
-  it("throws in production when the Pass binding is missing", () => {
-    expect(() =>
-      requirePassInProduction({ ENVIRONMENT: "production" }),
-    ).toThrow(/falls? open/u);
-  });
-
-  it("stays quiet outside production", () => {
-    expect(() =>
-      requirePassInProduction({ ENVIRONMENT: "development" }),
-    ).not.toThrow();
-  });
-
-  it("stays quiet in production when the binding is there", () => {
-    expect(() =>
-      requirePassInProduction({
-        ENVIRONMENT: "production",
-        PASS: { fetch: async () => new Response(null) },
-      }),
-    ).not.toThrow();
   });
 });
 
@@ -70,17 +47,6 @@ describe("the Pass seam", () => {
       },
     };
   }
-
-  it("asks Pass about the session cookie under the shared header", async () => {
-    const seen: Headers[] = [];
-    const request = new Request("https://link.product.test", {
-      headers: { cookie: "__Secure-pawl_session=abc" },
-    });
-    await verifySession(request, recordingPass(seen));
-    expect(seen.map((headers) => headers.get("x-pawl-session"))).toEqual([
-      "abc",
-    ]);
-  });
 
   it("asks Pass about the challenge cookie under the shared header", async () => {
     const seen: Headers[] = [];

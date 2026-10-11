@@ -24,6 +24,7 @@ const env = {
   PASS_D1_ID: "11111111-1111-1111-1111-111111111111",
   PASS_KV_ID: "11111111111111111111111111111111",
   AUTH_FROM_EMAIL: "Product <no-reply@product.test>",
+  GATEWAY_CLIENT_ID: "gateway",
 };
 
 describe("production deployment config", () => {
@@ -62,6 +63,26 @@ describe("production deployment config", () => {
     expect(configs["gateway"]?.services).toEqual([
       { binding: "PASS", service: "product-pass" },
     ]);
+  });
+
+  it("makes the gateway a client of Pawl's provider on its public origin", () => {
+    const configs = productionConfigs(env, "canonical", EMPTY_MANIFEST);
+    expect(configs["gateway"]?.vars).toMatchObject({
+      OIDC_ISSUER: "https://paw.product.test",
+      OIDC_CLIENT_ID: "gateway",
+    });
+  });
+
+  it("refuses to render a gateway that has no client of its own", () => {
+    const { GATEWAY_CLIENT_ID, ...clientless } = env;
+    expect(GATEWAY_CLIENT_ID).toBe("gateway");
+    expect(() =>
+      productionConfigs(
+        clientless as unknown as typeof env,
+        "none",
+        EMPTY_MANIFEST,
+      ),
+    ).toThrow(/GATEWAY_CLIENT_ID/u);
   });
 
   it("refuses placeholder resource ids", () => {
@@ -112,6 +133,21 @@ describe("production deployment config", () => {
       "AUTHORIZE_RATE_LIMIT",
       "TOKEN_RATE_LIMIT",
     ]);
+  });
+
+  it("lets a local suite's silent sign-ins through, and keeps production's authorize limit tight", () => {
+    type Limit = { name: string; simple: { limit: number } };
+    const limitOf = (limits: unknown) =>
+      (limits as Limit[]).find((limit) => limit.name === "AUTHORIZE_RATE_LIMIT")
+        ?.simple.limit;
+    expect(
+      limitOf(
+        productionConfigs(env, "none", EMPTY_MANIFEST)["pass"]?.ratelimits,
+      ),
+    ).toBe(30);
+    expect(limitOf(localConfigs(FIXTURE, "key")["pass"]?.ratelimits)).toBe(
+      1000,
+    );
   });
 
   it("ignores unrelated runner environment variables", () => {
@@ -171,6 +207,11 @@ describe("apps from the manifest", () => {
     expect(
       (local["pass"]?.vars as { OIDC_SIGNING_KEY: string }).OIDC_SIGNING_KEY,
     ).toBe("local-key");
+    expect(local["gateway"]?.vars).toMatchObject({
+      OIDC_ISSUER: "http://127.0.0.1:8787",
+      OIDC_CLIENT_ID: "gateway",
+      OIDC_CLIENT_SECRET: "local-gateway-secret",
+    });
   });
 });
 
@@ -185,6 +226,7 @@ describe("production secrets", () => {
     GITHUB_CLIENT_SECRET: "github-secret",
     OIDC_SIGNING_KEY: "signing",
     OIDC_SUB_SECRET: "pairwise",
+    GATEWAY_CLIENT_SECRET: "gateway-secret",
   };
 
   it("uses generic repository secret names as Worker bindings", () => {
@@ -192,7 +234,8 @@ describe("production secrets", () => {
     expect(result.pass.RESEND_API_KEY).toBe("resend");
     expect(result.pass.OIDC_SIGNING_KEY).toBe("signing");
     expect(result.pass).not.toHaveProperty("OIDC_PREVIOUS_SIGNING_KEY");
-    expect(Object.keys(result)).toEqual(["pass"]);
+    expect(Object.keys(result)).toEqual(["pass", "gateway"]);
+    expect(result.gateway).toEqual({ OIDC_CLIENT_SECRET: "gateway-secret" });
   });
 
   it("carries the previous signing key only while one is set", () => {
@@ -201,6 +244,14 @@ describe("production secrets", () => {
       OIDC_PREVIOUS_SIGNING_KEY: "previous",
     });
     expect(result.pass.OIDC_PREVIOUS_SIGNING_KEY).toBe("previous");
+  });
+
+  it("refuses to render a gateway that could not exchange a code", () => {
+    const { GATEWAY_CLIENT_SECRET, ...secretless } = secrets;
+    expect(GATEWAY_CLIENT_SECRET).toBe("gateway-secret");
+    expect(() => productionSecrets(secretless)).toThrow(
+      /GATEWAY_CLIENT_SECRET/u,
+    );
   });
 
   it("refuses to render a Pawl that could sign nothing", () => {

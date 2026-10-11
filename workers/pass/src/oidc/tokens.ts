@@ -14,6 +14,10 @@ export interface AccessTokenClaims {
   client_id?: string;
   iat: number;
   exp: number;
+  role?: "ADMIN" | "USER";
+  email?: string;
+  email_verified?: boolean;
+  preferred_username?: string;
 }
 
 async function sign(
@@ -49,9 +53,11 @@ export function mintAccessToken(
     sub: string;
     scopes: string[];
     clientId?: string;
+    identity?: Record<string, unknown>;
   },
 ): Promise<string> {
   return sign(env, {
+    ...input.identity,
     aud: input.audience,
     sub: input.sub,
     scope: input.scopes.join(" "),

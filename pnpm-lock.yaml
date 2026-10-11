@@ -323,9 +323,6 @@ importers:
 
   packages/worker:
     dependencies:
-      '@pawl/auth':
-        specifier: workspace:*
-        version: link:../auth
       '@pawl/core':
         specifier: workspace:*
         version: link:../core
@@ -415,12 +412,12 @@ importers:
       '@pawl/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@pawl/config':
-        specifier: workspace:*
-        version: link:../../packages/config
       '@pawl/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@pawl/oidc':
+        specifier: workspace:*
+        version: link:../../packages/oidc
       '@pawl/registry':
         specifier: workspace:*
         version: link:../../packages/registry
@@ -479,6 +476,9 @@ importers:
       '@pawl/registry':
         specifier: workspace:*
         version: link:../../packages/registry
+      '@pawl/topology':
+        specifier: workspace:*
+        version: link:../../packages/topology
       '@pawl/worker':
         specifier: workspace:*
         version: link:../../packages/worker

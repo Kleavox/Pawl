@@ -10,7 +10,13 @@ import {
   type NavCounts,
   type Overview,
 } from "@pawl/ui";
-import { OtpVerifyError, startOtp, verifyOtpCode } from "./auth-client";
+import {
+  OtpVerifyError,
+  signOut,
+  silentSignInPath,
+  startOtp,
+  verifyOtpCode,
+} from "./auth-client";
 import { toMachineModel, type MachineModel } from "./estate-adapter";
 import { mountConsole, mountTerminal } from "./machine/console";
 import { createKeypad } from "./machine/keypad";
@@ -34,7 +40,11 @@ import {
   type MachineState,
 } from "./machine/state";
 
-type GatewaySession = { authenticated: boolean; identity?: Identity };
+type GatewaySession = {
+  authenticated: boolean;
+  identity?: Identity;
+  reason?: string;
+};
 
 const CATALOG = SITE.bays;
 const TOOL_KEYS = SITE.tools.map((tool) => tool.key);
@@ -201,12 +211,8 @@ trigger?.addEventListener("click", (event) => {
 dropdown?.addEventListener("click", (event) => event.stopPropagation());
 window.addEventListener("click", closeMenu);
 
-logout?.addEventListener("click", async () => {
-  try {
-    await fetch("/api/logout", { method: "POST", credentials: "include" });
-  } finally {
-    window.location.reload();
-  }
+logout?.addEventListener("click", () => {
+  signOut().catch(() => fault("SIGN-OUT FAILED, TRY AGAIN"));
 });
 
 function paintAccount(session: GatewaySession): void {
@@ -258,6 +264,11 @@ async function retryEstate(): Promise<void> {
       session = await readSession();
     } catch {
       fault("SESSION STILL UNREADABLE");
+      return;
+    }
+    if (!session.authenticated && session.reason === "expired") {
+      if (!keepRequest()) await hold(FAULT_HOLD_MS);
+      window.location.assign(silentSignInPath(window.location));
       return;
     }
     const overview = session.authenticated ? await readEstate() : null;
@@ -456,11 +467,22 @@ async function submitCode(code: string): Promise<void> {
     return;
   }
 
+  let session: GatewaySession | null = null;
   try {
-    await adoptPass(verified.user);
+    session = await readSession();
   } catch {
-    fault("PASS ACCEPTED, MACHINE DID NOT WAKE");
+    session = null;
   }
+  if (session?.authenticated && session.identity) {
+    try {
+      await adoptPass(session.identity);
+    } catch {
+      fault("PASS ACCEPTED, MACHINE DID NOT WAKE");
+    }
+    return;
+  }
+  if (!keepRequest()) await hold(FAULT_HOLD_MS);
+  window.location.assign(silentSignInPath(window.location));
 }
 
 function keepRequest(): boolean {
@@ -475,7 +497,10 @@ function keepRequest(): boolean {
 }
 
 function leaveFor(url: URL): void {
-  url.searchParams.set("returnTo", window.location.href);
+  url.searchParams.set(
+    "returnTo",
+    new URL(silentSignInPath(window.location), window.location.origin).href,
+  );
   window.location.assign(url.toString());
 }
 

@@ -13,7 +13,7 @@ import {
 } from "../oidc/db.testkit";
 import { findGrant } from "../oidc/grants";
 import { mintAccessToken } from "../oidc/tokens";
-import { createSession } from "../lib/session";
+import { createSession, getSession } from "../lib/session";
 import { registerOidcRoutes } from "./oidc";
 import type { AppEnv } from "./shared";
 
@@ -271,6 +271,7 @@ describe("discovery", () => {
       userinfo_endpoint: `${ISSUER}/oauth/userinfo`,
       jwks_uri: `${ISSUER}/oauth/jwks.json`,
       revocation_endpoint: `${ISSUER}/oauth/revoke`,
+      end_session_endpoint: `${ISSUER}/oauth/logout`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code", "refresh_token"],
       subject_types_supported: ["public", "pairwise"],
@@ -800,14 +801,28 @@ describe("the provider's own guards", () => {
     );
   });
 
-  it("answers 429 when the authorize rate limit is spent", async () => {
+  it("sends a rate-limited sign-in back to the app that asked, so nobody is stranded on an error", async () => {
+    const spent = {
+      AUTHORIZE_RATE_LIMIT: { limit: async () => ({ success: false }) },
+    } as unknown as Partial<Env>;
     const response = await call(
-      `/oauth/authorize?${authorizeQuery("notes")}`,
+      `/oauth/authorize?${authorizeQuery("notes", { prompt: "none" })}`,
+      undefined,
+      spent,
+    );
+    expect(response.status).toBe(302);
+    const back = location(response);
+    expect(`${back.origin}${back.pathname}`).toBe(DES_CB);
+    expect(back.searchParams.get("error")).toBe("temporarily_unavailable");
+    expect(back.searchParams.get("state")).toBe("s-1");
+  });
+
+  it("answers 429 itself when the rate-limited request names no client it trusts", async () => {
+    const response = await call(
+      "/oauth/authorize?client_id=nobody&redirect_uri=https%3A%2F%2Fevil.test%2F",
       undefined,
       {
-        AUTHORIZE_RATE_LIMIT: {
-          limit: async () => ({ success: false }),
-        },
+        AUTHORIZE_RATE_LIMIT: { limit: async () => ({ success: false }) },
       } as unknown as Partial<Env>,
     );
     expect(response.status).toBe(429);
@@ -826,5 +841,118 @@ describe("the provider's own guards", () => {
       } as unknown as Partial<Env>,
     );
     expect(response.status).toBe(429);
+  });
+});
+
+describe("what an access token says about the person", () => {
+  async function accessClaims(client: ClientId, userId = "user-1") {
+    const code = await codeFor(client, userId);
+    const body = (await (await exchange({ client, code })).json()) as {
+      access_token: string;
+    };
+    return payloadOf(body.access_token);
+  }
+
+  it("tells a first-party client who the person is and what they may do", async () => {
+    expect(await accessClaims("notes")).toMatchObject({
+      sub: "user-1",
+      role: "USER",
+      preferred_username: "owner",
+      email: "owner@product.test",
+      email_verified: true,
+    });
+  });
+
+  it("tells a first-party client when the person is an admin", async () => {
+    db.sqlite
+      .prepare("UPDATE users SET role = 'ADMIN' WHERE id = ?")
+      .run("user-1");
+    expect((await accessClaims("notes")).role).toBe("ADMIN");
+  });
+
+  it("tells a third-party client nothing beyond its pairwise subject", async () => {
+    const claims = await accessClaims("docs-access");
+    expect(claims).not.toHaveProperty("role");
+    expect(claims).not.toHaveProperty("email");
+    expect(claims).not.toHaveProperty("preferred_username");
+  });
+
+  it("never puts an unverified address in a first-party access token", async () => {
+    const claims = await accessClaims("notes", "user-2");
+    expect(claims.sub).toBe("user-2");
+    expect(claims).not.toHaveProperty("email");
+    expect(claims).not.toHaveProperty("email_verified");
+  });
+});
+
+describe("signing out through Pawl", () => {
+  function tokenOf(cookie: string): string {
+    return cookie.slice(`${SESSION_COOKIE}=`.length);
+  }
+
+  function logout(cookie: string, form: Record<string, string>) {
+    return call("/oauth/logout", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie,
+      },
+      body: new URLSearchParams(form).toString(),
+    });
+  }
+
+  it("ends this browser's Pawl session and returns to the app that asked", async () => {
+    const cookie = await cookieFor();
+    const response = await logout(cookie, {
+      client_id: "notes",
+      post_logout_redirect_uri: "https://des.product.test/",
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://des.product.test/");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(await getSession(env, tokenOf(cookie))).toBeNull();
+  });
+
+  it("returns to Pawl rather than to an origin the client never registered", async () => {
+    for (const uri of [
+      "https://evil.test/",
+      "https://des.product.test.evil.test/",
+      "https://des.product.test@evil.test/",
+      "not a url",
+    ]) {
+      const response = await logout(await cookieFor(), {
+        client_id: "notes",
+        post_logout_redirect_uri: uri,
+      });
+      expect(response.headers.get("location"), uri).toBe(`${ISSUER}/`);
+    }
+  });
+
+  it("returns to Pawl when the client is unknown", async () => {
+    const response = await logout(await cookieFor(), {
+      client_id: "nobody",
+      post_logout_redirect_uri: "https://des.product.test/",
+    });
+    expect(response.headers.get("location")).toBe(`${ISSUER}/`);
+  });
+
+  it("leaves the person's other browsers signed in", async () => {
+    const here = await cookieFor();
+    const elsewhere = await cookieFor();
+    await logout(here, { client_id: "notes" });
+    expect(await getSession(env, tokenOf(elsewhere))).not.toBeNull();
+  });
+
+  it("is not a GET, so a link or an image cannot sign anyone out", async () => {
+    const cookie = await cookieFor();
+    await call("/oauth/logout?client_id=notes", { headers: { cookie } });
+    expect(await getSession(env, tokenOf(cookie))).not.toBeNull();
+  });
+
+  it("is named in discovery", async () => {
+    const config = (await (
+      await call("/.well-known/openid-configuration")
+    ).json()) as Record<string, unknown>;
+    expect(config.end_session_endpoint).toBe(`${ISSUER}/oauth/logout`);
   });
 });

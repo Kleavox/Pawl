@@ -316,7 +316,7 @@ test("otp: an unknown email becomes an account that still needs setup", async ()
   await worker.goto(GATEWAY);
   await mintOtp(email, "246810");
 
-  const response = await worker.request.post(`${GATEWAY}/api/auth/otp/verify`, {
+  const response = await worker.request.post(`${PASS}/api/auth/otp/verify`, {
     headers: { origin: GATEWAY },
     data: { email, code: "246810" },
   });
@@ -350,7 +350,7 @@ test("otp: wrong codes sent together each cost their own attempt", async () => {
 
   const answers = await Promise.all(
     Array.from({ length: 9 }, () =>
-      worker.request.post(`${GATEWAY}/api/auth/otp/verify`, {
+      worker.request.post(`${PASS}/api/auth/otp/verify`, {
         headers: { origin: GATEWAY },
         data: { email, code: "000000" },
       }),
@@ -369,10 +369,10 @@ test("otp: wrong codes sent together each cost their own attempt", async () => {
     "a counter read before the write would tell every caller the same number",
   ).toEqual([1, 2, 3, 4]);
 
-  const afterwards = await worker.request.post(
-    `${GATEWAY}/api/auth/otp/verify`,
-    { headers: { origin: GATEWAY }, data: { email, code: "135790" } },
-  );
+  const afterwards = await worker.request.post(`${PASS}/api/auth/otp/verify`, {
+    headers: { origin: GATEWAY },
+    data: { email, code: "135790" },
+  });
   expect(afterwards.status()).toBe(401);
   await expect(afterwards.json()).resolves.toMatchObject({
     code: "too_many_attempts",
@@ -393,7 +393,7 @@ test("otp: a disabled account is refused after the code is accepted", async () =
   );
   await mintOtp(account.email, "135791");
 
-  const response = await worker.request.post(`${GATEWAY}/api/auth/otp/verify`, {
+  const response = await worker.request.post(`${PASS}/api/auth/otp/verify`, {
     headers: { origin: GATEWAY },
     data: { email: account.email, code: "135791" },
   });

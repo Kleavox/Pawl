@@ -1,32 +1,29 @@
 import { readFileSync } from "node:fs";
 
 import { publicHost } from "@pawl/topology";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { app } from "./app";
 import type { Env } from "./app";
+import {
+  accessClaims,
+  CLIENT_ID,
+  fakePawl,
+  ISSUER,
+  type FakePawl,
+} from "./session/pawl.testkit";
+
+let pawl: FakePawl;
+let token: string;
+const OIDC = { OIDC_ISSUER: ISSUER, OIDC_CLIENT_ID: CLIENT_ID };
+
+beforeAll(async () => {
+  pawl = await fakePawl();
+  pawl.devices = { "user-1": 1 };
+  token = await pawl.sign(accessClaims());
+});
 
 describe("Gateway public namespace", () => {
-  it("signs the session out at Pass under the shared header", async () => {
-    const passFetch = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) =>
-        new Response(null, { status: 404 }),
-    );
-    await app.request(
-      "https://product.test/api/logout",
-      { method: "POST", headers: { cookie: "__Secure-pawl_session=tok" } },
-      {
-        PASS: { fetch: passFetch },
-        ASSETS: { fetch: vi.fn() },
-        PUBLIC_ORIGIN: "https://product.test",
-      } as unknown as Env,
-    );
-
-    expect(
-      new Headers(passFetch.mock.calls[0]?.[1]?.headers).get("x-pawl-session"),
-    ).toBe("tok");
-  });
-
   it("renders the unified error page for an unknown HTML route", async () => {
     const response = await app.request(
       "https://product.test/no/such/path",
@@ -56,23 +53,17 @@ describe("Gateway estate endpoint", () => {
   });
 
   it("never reflects an origin outside the topology allowlist", async () => {
-    const passFetch = vi.fn(async (url: string) => {
-      if (url.includes("/internal/session")) {
-        return Response.json({ identity: { id: "u1", role: "ADMIN" } });
-      }
-      return Response.json({ sessions: [] });
-    });
-
     const response = await app.request(
       "https://product.test/api/estate",
       {
         headers: {
-          cookie: "__Secure-pawl_session=tok",
+          cookie: `__Host-session=${token}`,
           Origin: "https://evil.example",
         },
       },
       {
-        PASS: { fetch: passFetch },
+        PASS: pawl,
+        ...OIDC,
         ASSETS: { fetch: vi.fn() },
         PUBLIC_ORIGIN: "https://product.test",
       } as unknown as Env,
@@ -98,23 +89,17 @@ describe("Gateway estate endpoint", () => {
   });
 
   it("derives the allowlist from PUBLIC_ORIGIN, not a spoofable Host header", async () => {
-    const passFetch = vi.fn(async (url: string) => {
-      if (url.includes("/internal/session")) {
-        return Response.json({ identity: { id: "u1", role: "ADMIN" } });
-      }
-      return Response.json({ sessions: [] });
-    });
-
     const response = await app.request(
       "https://attacker.example/api/estate",
       {
         headers: {
-          cookie: "__Secure-pawl_session=tok",
+          cookie: `__Host-session=${token}`,
           Origin: "https://notes.product.test",
         },
       },
       {
-        PASS: { fetch: passFetch },
+        PASS: pawl,
+        ...OIDC,
         ASSETS: { fetch: vi.fn() },
         PUBLIC_ORIGIN: "https://product.test",
         ESTATE_MANIFEST: MANIFEST,
@@ -125,353 +110,6 @@ describe("Gateway estate endpoint", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe(
       "https://notes.product.test",
     );
-  });
-});
-
-describe("Gateway auth proxy", () => {
-  const baseEnv = {
-    ASSETS: { fetch: vi.fn() },
-    PASS: { fetch: vi.fn() },
-    PUBLIC_ORIGIN: "https://example.test",
-  };
-
-  it("hands both the Pawl hostname and the old Pass hostname to Pass", async () => {
-    const reached: string[] = [];
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: {
-        fetch: async (input: Request) => {
-          reached.push(new URL(input.url).hostname);
-          return new Response("pass");
-        },
-      },
-    } as unknown as Env;
-    for (const host of ["paw.example.test", "pass.example.test"]) {
-      const response = await app.request(`https://${host}/account`, {}, env);
-      expect(await response.text()).toBe("pass");
-    }
-    expect(reached).toEqual(["paw.example.test", "pass.example.test"]);
-  });
-
-  it("hands Pass a hostname under the root domain, so the session it mints is scoped to every origin under the root domain", async () => {
-    const seen: { host: string; origin: string | null }[] = [];
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: {
-        fetch: async (input: Request) => {
-          seen.push({
-            host: new URL(input.url).host,
-            origin: input.headers.get("origin"),
-          });
-          return new Response("{}", { status: 200 });
-        },
-      },
-    } as unknown as Env;
-
-    const response = await app.request(
-      "https://example.test/api/auth/otp/verify",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          origin: "https://example.test",
-        },
-        body: "{}",
-      },
-      env,
-    );
-
-    const rootDomain = "example.test";
-    expect(response.status).toBe(200);
-    expect(seen[0]!.host).toBe(publicHost(rootDomain, "pass"));
-    expect(seen[0]!.origin).toBe(`https://${publicHost(rootDomain, "pass")}`);
-    expect(seen[0]!.host.endsWith(`.${rootDomain}`)).toBe(true);
-  });
-
-  it("keeps the request's own hostname when it is not under the root domain, so a local session is not scoped to a domain the browser would refuse", async () => {
-    const seen: { host: string; origin: string | null }[] = [];
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: {
-        fetch: async (input: Request) => {
-          seen.push({
-            host: new URL(input.url).host,
-            origin: input.headers.get("origin"),
-          });
-          return new Response("{}", { status: 200 });
-        },
-      },
-    } as unknown as Env;
-
-    const response = await app.request(
-      "http://localhost:8786/api/auth/otp/verify",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          origin: "http://localhost:8786",
-        },
-        body: "{}",
-      },
-      env,
-    );
-
-    expect(response.status).toBe(200);
-    expect(seen[0]!.host).toBe("localhost:8786");
-    expect(seen[0]!.origin).toBe("http://localhost:8786");
-  });
-
-  it("forwards a request whose Origin matches the request URL's own origin, even when PUBLIC_ORIGIN is different", async () => {
-    const seen: { host: string; origin: string | null }[] = [];
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://different.example",
-      PASS: {
-        fetch: async (input: Request) => {
-          seen.push({
-            host: new URL(input.url).host,
-            origin: input.headers.get("origin"),
-          });
-          return new Response("{}", { status: 200 });
-        },
-      },
-    } as unknown as Env;
-
-    const response = await app.request(
-      "https://example.test/api/auth/otp/start",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          origin: "https://example.test",
-        },
-        body: "{}",
-      },
-      env,
-    );
-
-    expect(response.status).toBe(200);
-    expect(seen[0]!.host).toBe("example.test");
-  });
-
-  it("forwards a request whose Origin matches PUBLIC_ORIGIN, even when the request URL's own host is different", async () => {
-    const seen: { host: string; origin: string | null }[] = [];
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: {
-        fetch: async (input: Request) => {
-          seen.push({
-            host: new URL(input.url).host,
-            origin: input.headers.get("origin"),
-          });
-          return new Response("{}", { status: 200 });
-        },
-      },
-    } as unknown as Env;
-
-    const response = await app.request(
-      "https://staging-gateway.example/api/auth/otp/start",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          origin: "https://example.test",
-        },
-        body: "{}",
-      },
-      env,
-    );
-
-    expect(response.status).toBe(200);
-    expect(seen[0]!.host).toBe("staging-gateway.example");
-  });
-
-  it("does not hand Pass a path it has no route for", async () => {
-    const passFetch = vi.fn(
-      async () => new Response("<html>pass-single-page-app</html>"),
-    );
-    const assetsFetch = vi.fn(
-      async () => new Response("nope", { status: 404 }),
-    );
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: { fetch: passFetch },
-      ASSETS: { fetch: assetsFetch },
-    } as unknown as Env;
-
-    const response = await app.request(
-      "https://example.test/api/auth/anything",
-      { headers: { accept: "text/html" } },
-      env,
-    );
-
-    expect(passFetch).not.toHaveBeenCalled();
-    expect(response.status).toBe(404);
-    expect(await response.text()).not.toContain("pass-single-page-app");
-  });
-
-  it("does not hand Pass a GET to an auth route that only answers POST", async () => {
-    const passFetch = vi.fn(
-      async () => new Response("<html>pass-single-page-app</html>"),
-    );
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: { fetch: passFetch },
-      ASSETS: {
-        fetch: vi.fn(async () => new Response("nope", { status: 404 })),
-      },
-    } as unknown as Env;
-
-    await app.request(
-      "https://example.test/api/auth/otp/start",
-      { headers: { origin: "https://example.test", accept: "text/html" } },
-      env,
-    );
-
-    expect(passFetch).not.toHaveBeenCalled();
-  });
-
-  it("refuses to launder a cross-site origin into Pass", async () => {
-    const passFetch = vi.fn(async () => new Response("{}", { status: 200 }));
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: { fetch: passFetch },
-    } as unknown as Env;
-
-    const response = await app.request(
-      "https://example.test/api/auth/otp/start",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          origin: "https://attacker.example",
-        },
-        body: "{}",
-      },
-      env,
-    );
-
-    expect(response.status).toBe(403);
-    expect(passFetch).not.toHaveBeenCalled();
-  });
-
-  it("refuses a request with no Origin header at all", async () => {
-    const passFetch = vi.fn(async () => new Response("{}", { status: 200 }));
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: { fetch: passFetch },
-    } as unknown as Env;
-
-    const response = await app.request(
-      "https://example.test/api/auth/otp/start",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-      },
-      env,
-    );
-
-    expect(response.status).toBe(403);
-    expect(passFetch).not.toHaveBeenCalled();
-  });
-
-  it("drops the browser referer before the internal hop", async () => {
-    const seen: (string | null)[] = [];
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: {
-        fetch: async (input: Request) => {
-          seen.push(input.headers.get("referer"));
-          return new Response("{}", { status: 200 });
-        },
-      },
-    } as unknown as Env;
-
-    await app.request(
-      "https://example.test/api/auth/otp/start",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          origin: "https://example.test",
-          referer: "https://example.test/",
-        },
-        body: "{}",
-      },
-      env,
-    );
-
-    expect(seen[0]).toBeNull();
-  });
-
-  it("preserves the request path and query string on the internal hop", async () => {
-    const seen: string[] = [];
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: {
-        fetch: async (input: Request) => {
-          const url = new URL(input.url);
-          seen.push(url.pathname + url.search);
-          return new Response("{}", { status: 200 });
-        },
-      },
-    } as unknown as Env;
-
-    await app.request(
-      "https://example.test/api/auth/otp/verify?flow=vending",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          origin: "https://example.test",
-        },
-        body: "{}",
-      },
-      env,
-    );
-
-    expect(seen[0]).toBe("/api/auth/otp/verify?flow=vending");
-  });
-
-  it("forwards the method and body unchanged", async () => {
-    const seen: { method: string; body: string }[] = [];
-    const env = {
-      ...baseEnv,
-      PUBLIC_ORIGIN: "https://example.test",
-      PASS: {
-        fetch: async (input: Request) => {
-          seen.push({ method: input.method, body: await input.text() });
-          return new Response("{}", { status: 200 });
-        },
-      },
-    } as unknown as Env;
-
-    await app.request(
-      "https://example.test/api/auth/otp/verify",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          origin: "https://example.test",
-        },
-        body: '{"code":"123456"}',
-      },
-      env,
-    );
-
-    expect(seen[0]!.method).toBe("POST");
-    expect(seen[0]!.body).toBe('{"code":"123456"}');
   });
 });
 
@@ -507,6 +145,46 @@ function appsEnv(
 }
 
 describe("apps from the manifest", () => {
+  it("never lets a browser state an identity, on any hop", async () => {
+    const seen: Request[] = [];
+    const { env } = appsEnv((request) => {
+      seen.push(request);
+      return new Response(null, { status: 404 });
+    });
+    const passSeen: Request[] = [];
+    const withPass = {
+      ...env,
+      PASS: {
+        fetch: async (request: Request) => {
+          passSeen.push(request);
+          return new Response("pawl");
+        },
+      },
+    } as unknown as Env;
+    const stated = () => ({
+      headers: {
+        "x-pawl-user": "victim",
+        "x-pawl-role": "ADMIN",
+        accept: "text/html",
+      },
+    });
+    await app.request("https://docs.example.test/page", stated(), withPass);
+    await app.request(
+      "https://example.test/api/notes/list",
+      stated(),
+      withPass,
+    );
+    await app.request("https://example.test/hello", stated(), withPass);
+    await app.request("https://example.test/n_abc123", stated(), withPass);
+    await app.request("https://paw.example.test/", stated(), withPass);
+    expect(seen).toHaveLength(5);
+    expect(passSeen).toHaveLength(1);
+    for (const request of [...seen, ...passSeen]) {
+      expect(request.headers.get("x-pawl-user"), request.url).toBeNull();
+      expect(request.headers.get("x-pawl-role"), request.url).toBeNull();
+    }
+  });
+
   it("hands an app's subdomain to its binding unchanged", async () => {
     const { env, reached } = appsEnv();
     await app.request("https://docs.example.test/page", {}, env);
@@ -590,12 +268,8 @@ describe("the estate endpoint", () => {
       ASSETS: { fetch: vi.fn(async () => new Response("asset")) },
       PUBLIC_ORIGIN: "https://example.test",
       ESTATE_MANIFEST: MANIFEST,
-      PASS: {
-        fetch: async (url: string) =>
-          url.includes("/internal/session")
-            ? Response.json({ identity: { id: "u1", role: "ADMIN" } })
-            : Response.json({ sessions: [{ id: "s1" }] }),
-      },
+      PASS: pawl,
+      ...OIDC,
       APP_NOTES: { fetch: async () => notes() },
     } as unknown as Env;
   }
@@ -603,7 +277,7 @@ describe("the estate endpoint", () => {
   async function read(env: Env) {
     const response = await app.request(
       "https://example.test/api/estate",
-      { headers: { cookie: "__Secure-pawl_session=tok" } },
+      { headers: { cookie: `__Host-session=${token}` } },
       env,
     );
     return (await response.json()) as { tools: Record<string, unknown> };
@@ -654,12 +328,8 @@ describe("the estate call itself", () => {
       ASSETS: { fetch: vi.fn(async () => new Response("asset")) },
       PUBLIC_ORIGIN: "https://example.test",
       ESTATE_MANIFEST: MANIFEST,
-      PASS: {
-        fetch: async (url: string) =>
-          url.includes("/internal/session")
-            ? Response.json({ identity: { id: "u1", role: "ADMIN" } })
-            : Response.json({ sessions: [] }),
-      },
+      PASS: pawl,
+      ...OIDC,
       APP_NOTES: {
         fetch: async (_url: string, init?: RequestInit) => {
           seen.push(new Headers(init?.headers));
@@ -669,10 +339,12 @@ describe("the estate call itself", () => {
     } as unknown as Env;
     await app.request(
       "http://localhost:8786/api/estate",
-      { headers: { cookie: "__Secure-pawl_session=tok" } },
+      { headers: { cookie: `__Host-session=${token}` } },
       env,
     );
     expect(seen[0]?.get("x-pawl-public-host")).toBe("localhost");
-    expect(seen[0]?.get("cookie")).toBe("__Secure-pawl_session=tok");
+    expect(seen[0]?.get("cookie")).toBeNull();
+    expect(seen[0]?.get("x-pawl-user")).toBe("user-1");
+    expect(seen[0]?.get("x-pawl-role")).toBe("ADMIN");
   });
 });

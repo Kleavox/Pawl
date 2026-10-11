@@ -1,14 +1,17 @@
 import { INTERNAL_HOSTS } from "@pawl/config";
+import { localWorkerOrigin } from "@pawl/topology";
 import { securityHeaders } from "@pawl/worker";
 import { Hono } from "hono";
 
 import { registerAccountRoutes } from "./routes/account";
 import { registerAuthRoutes } from "./routes/auth";
+import { registerGrantRoutes } from "./routes/grants";
 import { registerInternalRoutes } from "./routes/internal";
 import { registerOAuthRoutes } from "./routes/oauth";
 import { registerOtpRoutes } from "./routes/otp";
 import { registerOidcRoutes } from "./routes/oidc";
-import { apiError, type AppEnv } from "./routes/shared";
+import { apiError, currentSession, type AppEnv } from "./routes/shared";
+import type { Env } from "./env";
 
 const MIGRATED_TABLES = [
   "users",
@@ -22,6 +25,35 @@ const MIGRATED_TABLES = [
   "oauth_codes",
   "oauth_refresh_tokens",
 ];
+
+const CABINET_CODE_ROUTES = new Set([
+  "/api/auth/otp/start",
+  "/api/auth/otp/verify",
+]);
+
+const LOOPBACK = ["127.0.0.1", "localhost"];
+
+function cabinetOrigins(request: Request, env: Env): string[] {
+  return LOOPBACK.includes(new URL(request.url).hostname)
+    ? LOOPBACK.map((hostname) => localWorkerOrigin("gateway", hostname))
+    : [`https://${env.ROOT_DOMAIN}`];
+}
+
+function cabinetCors(request: Request, env: Env): Record<string, string> {
+  const origin = request.headers.get("origin");
+  if (
+    !CABINET_CODE_ROUTES.has(new URL(request.url).pathname) ||
+    origin === null ||
+    !cabinetOrigins(request, env).includes(origin)
+  ) {
+    return { Vary: "Origin" };
+  }
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Credentials": "true",
+    Vary: "Origin",
+  };
+}
 
 const app = new Hono<AppEnv>();
 
@@ -62,6 +94,24 @@ app.use("*", async (context, next) => {
   return next();
 });
 
+app.options("/api/auth/otp/:step", (context) =>
+  context.body(null, 204, {
+    ...cabinetCors(context.req.raw, context.env),
+    "Access-Control-Allow-Methods": "POST",
+    "Access-Control-Allow-Headers": "content-type",
+    "Access-Control-Max-Age": "600",
+  }),
+);
+
+app.use("/api/auth/otp/*", async (context, next) => {
+  await next();
+  for (const [name, value] of Object.entries(
+    cabinetCors(context.req.raw, context.env),
+  )) {
+    context.res.headers.set(name, value);
+  }
+});
+
 app.use("/api/*", async (context, next) => {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(context.req.method)) {
     return next();
@@ -79,7 +129,14 @@ app.use("/api/*", async (context, next) => {
 
   const origin = context.req.header("origin");
   const requestOrigin = new URL(context.req.url).origin;
-  const trustedOrigins = new Set([context.env.PUBLIC_ORIGIN, requestOrigin]);
+  const cabinet = CABINET_CODE_ROUTES.has(new URL(context.req.url).pathname)
+    ? cabinetOrigins(context.req.raw, context.env)
+    : [];
+  const trustedOrigins = new Set([
+    context.env.PUBLIC_ORIGIN,
+    requestOrigin,
+    ...cabinet,
+  ]);
 
   if (
     (origin && !trustedOrigins.has(origin)) ||
@@ -93,7 +150,8 @@ app.use("/api/*", async (context, next) => {
     context.env.ENVIRONMENT === "production" &&
     referer &&
     !referer.startsWith(context.env.PUBLIC_ORIGIN) &&
-    !referer.startsWith(requestOrigin)
+    !referer.startsWith(requestOrigin) &&
+    !cabinet.some((origin) => referer.startsWith(origin))
   ) {
     return apiError(
       context,
@@ -128,12 +186,22 @@ app.get("/api/estate", async (context) => {
   if (!context.env.GATEWAY) {
     return context.json({ code: "GATEWAY_UNAVAILABLE" }, 503);
   }
+  const headers = new Headers(context.req.raw.headers);
+  for (const name of [...headers.keys()]) {
+    if (name.startsWith("x-pawl-")) headers.delete(name);
+  }
+  const session = await currentSession(context);
+  if (session) {
+    headers.set("x-pawl-user", session.identity.id);
+    headers.set("x-pawl-role", session.identity.role);
+  }
   return context.env.GATEWAY.fetch(
-    new Request(`http://${INTERNAL_HOSTS.GATEWAY}/api/estate`, context.req.raw),
+    new Request(`http://${INTERNAL_HOSTS.GATEWAY}/api/estate`, { headers }),
   );
 });
 
 registerOAuthRoutes(app);
+registerGrantRoutes(app);
 registerAccountRoutes(app);
 registerAuthRoutes(app);
 registerOtpRoutes(app);

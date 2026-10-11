@@ -12,6 +12,5 @@
     "PUBLIC_ORIGIN": "http://127.0.0.1:8790",
     "PROVIDER": "http://127.0.0.1:8787",
     "CLIENT_ID": "fixture-notes",
-    "REDIRECT_URI": "http://localhost:8790/callback",
   },
 }

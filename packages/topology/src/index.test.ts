@@ -39,9 +39,11 @@ describe("Pawl topology", () => {
   });
 
   it("keeps internal URLs attached to their declared host", () => {
-    expect(new URL(INTERNAL_URLS.SESSION_VERIFY).host).toBe(
+    expect(new URL(INTERNAL_URLS.VERIFICATION_CHECK).host).toBe(
       INTERNAL_HOSTS.PASS,
     );
+    expect(INTERNAL_URLS).not.toHaveProperty("SESSION_VERIFY");
+    expect(INTERNAL_URLS).not.toHaveProperty("SESSION_LOGOUT");
   });
 
   it("names no application that left the platform", () => {

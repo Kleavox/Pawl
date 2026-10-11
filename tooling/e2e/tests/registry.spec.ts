@@ -57,7 +57,11 @@ test("the estate names the fixture's count and never zero for a tool it could no
   page,
 }) => {
   test.setTimeout(180_000);
-  await signedInAs(page, "probeestate", "ADMIN");
+  const account = await signedInAs(page, "probeestate", "ADMIN");
+  await page.goto("http://localhost:8786/");
+  await expect(page.locator("[data-account-name]")).toHaveText(account.user, {
+    timeout: 20_000,
+  });
   const estate = (await (
     await page.request.get("http://localhost:8786/api/estate")
   ).json()) as {

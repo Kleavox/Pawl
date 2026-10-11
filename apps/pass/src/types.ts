@@ -18,3 +18,12 @@ export interface OAuthProviders {
   google: boolean;
   github: boolean;
 }
+
+export interface ConnectedApp {
+  clientId: string;
+  name: string;
+  homepage: string | null;
+  sector: string;
+  scopes: string[];
+  createdAt: string;
+}

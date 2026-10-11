@@ -5,6 +5,7 @@ export interface ClaimsUser {
   email: string;
   username: string | null;
   email_verified_at: string | null;
+  role: "ADMIN" | "USER";
 }
 
 export function claimsFor(
@@ -27,7 +28,7 @@ export async function findClaimsUser(
   userId: string,
 ): Promise<ClaimsUser | null> {
   return env.DB.prepare(
-    `SELECT id, email, username, email_verified_at
+    `SELECT id, email, username, email_verified_at, role
      FROM users WHERE id = ? AND disabled_at IS NULL LIMIT 1`,
   )
     .bind(userId)

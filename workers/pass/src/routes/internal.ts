@@ -1,84 +1,9 @@
-import { INTERNAL_HOSTS, SESSION_COOKIE } from "@pawl/config";
+import { INTERNAL_HOSTS } from "@pawl/config";
 
-import {
-  getSession,
-  invalidateUserSessions,
-  purgeUserSessions,
-} from "../lib/session";
-import { apiError, checkVerification, safeAudit, type PassApp } from "./shared";
+import { listSessions } from "../lib/session";
+import { apiError, checkVerification, type PassApp } from "./shared";
 
 export function registerInternalRoutes(app: PassApp): void {
-  app.get("/internal/session", async (context) => {
-    if (new URL(context.req.url).hostname !== INTERNAL_HOSTS.PASS) {
-      return context.body(null, 404);
-    }
-
-    const token = context.req.header("x-pawl-session");
-    if (!token)
-      return context.json(
-        { code: "UNAUTHORIZED", message: "Invalid or missing token." },
-        401,
-      );
-
-    const session = await getSession(context.env, token);
-    if (!session)
-      return context.json(
-        { code: "UNAUTHORIZED", message: "Invalid or missing token." },
-        401,
-      );
-    return context.json(session);
-  });
-
-  app.post("/internal/logout", async (context) => {
-    if (new URL(context.req.url).hostname !== INTERNAL_HOSTS.PASS) {
-      return context.body(null, 404);
-    }
-
-    const token = context.req.header("x-pawl-session");
-    if (!token)
-      return context.json(
-        { code: "UNAUTHORIZED", message: "Invalid or missing token." },
-        401,
-      );
-
-    const session = await getSession(context.env, token);
-    if (!session)
-      return context.json(
-        { code: "UNAUTHORIZED", message: "Invalid or missing token." },
-        401,
-      );
-
-    const row = await context.env.DB.prepare(
-      `UPDATE users
-     SET auth_version = auth_version + 1, updated_at = datetime('now')
-     WHERE id = ?
-     RETURNING auth_version`,
-    )
-      .bind(session.identity.id)
-      .first<{ auth_version: number }>();
-
-    if (row) {
-      await invalidateUserSessions(
-        context.env,
-        session.identity.id,
-        row.auth_version,
-      );
-    }
-    await purgeUserSessions(context.env, session.identity.id);
-
-    await safeAudit(context.env, {
-      userId: session.identity.id,
-      type: "sessions_revoked",
-      request: context.req.raw,
-    });
-
-    const root = context.env.ROOT_DOMAIN.toLowerCase();
-    return context.json({
-      ok: true,
-      cookie: `${SESSION_COOKIE}=; Path=/; Domain=.${root}; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
-    });
-  });
-
   app.get("/internal/identity", async (context) => {
     if (new URL(context.req.url).hostname !== INTERNAL_HOSTS.PASS) {
       return context.body(null, 404);
@@ -102,6 +27,22 @@ export function registerInternalRoutes(app: PassApp): void {
     }
 
     return context.json({ email: user.email, username: user.username });
+  });
+
+  app.get("/internal/devices", async (context) => {
+    if (new URL(context.req.url).hostname !== INTERNAL_HOSTS.PASS) {
+      return context.body(null, 404);
+    }
+    const id = context.req.query("id");
+    if (!id) {
+      return context.json(
+        { code: "INVALID_INPUT", message: "Missing id." },
+        400,
+      );
+    }
+    return context.json({
+      devices: (await listSessions(context.env, id)).length,
+    });
   });
 
   app.get("/internal/public-key", async (context) => {

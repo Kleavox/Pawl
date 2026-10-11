@@ -1,5 +1,4 @@
-import { verifySession, type PassBinding } from "@pawl/auth";
-import type { DeployEnvironment, SessionIdentity } from "@pawl/core";
+import type { DeployEnvironment } from "@pawl/core";
 import type { MiddlewareHandler } from "hono";
 
 export interface MailEnv {
@@ -39,11 +38,6 @@ export async function sendEmail(
   }
 }
 
-type SessionEnv = {
-  Bindings: { PASS?: PassBinding };
-  Variables: { session: SessionIdentity };
-};
-
 export function securityHeaders(options: {
   referrerPolicy: string;
   csp?: string;
@@ -66,44 +60,5 @@ export function securityHeaders(options: {
         context.header("Content-Security-Policy", options.csp);
       }
     }
-  };
-}
-
-export function requireSession<
-  E extends SessionEnv = SessionEnv,
->(): MiddlewareHandler<E> {
-  return async (context, next) => {
-    const session = await verifySession(context.req.raw, context.env.PASS);
-    if (!session) {
-      return context.json(
-        { code: "UNAUTHORIZED", message: "Sign in with Pawl." },
-        401,
-      );
-    }
-    context.set("session", session);
-    await next();
-  };
-}
-
-export function requireRole<E extends SessionEnv = SessionEnv>(
-  role: string,
-  forbiddenMessage: string,
-): MiddlewareHandler<E> {
-  return async (context, next) => {
-    const session = await verifySession(context.req.raw, context.env.PASS);
-    if (!session) {
-      return context.json(
-        { code: "UNAUTHORIZED", message: "Sign in with Pawl." },
-        401,
-      );
-    }
-    if (session.identity.role !== role) {
-      return context.json(
-        { code: "FORBIDDEN", message: forbiddenMessage },
-        403,
-      );
-    }
-    context.set("session", session);
-    await next();
   };
 }

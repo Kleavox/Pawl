@@ -47,11 +47,12 @@ jobs:
       OIDC_SIGNING_KEY: ${{ secrets.OIDC_SIGNING_KEY }}
       OIDC_PREVIOUS_SIGNING_KEY: ${{ secrets.OIDC_PREVIOUS_SIGNING_KEY }}
       OIDC_SUB_SECRET: ${{ secrets.OIDC_SUB_SECRET }}
+      GATEWAY_CLIENT_ID: ${{ vars.GATEWAY_CLIENT_ID }}
+      GATEWAY_CLIENT_SECRET: ${{ secrets.GATEWAY_CLIENT_SECRET }}
       VITE_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
       PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
       VITE_ROOT_ORIGIN: https://${{ vars.APP_ROOT_DOMAIN }}
       VITE_PASS_ORIGIN: https://paw.${{ vars.APP_ROOT_DOMAIN }}
-      VITE_LINK_ORIGIN: https://link.${{ vars.APP_ROOT_DOMAIN }}
       PUBLIC_ROOT_ORIGIN: https://${{ vars.APP_ROOT_DOMAIN }}
     steps:
       - uses: actions/checkout@v7
@@ -101,7 +102,7 @@ jobs:
         run: pnpm exec wrangler deploy --strict --config .wrangler/deploy/pass.json --secrets-file .wrangler/deploy/pass.secrets.json
 
       - name: Deploy Gateway
-        run: pnpm exec wrangler deploy --strict --config .wrangler/deploy/gateway.json
+        run: pnpm exec wrangler deploy --strict --config .wrangler/deploy/gateway.json --secrets-file .wrangler/deploy/gateway.secrets.json
 
       - name: Verify public services
         if: inputs.domains != 'none'

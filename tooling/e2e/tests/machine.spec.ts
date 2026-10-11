@@ -1304,8 +1304,10 @@ test.describe("codes typed on the machine keypad", () => {
   test("signing in while the estate is down says so, it does not stop at PASS ACCEPTED", async ({
     page,
   }) => {
-    await page.route("**/api/auth/otp/verify", (route) =>
-      route.fulfill({
+    let accepted = false;
+    await page.route("**/api/auth/otp/verify", (route) => {
+      accepted = true;
+      return route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
@@ -1318,7 +1320,24 @@ test.describe("codes typed on the machine keypad", () => {
           },
           needsSetup: false,
         }),
-      }),
+      });
+    });
+    await page.route("**/api/session", (route) =>
+      accepted
+        ? route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              authenticated: true,
+              identity: {
+                id: "probe",
+                email: "probe@example.com",
+                username: "probe",
+                role: "USER",
+              },
+            }),
+          })
+        : route.continue(),
     );
     await page.route("**/api/estate", (route) =>
       route.fulfill({ status: 500, body: "{}" }),
@@ -1373,8 +1392,10 @@ test.describe("codes typed on the machine keypad", () => {
   }) => {
     const fresh = await browser.newContext();
     const page = await fresh.newPage();
-    await page.route("**/api/auth/otp/verify", (route) =>
-      route.fulfill({
+    let accepted = false;
+    await page.route("**/api/auth/otp/verify", (route) => {
+      accepted = true;
+      return route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
@@ -1387,7 +1408,24 @@ test.describe("codes typed on the machine keypad", () => {
           },
           needsSetup: false,
         }),
-      }),
+      });
+    });
+    await page.route("**/api/session", (route) =>
+      accepted
+        ? route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              authenticated: true,
+              identity: {
+                id: "probe",
+                email: "namedprobe@example.com",
+                username: "namedprobe",
+                role: "USER",
+              },
+            }),
+          })
+        : route.continue(),
     );
     await page.goto(GATEWAY);
     await reachOtpMode(page);

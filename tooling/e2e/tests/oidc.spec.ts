@@ -34,3 +34,85 @@ test("a relying party learns a signed-out person must sign in, without a page in
   await page.goto(`${RELYING_PARTY}/login`);
   await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:8787\/\?returnTo=/u);
 });
+
+const SAME_SITE_RP = "http://127.0.0.1:8790";
+
+test("a person signed in at Pawl arrives signed in at a relying party, without a page in between", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const account = await freshAccount(page, "probesilent");
+  await signInAtProvider(page, account);
+  await page.goto(`${RELYING_PARTY}/login?prompt=none`);
+  await expect(
+    page.getByRole("heading", { name: `signed in as ${account.user}` }),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("[data-role]")).toHaveText("USER");
+});
+
+test("a guest asked silently comes back a guest, not to a sign-in page", async ({
+  page,
+}) => {
+  await page.goto(`${RELYING_PARTY}/login?prompt=none`);
+  await expect(page.locator("[data-error]")).toHaveText("login_required");
+});
+
+test("signing out at a relying party ends the Pawl session", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const account = await freshAccount(page, "probeout");
+  await signInAtProvider(page, account);
+  await page.goto(`${SAME_SITE_RP}/signout`);
+  await page.getByRole("button", { name: "sign out" }).click();
+  await expect(page).toHaveURL(`${SAME_SITE_RP}/`);
+  await page.goto(`${SAME_SITE_RP}/login?prompt=none`);
+  await expect(page.locator("[data-error]")).toHaveText("login_required");
+});
+
+const THIRD_PARTY = "http://127.0.0.1:8791";
+
+test("a person connects a third-party app, finds it in their account, and disconnects it", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const account = await freshAccount(page, "probeconnect");
+  await signInAtProvider(page, account);
+  await page.goto(`${THIRD_PARTY}/login`);
+  await page.getByRole("button", { name: "Allow" }).click();
+  await expect(
+    page.getByRole("heading", { name: `signed in as ${account.user}` }),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.locator("[data-role]"),
+    "a third-party access token says nothing about the person's role",
+  ).toHaveText("undefined");
+
+  await page.goto(`${PROVIDER}/`);
+  const disconnect = page.getByRole("button", { name: "Disconnect Docs" });
+  await expect(disconnect).toBeVisible({ timeout: 20_000 });
+  await disconnect.click();
+  await expect(disconnect).toBeHidden();
+
+  await page.goto(`${THIRD_PARTY}/login?prompt=none`);
+  await expect(page.locator("[data-error]")).toHaveText("consent_required");
+});
+
+const CABINET = "http://127.0.0.1:8786";
+
+test("the cabinet trusts only its own session, and gets one from Pawl without a page in between", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const account = await freshAccount(page, "probecabinet");
+  await signInAtProvider(page, account);
+  const asked = await page.request.get(`${CABINET}/api/session`);
+  expect(
+    await asked.json(),
+    "the Pawl cookie alone must not sign anyone in at the gateway",
+  ).toEqual({ authenticated: false });
+  await page.goto(`${CABINET}/`);
+  await expect(page.locator("[data-account-name]")).toHaveText(account.user, {
+    timeout: 20_000,
+  });
+});
