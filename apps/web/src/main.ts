@@ -1,15 +1,10 @@
-import { displayHandle, type Identity } from "@pawl/core";
+import type { Identity } from "@pawl/core";
 import "@pawl/ui/styles.css";
-import "./styles/global.css";
+import "./styles/room.css";
 import "./styles/machine.css";
-import {
-  navCountsFrom,
-  renderAppHeader,
-  PASS_ORIGIN,
-  unreadableCounts,
-  type NavCounts,
-  type Overview,
-} from "@pawl/ui";
+import "./styles/panel.css";
+import "./styles/base.css";
+import { PASS_ORIGIN, type Overview } from "@pawl/ui";
 import {
   OtpVerifyError,
   signOut,
@@ -18,10 +13,16 @@ import {
   verifyOtpCode,
 } from "./auth-client";
 import { toMachineModel, type MachineModel } from "./estate-adapter";
-import { mountConsole, mountTerminal } from "./machine/console";
+import { followView, mountTerminal } from "./machine/console";
 import { createKeypad } from "./machine/keypad";
-import { render } from "./machine/render";
+import {
+  render,
+  say as sayOn,
+  viewFor,
+  type ScreenView,
+} from "./machine/render";
 import { SITE } from "./site";
+import { mountSound } from "./sound";
 import {
   forgetRequest,
   readRememberedRequest,
@@ -47,6 +48,7 @@ type GatewaySession = {
 };
 
 const CATALOG = SITE.bays;
+const SITE_NAME = SITE.site.name;
 const TOOL_KEYS = SITE.tools.map((tool) => tool.key);
 const BAY_CODES: readonly BayCode[] = CATALOG.map((bay) => bay.code);
 const PRESSABLE = new Set([
@@ -66,14 +68,20 @@ const PRESSABLE = new Set([
 const TYPING = "input, textarea, select, button, a, [contenteditable]";
 const FAULT_HOLD_MS = 2000;
 const OTP_LENGTH = 6;
+const NARROW = "(max-width: 899px)";
+const TICKER_SPEED = 40;
 
-let model: MachineModel = toMachineModel(
-  { authenticated: false },
-  null,
-  CATALOG,
-  TOOL_KEYS,
-);
+function modelFor(
+  session: GatewaySession,
+  overview: Overview | null,
+): MachineModel {
+  return toMachineModel(session, overview, CATALOG, TOOL_KEYS, SITE_NAME);
+}
+
+let model: MachineModel = modelFor({ authenticated: false }, null);
 let state: MachineState = initialState("guest", CATALOG);
+let shownView: ScreenView | null = null;
+let shownTicker = "";
 let otpEmail = "";
 let checking = false;
 let bridging: AbortController | null = null;
@@ -81,23 +89,66 @@ let faultWords: string | null = null;
 let retrying = false;
 
 const keypad = createKeypad(BAY_CODES);
+const sound = mountSound(document);
 
-const terminal = document.querySelector<HTMLDialogElement>("[data-terminal]");
 const bridge = document.querySelector<HTMLDialogElement>("[data-transfer]");
 const trayAction = document.querySelector<HTMLElement>("[data-tray-action]");
 const emailField = document.querySelector<HTMLInputElement>(
   "[data-terminal-email]",
 );
-const terminalError = document.querySelector<HTMLElement>(
-  "[data-terminal-error]",
+const terminalForm = document.querySelector<HTMLFormElement>(
+  "[data-terminal-form]",
 );
+const screenZone = document.querySelector<HTMLElement>("[data-screen-zone]");
+
+function narrow(): boolean {
+  try {
+    return globalThis.matchMedia(NARROW).matches;
+  } catch {
+    return false;
+  }
+}
+
+function bringScreenIntoView(): void {
+  if (!narrow() || screenZone === null) return;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  screenZone.scrollIntoView({
+    block: "center",
+    behavior: still ? "auto" : "smooth",
+  });
+}
+
+function armTicker(): void {
+  const text = document.querySelector<HTMLElement>("[data-ticker-text]");
+  const frame = text?.parentElement;
+  if (!text || !frame || text.textContent === shownTicker) return;
+  shownTicker = text.textContent ?? "";
+  text.removeAttribute("data-scroll");
+  const travel = text.scrollWidth - frame.clientWidth;
+  if (travel <= 0) return;
+  text.style.setProperty("--pw-ticker-travel", `${-travel}px`);
+  text.style.setProperty(
+    "--pw-ticker-time",
+    `${Math.max(6, (travel / TICKER_SPEED) * 1.6).toFixed(1)}s`,
+  );
+  void text.offsetWidth;
+  text.dataset.scroll = "once";
+}
 
 function paint(): void {
   render(
     document,
     state,
     faultWords === null ? model : { ...model, screen: faultWords },
+    faultWords !== null,
   );
+  const view = viewFor(state);
+  followView(document, shownView, view);
+  if (shownView !== null && view !== shownView) {
+    if (view === "signin" || view === "code") bringScreenIntoView();
+  }
+  shownView = view;
+  armTicker();
 }
 
 function dispatch(event: MachineEvent): MachineState {
@@ -140,97 +191,13 @@ function hrefFor(bay: BayCode): string {
   return cartridge?.dataset.href ?? "/";
 }
 
-function showTerminalError(message: string): void {
-  if (terminalError) terminalError.textContent = message;
+function say(message: string): void {
+  sayOn(document, state, message);
 }
 
-const headerTarget = document.querySelector<HTMLElement>("[data-app-header]");
-const headerAccountTemplate = document.querySelector<HTMLTemplateElement>(
-  "[data-header-account]",
-);
-const accountNode =
-  headerAccountTemplate?.content.firstElementChild instanceof HTMLElement
-    ? (headerAccountTemplate.content.firstElementChild.cloneNode(
-        true,
-      ) as HTMLElement)
-    : null;
-
-function paintHeader(counts: NavCounts | null): void {
-  if (!headerTarget) return;
-  renderAppHeader(headerTarget, {
-    counts,
-    tools: SITE.tools,
-    siteName: SITE.site.name,
-  });
-  if (accountNode) headerTarget.append(accountNode);
-}
-
-function headerCounts(
-  session: GatewaySession,
-  overview: Overview | null,
-): NavCounts | null {
-  if (!session.authenticated) return null;
-  return overview === null
-    ? unreadableCounts(TOOL_KEYS)
-    : navCountsFrom(overview, TOOL_KEYS);
-}
-
-const account =
-  accountNode?.matches("[data-account]") === true
-    ? accountNode
-    : (accountNode?.querySelector<HTMLElement>("[data-account]") ?? null);
-const signIn = accountNode?.querySelector<HTMLElement>("[data-signin]") ?? null;
-const menu =
-  accountNode?.querySelector<HTMLElement>("[data-account-menu]") ?? null;
-const trigger =
-  accountNode?.querySelector<HTMLButtonElement>("[data-account-trigger]") ??
-  null;
-const dropdown =
-  accountNode?.querySelector<HTMLElement>("[data-account-dropdown]") ?? null;
-const name =
-  accountNode?.querySelector<HTMLElement>("[data-account-name]") ?? null;
-const logout =
-  accountNode?.querySelector<HTMLButtonElement>("[data-logout]") ?? null;
-
-const closeMenu = (): void => {
-  dropdown?.setAttribute("hidden", "");
-  trigger?.setAttribute("aria-expanded", "false");
-};
-
-trigger?.addEventListener("click", (event) => {
-  event.stopPropagation();
-  const open = trigger.getAttribute("aria-expanded") === "true";
-  if (open) {
-    closeMenu();
-    return;
-  }
-  dropdown?.removeAttribute("hidden");
-  trigger.setAttribute("aria-expanded", "true");
-});
-
-dropdown?.addEventListener("click", (event) => event.stopPropagation());
-window.addEventListener("click", closeMenu);
-
-logout?.addEventListener("click", () => {
-  signOut().catch(() => fault("SIGN-OUT FAILED, TRY AGAIN"));
-});
-
-function paintAccount(session: GatewaySession): void {
-  if (!session.authenticated || !session.identity) {
-    signIn?.removeAttribute("hidden");
-    menu?.setAttribute("hidden", "");
-    account?.classList.remove("is-authenticated");
-    return;
-  }
-  if (name) {
-    name.textContent = displayHandle(
-      session.identity.username,
-      session.identity.email,
-    );
-  }
-  signIn?.setAttribute("hidden", "");
-  menu?.removeAttribute("hidden");
-  account?.classList.add("is-authenticated");
+function masked(email: string): string {
+  const [local = "", domain = ""] = email.split("@");
+  return domain === "" ? email : `${local.slice(0, 1)}•••@${domain}`;
 }
 
 async function readSession(): Promise<GatewaySession> {
@@ -272,9 +239,7 @@ async function retryEstate(): Promise<void> {
       return;
     }
     const overview = session.authenticated ? await readEstate() : null;
-    model = toMachineModel(session, overview, CATALOG, TOOL_KEYS);
-    paintHeader(headerCounts(session, overview));
-    paintAccount(session);
+    model = modelFor(session, overview);
     if (model.access === "guest") {
       forgetRequest();
       dispatch({ type: "pass-removed" });
@@ -349,10 +314,7 @@ function openMethods(): void {
   if (state.authStep !== "closed" || state.status === "reading") return;
   const reading = dispatch({ type: "pass-tap" });
   if (reading.status !== "reading") return;
-  const chosen = dispatch({ type: "reader-scanned" });
-  if (chosen.authStep === "methods" && terminal && !terminal.open) {
-    terminal.showModal();
-  }
+  dispatch({ type: "reader-scanned" });
 }
 
 async function tapPass(): Promise<void> {
@@ -360,19 +322,13 @@ async function tapPass(): Promise<void> {
     await runReaderScan(dispatch);
   } catch {
     fault("PASS READER FAULT");
-    return;
-  }
-  if (state.authStep === "methods" && terminal && !terminal.open) {
-    terminal.showModal();
   }
 }
 
 async function adoptPass(identity: Identity): Promise<void> {
   const session: GatewaySession = { authenticated: true, identity };
   const overview = await readEstate();
-  model = toMachineModel(session, overview, CATALOG, TOOL_KEYS);
-  paintHeader(headerCounts(session, overview));
-  paintAccount(session);
+  model = modelFor(session, overview);
   const issued = dispatch({ type: "pass-issued", access: model.access });
   if (issued.status === "dispensing" && issued.selection !== null) {
     await release();
@@ -384,25 +340,28 @@ async function adoptPass(identity: Identity): Promise<void> {
 async function sendCode(): Promise<void> {
   const email = emailField?.value.trim() ?? "";
   if (email === "") {
-    showTerminalError("Enter the email address your code should go to.");
+    say("Enter the email address your code should go to.");
     return;
   }
-  showTerminalError("");
+  say("");
   openMethods();
   try {
     await startOtp(email);
   } catch (error) {
-    showTerminalError(messageOf(error));
+    say(messageOf(error));
     return;
   }
   otpEmail = email;
+  keypad.reset();
+  for (const target of document.querySelectorAll("[data-code-email]")) {
+    target.textContent = masked(email);
+  }
   const next = dispatch({ type: "otp-sent" });
   if (next.authStep !== "otp-machine") {
-    showTerminalError("Tap your pass on the machine, then send the code.");
+    say("Tap your pass on the machine, then send the code.");
     return;
   }
   keypad.setMode("otp");
-  terminal?.close();
 }
 
 async function reconcileVerify(): Promise<void> {
@@ -413,12 +372,10 @@ async function reconcileVerify(): Promise<void> {
     session = null;
   }
   if (session?.authenticated !== true || !session.identity) {
-    showTerminalError(
-      "The machine could not tell whether your code went through. Close " +
-        "this and press GO to send the same code again, and ask for a new " +
-        "code if it is refused.",
+    say(
+      "The machine could not tell whether your code went through. Press GO " +
+        "to send the same code again, and ask for a new code if it is refused.",
     );
-    if (terminal && !terminal.open) terminal.showModal();
     return;
   }
   keypad.reset();
@@ -435,6 +392,7 @@ async function reconcileVerify(): Promise<void> {
 async function submitCode(code: string): Promise<void> {
   if (checking) return;
   checking = true;
+  say("");
   let verified;
   try {
     verified = await verifyOtpCode(otpEmail, code);
@@ -488,11 +446,10 @@ async function submitCode(code: string): Promise<void> {
 function keepRequest(): boolean {
   const wanted = state.authRequest;
   if (wanted === null || rememberRequest(wanted)) return true;
-  showTerminalError(
+  say(
     "This browser will not hold your bay request, so the machine cannot " +
       "open it for you when you come back. Sign in, then pick the bay again.",
   );
-  if (terminal && !terminal.open) terminal.showModal();
   return false;
 }
 
@@ -513,7 +470,29 @@ async function startProvider(provider: string): Promise<void> {
   leaveFor(new URL(`/api/oauth/${provider}`, PASS_ORIGIN));
 }
 
+function press(key: string): void {
+  const cap = document.querySelector<HTMLElement>(`[data-key="${key}"]`);
+  if (cap === null) return;
+  cap.classList.add("is-pressed");
+  setTimeout(() => cap.classList.remove("is-pressed"), 120);
+}
+
+function unlit(key: string): boolean {
+  return (
+    document
+      .querySelector(`[data-key="${key}"]`)
+      ?.getAttribute("aria-disabled") === "true"
+  );
+}
+
 async function pressKey(key: string): Promise<void> {
+  if (unlit(key)) return;
+  sound.click();
+  if (state.authStep === "methods") {
+    if (key === "GO") terminalForm?.requestSubmit();
+    if (key === "CLR") dispatch({ type: "cancel" });
+    return;
+  }
   const otp = state.authStep === "otp-machine";
   keypad.setMode(otp ? "otp" : "selector");
   const result = keypad.press(key);
@@ -539,13 +518,11 @@ async function pressKey(key: string): Promise<void> {
     await submitCode(result.code);
     return;
   }
-  if (result.kind === "cancelled") {
-    dispatch({ type: "cancel" });
+  if (result.kind === "cancelled" || (!otp && key === "CLR")) {
+    dispatch({ type: otp ? "otp-back" : "cancel" });
   }
 }
 
-paintHeader(null);
-mountConsole(document, host);
 mountTerminal(document, host);
 
 for (const cartridge of document.querySelectorAll<HTMLButtonElement>(
@@ -574,12 +551,20 @@ document.addEventListener("keydown", (event) => {
         : event.key;
   if (!PRESSABLE.has(pressed)) return;
   event.preventDefault();
+  if (unlit(pressed)) return;
+  press(pressed);
   void pressKey(pressed);
 });
 
 document
   .querySelector<HTMLButtonElement>("[data-reader]")
   ?.addEventListener("click", () => void tapPass());
+
+document
+  .querySelector<HTMLButtonElement>("[data-logout]")
+  ?.addEventListener("click", () => {
+    signOut().catch(() => fault("SIGN-OUT FAILED, TRY AGAIN"));
+  });
 
 trayAction?.addEventListener("click", () => void takeDelivery());
 
@@ -598,9 +583,10 @@ for (const opener of document.querySelectorAll<HTMLButtonElement>(
   opener.addEventListener("click", openMethods);
 }
 
-document
-  .querySelector<HTMLButtonElement>("[data-terminal-send]")
-  ?.addEventListener("click", () => void sendCode());
+terminalForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void sendCode();
+});
 
 for (const provider of document.querySelectorAll<HTMLButtonElement>(
   "[data-terminal-provider]",
@@ -620,12 +606,14 @@ async function boot(): Promise<void> {
   }
 
   const overview = session.authenticated ? await readEstate() : null;
-  model = toMachineModel(session, overview, CATALOG, TOOL_KEYS);
-  if (unread) model = { ...model, screen: "SESSION UNREADABLE" };
-  paintHeader(
-    unread ? unreadableCounts(TOOL_KEYS) : headerCounts(session, overview),
-  );
-  paintAccount(session);
+  model = modelFor(session, overview);
+  if (unread) {
+    model = {
+      ...model,
+      screen: "SESSION UNREADABLE",
+      ticker: "SESSION UNREADABLE · PRESS GO TO RETRY",
+    };
+  }
 
   if (model.access === "guest") {
     if (!unread) forgetRequest();

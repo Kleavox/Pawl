@@ -31,6 +31,8 @@ export interface Tool {
 
 export interface BayView {
   code: string;
+  key: string;
+  estate: boolean;
   product: string;
   chars: number;
   title: string;

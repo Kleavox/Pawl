@@ -38,6 +38,10 @@ export function createKeypad(codes: readonly BayCode[]): Keypad {
       pendingBay = null;
       return { kind: "confirm", bay };
     }
+    if (key === "CLR" && pendingBay !== null) {
+      pendingBay = null;
+      return { kind: "cancelled" };
+    }
     return { kind: "ignored" };
   }
 

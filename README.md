@@ -189,7 +189,39 @@ Deleting the `pawl` Worker deletes its secrets. The next deploy makes new ones,
 and with a new `OIDC_SUB_SECRET` every third-party app sees every person as
 someone new.
 
+The privacy policy and the terms name `privacy@ROOT_DOMAIN` as the contact
+address, derived at build so the repository holds no address of the operator's.
+Route it to a mailbox you read (Cloudflare Email Routing) before publishing.
+
 No production credential is required to build or test this repository.
+
+## The machine
+
+Every page Pawl serves is a view of one steel-and-cobalt vending machine; there
+is no page header and no page footer anywhere.
+
+| Part            | What it carries                                                                                                                                                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Marquee (crown) | The site's wordmark, a dot-matrix ticker (what needs a look, or a welcome), and the pass chip (`GUEST MODE`, `VISITOR MODE`, `OWNER MODE`)                                                                                                                   |
+| Glass door      | Nine bays on three shelves. Each app is a cartridge on a coil with a label rail under it: bay code, label, and an LED with its estate count (`--` when it could not be read, never `0`), `PASS` when the pass does not open it, `OPEN ↗` for a link-only app |
+| Touchscreen     | The status line, then one view at a time: welcome, sign-in, email code, working, signed in                                                                                                                                                                   |
+| Keypad          | Picks bays and types email codes; `GO` continues, `CLR` goes back. A key is lit only when it does something                                                                                                                                                  |
+| Card reader     | Tap pass to sign in; signed in, the pass sits in the reader with the handle and role                                                                                                                                                                         |
+| Printer         | Prints the receipts: `/privacy.html` and `/terms.html` are thermal receipts hanging from it, whole in the static HTML                                                                                                                                        |
+| Delivery bay    | A released cartridge drops behind the flap; taking it opens the app                                                                                                                                                                                          |
+| Serial plate    | `PAWL-GW-01`, Privacy, Terms, ©, and the keypad sound switch (off until switched on)                                                                                                                                                                         |
+
+`<root>` frames the whole machine. `paw.<root>` frames the service panel close
+up — the camera glides in on load — and carries sign-in, the account (Profile,
+Devices, Apps, Security) and the OpenID Connect consent screen, where the
+keypad's `CLR` and `GO` deny and allow. The provider's 404 and 500 pages are
+the same panel, rendered by `renderMachinePage` in `@pawl/core`.
+
+The design tokens are the `--pw-*` custom properties in
+`packages/ui/src/styles.css`: one accent (cobalt, for action and selection only)
+and four status colours. `pnpm lint:palette` rejects any other colour and
+`pnpm lint:type` any text below 0.68rem. Under reduced motion every sequence
+still happens, in 40 ms, and the camera does not move.
 
 ## The OpenID Connect provider
 

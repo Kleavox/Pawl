@@ -19,11 +19,28 @@ describe("errorCodeCopy", () => {
 });
 
 describe("renderErrorPage", () => {
-  it("renders the glitch code element and derives generic copy from the code", () => {
+  it("shows the code in LED numerals on the machine's screen, with generic copy", () => {
     const html = renderErrorPage({ code: "403" });
     expect(html).toContain('data-code="403"');
     expect(html).toContain("Access denied");
-    expect(html).toContain("pw-glitch-a");
+    expect(html).toContain("FAULT 403");
+    expect(html).not.toMatch(/<header|<footer/);
+  });
+
+  it("says an empty bay for a 404 and hangs an out-of-order card for a 5xx", () => {
+    expect(renderErrorPage({ code: "404" })).toContain("NOTHING IN THIS BAY");
+    expect(renderErrorPage({ code: "404" })).not.toContain('class="sign"');
+    const broken = renderErrorPage({ code: "500" });
+    expect(broken).toContain('class="sign"');
+    expect(broken).toContain("OUT OF ORDER");
+  });
+
+  it("leads home with both the button and the GO key", () => {
+    const html = renderErrorPage({ code: "404", homeHref: "/home" });
+    expect(html).toContain(
+      '<a class="key key--go" href="/home" aria-describedby="keys-caption">GO</a>',
+    );
+    expect(html).toContain("Back to the machine");
   });
 
   it("lets callers override the generic title/message", () => {
@@ -38,6 +55,6 @@ describe("renderErrorPage", () => {
 
   it("omits the code element when no code is given", () => {
     const html = renderErrorPage({ title: "Whoops", message: "No code here." });
-    expect(html).not.toContain('<div class="pw-error-code"');
+    expect(html).not.toContain('class="led"');
   });
 });

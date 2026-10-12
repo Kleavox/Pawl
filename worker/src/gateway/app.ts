@@ -42,6 +42,14 @@ function registry(env: Env) {
   return registryFor(env.ESTATE_MANIFEST ?? EMPTY_MANIFEST);
 }
 
+function siteName(env: Env): string {
+  try {
+    return registry(env).siteName();
+  } catch {
+    return "Pawl";
+  }
+}
+
 function binding(env: Env, name: string): Fetcher | undefined {
   const value = env[name];
   return value && typeof (value as Fetcher).fetch === "function"
@@ -84,7 +92,7 @@ app.onError((error, context) => {
   }
   return context.html(
     renderErrorPage({
-      service: "Pawl",
+      service: siteName(context.env),
       code: "500",
       title: "Something broke",
       message:
@@ -387,7 +395,7 @@ app.all("*", async (context) => {
   ) {
     return context.html(
       renderErrorPage({
-        service: "Pawl",
+        service: siteName(context.env),
         code: "404",
         title: "Page not found",
         message:

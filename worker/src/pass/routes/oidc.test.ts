@@ -156,10 +156,13 @@ async function signedInAuthorize(
   client: ClientId,
   params: Record<string, string> = {},
   userId = "user-1",
+  override?: Partial<Env>,
 ) {
-  return call(`/oauth/authorize?${authorizeQuery(client, params)}`, {
-    headers: { cookie: await cookieFor(userId) },
-  });
+  return call(
+    `/oauth/authorize?${authorizeQuery(client, params)}`,
+    { headers: { cookie: await cookieFor(userId) } },
+    override,
+  );
 }
 
 function location(response: Response): URL {
@@ -413,6 +416,35 @@ describe("consent", () => {
     expect(body).toContain("cloudflareaccess.com");
     expect(body).toContain("Docs");
     expect(body).not.toContain("code=");
+  });
+
+  it("asks on the machine's screen, with one Allow, one Deny, and the keypad answering too", async () => {
+    const body = await (await signedInAuthorize("docs-access")).text();
+    expect(body).toContain("NOTHING SHARED YET");
+    expect(body.match(/>Allow</g)).toHaveLength(1);
+    expect(body.match(/>Deny</g)).toHaveLength(1);
+    expect(body).toContain(
+      '<button class="key key--go" type="submit" form="consent" name="decision" value="allow" aria-describedby="keys-caption">GO</button>',
+    );
+    expect(body).toContain(
+      '<button class="key" type="submit" form="consent" name="decision" value="deny" aria-describedby="keys-caption">CLR</button>',
+    );
+    expect(body).not.toMatch(/<header\b|<footer\b/);
+  });
+
+  it("wears the site's own name on the marquee, as the cabinet does", async () => {
+    const body = await (
+      await signedInAuthorize("docs-access", {}, "user-1", {
+        ESTATE_MANIFEST: JSON.stringify({
+          site: { name: "Fixture" },
+          apps: [],
+        }),
+      })
+    ).text();
+    expect(body).toContain(">FIXTURE</a>");
+    expect(body).toContain(
+      "&copy; 2026 Fixture".replace("2026", String(new Date().getFullYear())),
+    );
   });
 
   it("names the client's registered domain, not a value from the query", async () => {

@@ -17,8 +17,9 @@ async function lampColour(target: Page): Promise<string> {
   return target.evaluate(
     () =>
       getComputedStyle(
-        document.querySelector<HTMLElement>("[data-cabinet-state]")!,
-        "::before",
+        document.querySelector<HTMLElement>(
+          "[data-cabinet-state] .pw-chip__lamp",
+        )!,
       ).backgroundColor,
   );
 }
@@ -77,7 +78,7 @@ test("the machine stops growing on a wide desktop", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   const box = await page.locator("[data-machine]").boundingBox();
-  expect(box!.width).toBeLessThanOrEqual(820);
+  expect(box!.width).toBeLessThanOrEqual(1120);
 });
 
 test("no horizontal overflow at 320px", async ({ page }) => {
@@ -106,7 +107,6 @@ test("every key is reachable and large enough to hit", async ({ page }) => {
   ]) {
     await page.setViewportSize(viewport);
     await page.goto("/");
-    if (viewport.width <= 760) await page.locator("[data-dock]").click();
     const keys = page.locator("[data-key]");
     await expect(keys).toHaveCount(12);
     for (const key of await keys.all()) {
@@ -118,220 +118,114 @@ test("every key is reachable and large enough to hit", async ({ page }) => {
   }
 });
 
-test("the console reports its own open state to assistive tech", async ({
+test("the service panel is a landmark at every width, never a modal", async ({
+  page,
+}) => {
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const panel = page.getByRole("region", { name: "Service panel" });
+    await expect(panel).toBeVisible();
+    expect(
+      await panel.evaluate((node) => ({
+        role: node.getAttribute("role"),
+        modal: node.getAttribute("aria-modal"),
+        inert: node.hasAttribute("inert"),
+      })),
+    ).toEqual({ role: null, modal: null, inert: false });
+    await page.locator("[data-key='7']").focus();
+    await expect(page.locator("[data-key='7']")).toBeFocused();
+  }
+});
+
+test("on a phone the machine is one tall column, top to bottom", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const dock = page.locator("[data-dock]");
-  const panel = page.locator("[data-console]");
-  await expect(dock).toHaveAttribute("aria-expanded", "false");
-  await expect(panel).toHaveAttribute("data-console", "closed");
-  await expect(panel).toHaveAttribute("aria-hidden", "true");
-  expect(await panel.evaluate((node) => node.hasAttribute("inert"))).toBe(true);
-  await dock.click();
-  await expect(dock).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator("[data-console]")).toHaveAttribute(
-    "data-console",
-    "open",
+  const tops = await page.evaluate(() =>
+    [
+      ".marquee",
+      ".glass",
+      "[data-screen-zone]",
+      ".keypad",
+      ".reader",
+      "[data-tray]",
+      ".plate",
+    ].map((selector) =>
+      Math.round(document.querySelector(selector)!.getBoundingClientRect().top),
+    ),
   );
-  await expect(panel).toHaveAttribute("aria-hidden", "false");
-  expect(await panel.evaluate((node) => node.hasAttribute("inert"))).toBe(
-    false,
-  );
-  await page.keyboard.press("Escape");
-  await expect(dock).toHaveAttribute("aria-expanded", "false");
-  await expect(panel).toHaveAttribute("data-console", "closed");
-  await expect(panel).toHaveAttribute("aria-hidden", "true");
-  expect(await panel.evaluate((node) => node.hasAttribute("inert"))).toBe(true);
+  expect(tops).toEqual([...tops].sort((a, b) => a - b));
+  await expect(page.locator("[data-dock]")).toHaveCount(0);
+  await expect(page.locator("[data-scrim]")).toHaveCount(0);
 });
 
-test("closing the console returns focus to the dock", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await page.locator("[data-dock]").click();
-  await expect(page.locator("[data-dock]")).not.toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(page.locator("[data-dock]")).toBeFocused();
-  await expect(page.locator("[data-console]")).toHaveAttribute(
-    "data-console",
-    "closed",
-  );
-});
-
-test("the close button and the scrim close it the same way", async ({
+test("signing in on a phone brings the screen to the person", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const dock = page.locator("[data-dock]");
-  const panel = page.locator("[data-console]");
-
-  await dock.click();
-  await page.locator("[data-console-close]").click();
-  await expect(panel).toHaveAttribute("data-console", "closed");
-  await expect(dock).toHaveAttribute("aria-expanded", "false");
-  await expect(dock).toBeFocused();
-
-  await dock.click();
-  await page.locator("[data-scrim]").click({ position: { x: 30, y: 30 } });
-  await expect(panel).toHaveAttribute("data-console", "closed");
-  await expect(dock).toHaveAttribute("aria-expanded", "false");
-  await expect(dock).toBeFocused();
-});
-
-test("the open sheet is a modal, and says so", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  const panel = page.locator("[data-console]");
-  const reach = async (): Promise<boolean> =>
-    page.evaluate(() => {
-      const cartridge = document.querySelector<HTMLElement>(
-        "[data-cartridge='2']",
-      )!;
-      cartridge.focus();
-      const reached = document.activeElement === cartridge;
-      cartridge.blur();
-      return reached;
-    });
-
-  expect(await reach()).toBe(true);
-  await page.locator("[data-dock]").click();
-  await expect(panel).toHaveAttribute("role", "dialog");
-  await expect(panel).toHaveAttribute("aria-modal", "true");
-  expect(await reach()).toBe(false);
-  await page.keyboard.press("Escape");
-  expect(await reach()).toBe(true);
-});
-
-test("on a desktop the console is a landmark, not a modal", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
-  const panel = page.locator("[data-console]");
-  expect(
-    await panel.evaluate((node) => ({
-      role: node.getAttribute("role"),
-      modal: node.getAttribute("aria-modal"),
-      inert: node.hasAttribute("inert"),
-    })),
-  ).toEqual({ role: null, modal: null, inert: false });
-  await page.locator("[data-key='7']").focus();
-  await expect(page.locator("[data-key='7']")).toBeFocused();
-});
-
-test("narrowing to the sheet does not strand focus inside it", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
-  const panel = page.locator("[data-console]");
-
-  await page.locator("[data-key='7']").focus();
-  await expect(page.locator("[data-key='7']")).toBeFocused();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(panel).toHaveAttribute("data-console", "closed");
-  await expect(page.locator("[data-dock]")).toBeFocused();
-
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(panel).toHaveAttribute("data-console", "open");
-  await page.locator("[data-cartridge='7']").focus();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(panel).toHaveAttribute("data-console", "closed");
-  await expect(page.locator(".cabinet")).not.toHaveAttribute("inert", "");
-  await expect(page.locator("[data-cartridge='7']")).toBeFocused();
-});
-
-test("narrowing back onto an open sheet does not strand focus on the body", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await page.locator("[data-dock]").click();
-  await expect(page.locator("[data-console]")).toHaveAttribute(
-    "data-console",
-    "open",
-  );
-  await expect(page.locator("[data-reader]")).toBeFocused();
-
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.locator("[data-cartridge='7']").focus();
-  await expect(page.locator("[data-cartridge='7']")).toBeFocused();
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator(".cabinet")).toHaveAttribute("inert", "");
-  await expect(page.locator("[data-console]")).toHaveAttribute(
-    "data-console",
-    "open",
-  );
-  expect(
-    await page.evaluate(() => document.activeElement?.tagName ?? null),
-  ).not.toBe("BODY");
-  await expect(page.locator("[data-reader]")).toBeFocused();
-});
-
-test("a resize that keeps the sheet sealed leaves focus where the reader put it", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await page.locator("[data-dock]").click();
-  await expect(page.locator("[data-reader]")).toBeFocused();
-  await page.locator("[data-key='7']").focus();
-  await expect(page.locator("[data-key='7']")).toBeFocused();
-
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.locator(".cabinet")).not.toHaveAttribute("inert", "");
-  await expect(page.locator("[data-key='7']")).toBeFocused();
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator(".cabinet")).toHaveAttribute("inert", "");
-  await expect(page.locator("[data-console]")).toHaveAttribute(
-    "data-console",
-    "open",
-  );
-  await expect(page.locator("[data-key='7']")).toBeFocused();
-});
-
-test("the reader stays inside the control column in the DOM", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  const inside = await page.evaluate(() =>
-    Boolean(document.querySelector("[data-console] [data-reader]")),
-  );
-  expect(inside).toBe(true);
-  await page.locator("[data-dock]").click();
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.locator("[data-terminal-open]").click({ force: true });
+  await expect(page.locator("[data-terminal]")).toBeVisible();
   await expect
     .poll(async () =>
       page.evaluate(() => {
-        const reader = document
-          .querySelector("[data-reader]")!
+        const box = document
+          .querySelector("[data-screen-zone]")!
           .getBoundingClientRect();
-        const panel = document
-          .querySelector("[data-console]")!
-          .getBoundingClientRect();
-        return Math.round(reader.bottom - panel.top);
+        return box.top < window.innerHeight && box.bottom > 0;
       }),
     )
-    .toBeLessThanOrEqual(0);
+    .toBe(true);
 });
 
-test("the login terminal is a modal dialog", async ({ page }) => {
+test("under reduced motion the screen jumps to the person instead of gliding", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => {
+    const seen: unknown[] = [];
+    Object.assign(window, { scrolls: seen });
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (options) {
+      seen.push(options);
+      return original.call(this, options);
+    };
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.locator("[data-terminal-open]").click({ force: true });
+  await expect(page.locator("[data-terminal]")).toBeVisible();
+  const scrolls = await page.evaluate(
+    () => (window as unknown as { scrolls: ScrollIntoViewOptions[] }).scrolls,
+  );
+  expect(scrolls.length).toBeGreaterThan(0);
+  for (const options of scrolls) expect(options.behavior).not.toBe("smooth");
+});
+
+test("the sign-in view lives on the machine's screen, not in a dialog", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   const terminal = page.locator("[data-terminal]");
   await expect(terminal).toBeHidden();
   await page.locator("[data-terminal-open]").click();
   await expect(terminal).toBeVisible();
-  expect(await terminal.evaluate((node) => node.matches("dialog:modal"))).toBe(
-    true,
-  );
+  expect(
+    await terminal.evaluate((node) => ({
+      dialog: node.closest("dialog") !== null,
+      onScreen: node.closest(".screen") !== null,
+    })),
+  ).toEqual({ dialog: false, onScreen: true });
+  await expect(page.locator("[data-view-panel]:visible")).toHaveCount(1);
+  await expect(page.locator("[data-terminal-provider='google']")).toBeFocused();
 });
 
-test("closing the terminal returns focus to the control that opened it", async ({
+test("closing the sign-in view returns focus to the control that opened it", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -342,20 +236,15 @@ test("closing the terminal returns focus to the control that opened it", async (
   await expect(page.locator("[data-terminal-open]")).toBeFocused();
 });
 
-test("escape inside the terminal closes it without closing the console", async ({
+test("escape leaves the sign-in view and gives the screen back", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await page.locator("[data-dock]").click();
   await page.locator("[data-terminal-open]").click();
   await expect(page.locator("[data-terminal]")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator("[data-terminal]")).toBeHidden();
-  await expect(page.locator("[data-console]")).toHaveAttribute(
-    "data-console",
-    "open",
-  );
   await expect(page.locator("[data-terminal-open]")).toBeFocused();
 });
 
@@ -396,7 +285,6 @@ test("the keypad says which mode it is in, not only what colour", async ({
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openBooted(page);
-  await page.locator("[data-dock]").click();
   const legend = page.locator(".keypad-mode");
   const selector = page.locator("[data-keypad-mode='selector']");
   const otp = page.locator("[data-keypad-mode='otp']");
@@ -470,11 +358,11 @@ test("the cabinet lamp changes with the pass, and never carries the meaning alon
 
   const lamps = await page.evaluate(() => {
     const node = document.querySelector<HTMLElement>("[data-cabinet-state]")!;
-    const read = (): string =>
-      getComputedStyle(node, "::before").backgroundColor;
+    const lamp = node.querySelector<HTMLElement>(".pw-chip__lamp")!;
+    const read = (): string => getComputedStyle(lamp).backgroundColor;
     const guest = read();
     node.dataset.cabinetState = "owner";
-    node.textContent = "OWNER MODE";
+    node.querySelector("[data-cabinet-word]")!.textContent = "OWNER MODE";
     return { guest, owner: read(), word: node.textContent };
   });
   expect(lamps.guest).not.toBe(lamps.owner);
@@ -830,7 +718,7 @@ test("every route the machine offers is reachable from here", async ({
       ...document.querySelectorAll<HTMLElement>("[data-href]"),
     ].map((node) => node.dataset.href ?? "");
     const footer = [
-      ...document.querySelectorAll<HTMLAnchorElement>(".ftr-links a"),
+      ...document.querySelectorAll<HTMLAnchorElement>(".plate a"),
     ].map((node) => node.getAttribute("href") ?? "");
     return { hrefs, footer, host: location.hostname };
   });
@@ -862,31 +750,68 @@ test("the returning pass card never widens the page", async ({ page }) => {
   }
 });
 
-test("the cabinet still wears its cap and its side rails", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+test("the whole site lives inside the machine: no page header, no page footer", async ({
+  page,
+}) => {
   await page.goto("/");
-  const protrusions = await page.evaluate(() => {
-    const machine = document
-      .querySelector<HTMLElement>("[data-machine]")!
-      .getBoundingClientRect();
-    const cap = getComputedStyle(
-      document.querySelector<HTMLElement>("[data-machine]")!,
-      "::after",
-    );
-    const cabinet = document.querySelector<HTMLElement>(".cabinet")!;
-    const rail = getComputedStyle(cabinet, "::before");
-    return {
-      capTop: cap.top,
-      railLeft: rail.left,
-      clipMargin: getComputedStyle(
-        document.querySelector<HTMLElement>("[data-machine]")!,
-      ).overflowClipMargin,
-      machineWidth: Math.round(machine.width),
-    };
+  await expect(page.locator("header, footer")).toHaveCount(0);
+  const inside = await page.evaluate(() => {
+    const machine = document.querySelector("[data-machine]")!;
+    return [
+      "[data-ticker-text]",
+      "[data-cabinet-state]",
+      "[data-screen]",
+      ".plate a[href='/privacy.html']",
+      ".plate a[href='/terms.html']",
+      "[data-sound]",
+    ].map((selector) => machine.contains(document.querySelector(selector)));
   });
-  expect(protrusions.capTop).toBe("-7px");
-  expect(protrusions.railLeft).toBe("-7px");
-  expect(Number.parseFloat(protrusions.clipMargin)).toBeGreaterThan(7);
+  expect(inside).toEqual([true, true, true, true, true, true]);
+});
+
+test("each bay's rail tells a guest what it holds, never a count", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("[data-bay='2'] [data-led]")).toHaveText("PASS");
+  await expect(page.locator("[data-bay='7'] [data-led]")).toHaveText("OPEN ↗");
+  await expect(page.locator("[data-bay='2'] .rail__code")).toHaveText("02");
+});
+
+test("the sound switch starts off and remembers being turned on", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const sound = page.locator("[data-sound]");
+  await expect(sound).toHaveAttribute("aria-pressed", "false");
+  await sound.click();
+  await expect(sound).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(page.locator("[data-sound]")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
+test("the receipts print from the machine's printer, whole and without a header", async ({
+  page,
+}) => {
+  for (const [path, title] of [
+    ["/privacy.html", "Privacy policy"],
+    ["/terms.html", "Terms of service"],
+  ] as const) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+    await expect(page.locator("[data-receipt]")).toBeVisible();
+    await expect(page.locator("header, footer")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Tear off and return to the machine" }),
+    ).toHaveAttribute("href", "/");
+  }
+  await page.goto("/privacy.html");
+  await expect(page.locator("[data-receipt]")).toContainText(
+    "openid email profile",
+  );
 });
 
 test("a guest is told to insert a pass and cannot take NOTE", async ({
@@ -1009,10 +934,10 @@ test("a blocked sessionStorage says so instead of forgetting in silence", async 
   await expect(said).toBeVisible();
   await expect(said).toContainText(/pick the bay again/i);
   expect(
-    await said.evaluate((node) => {
-      const dialog = node.closest("dialog");
-      return dialog !== null && dialog.matches("dialog:modal");
-    }),
+    await said.evaluate(
+      (node) => node.closest("[data-view-panel='signin']") !== null,
+    ),
+    "the warning is said on the machine's own screen",
   ).toBe(true);
 });
 
@@ -1153,11 +1078,9 @@ test.describe("with a real pass in the machine", () => {
     await expect(signedIn.locator("[data-cabinet-state]")).toHaveText(
       "OWNER MODE",
     );
-    await expect(signedIn.locator("[data-terminal-state]")).toHaveText(
-      "SIGNED IN",
-    );
-
-    await signedIn.locator("[data-terminal-open]").click();
+    await expect(signedIn.locator("[data-terminal-open]")).toBeHidden();
+    await expect(signedIn.locator("[data-logout]")).toBeVisible();
+    await expect(signedIn.locator("[data-reader]")).toBeHidden();
     await expect(signedIn.locator("[data-terminal]")).toBeHidden();
     await expect(
       signedIn.locator("[data-terminal-provider='google']"),
@@ -1250,13 +1173,10 @@ test("a broken session endpoint is a fault, not a calm guest", async ({
   await expect(screen).toContainText("UNREADABLE");
   await expect(screen).toBeVisible();
 
-  const counts = page.locator(".pw-nav-count");
   await expect(
-    counts,
-    "an unreadable session must not render the header of a calm guest",
-  ).toHaveCount(2);
-  await expect(counts).toHaveText(["--", "--"]);
-  await expect(page.locator(".pw-nav-tool .pw-pad-warn")).toHaveCount(2);
+    page.locator("[data-ticker-text]"),
+    "an unreadable session must not run the ticker of a calm guest",
+  ).toContainText("UNREADABLE");
 });
 
 async function reachOtpMode(page: Page): Promise<void> {
@@ -1361,7 +1281,7 @@ test.describe("codes typed on the machine keypad", () => {
     await page.route("**/api/auth/otp/verify", (route) => route.abort());
     await typeCode(page, "123456");
 
-    const error = page.locator("[data-terminal-error]");
+    const error = page.locator("[data-code-error]");
     await expect(error).toBeVisible();
     await expect(error).toContainText(/could not tell/i);
     await expect(
@@ -1373,7 +1293,6 @@ test.describe("codes typed on the machine keypad", () => {
       "otp",
     );
 
-    await page.locator("[data-terminal-close]").click();
     await expect(page.locator("[data-screen]")).toHaveText("EMAIL CODE 6/6");
 
     let verifies = 0;
@@ -1435,6 +1354,10 @@ test.describe("codes typed on the machine keypad", () => {
       "VISITOR MODE",
     );
     await expect(page.locator("[data-account-name]")).toHaveText("namedprobe");
+    await expect(
+      page.locator("[data-view-panel=\x27signed-in\x27]"),
+      "Enter after a keypad sign-in presses GO, it does not follow a link out of the machine",
+    ).toBeFocused();
     await fresh.close();
   });
 
@@ -1537,6 +1460,56 @@ test.describe("codes typed on the machine keypad", () => {
     await fresh.close();
   });
 
+  test("Use another email steps back to the email, and the next code starts empty", async ({
+    page,
+  }) => {
+    await page.goto(GATEWAY);
+    await reachOtpMode(page);
+    const email = await page.locator("[data-terminal-email]").inputValue();
+
+    await typeCode(page, "123");
+    await page.getByRole("button", { name: "Use another email" }).click();
+    await expect(page.locator("[data-terminal]")).toBeVisible();
+    await expect(page.locator("[data-terminal-email]")).toHaveValue(email);
+
+    await page.locator("[data-terminal-send]").click();
+    await expect(page.locator("[data-machine]")).toHaveAttribute(
+      "data-input",
+      "otp",
+    );
+    await page.locator("[data-key='4']").click();
+    await expect(page.locator("[data-screen]")).toHaveText("EMAIL CODE 1/6");
+  });
+
+  test("a key is lit only when it does something on the screen it serves", async ({
+    page,
+  }) => {
+    await page.goto(GATEWAY);
+    const key = (label: string) => page.locator(`[data-key='${label}']`);
+    await expect(key("7")).toHaveAttribute("aria-disabled", "false");
+    for (const dark of ["5", "0", "CLR", "GO"]) {
+      await expect(key(dark)).toHaveAttribute("aria-disabled", "true");
+    }
+
+    await page.keyboard.press("5");
+    await expect(page.locator("[data-screen]")).toHaveText("INSERT PASS");
+
+    await page.locator("[data-reader]").click();
+    await expect(page.locator("[data-terminal]")).toBeVisible();
+    await expect(key("7")).toHaveAttribute("aria-disabled", "true");
+    await expect(key("GO")).toHaveAttribute("aria-disabled", "false");
+
+    await page
+      .locator("[data-terminal-email]")
+      .fill(`goprobe-${Date.now().toString().slice(-6)}@example.com`);
+    await key("GO").click();
+    await expect(page.locator("[data-machine]")).toHaveAttribute(
+      "data-input",
+      "otp",
+    );
+    await expect(key("0")).toHaveAttribute("aria-disabled", "false");
+  });
+
   test("a second code cannot race the first one being checked", async ({
     page,
   }) => {
@@ -1573,7 +1546,7 @@ test("a fault holds the screen until the next touch, then the estate line comes 
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(GATEWAY);
-  await expect(page.locator("[data-dock-screen]")).toHaveText("INSERT PASS");
+  await expect(page.locator("[data-screen]")).toHaveText("INSERT PASS");
 
   await page.evaluate(() => {
     document.querySelector<HTMLElement>("[data-cartridge='7']")!.dataset.href =
@@ -1583,7 +1556,7 @@ test("a fault holds the screen until the next touch, then the estate line comes 
   await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
   await page.locator("[data-tray-action]").click();
 
-  await expect(page.locator("[data-dock-screen]")).toHaveText(
+  await expect(page.locator("[data-screen]")).toHaveText(
     "BRIDGE FAILED, RELEASE IT AGAIN",
     { timeout: 15_000 },
   );
@@ -1592,9 +1565,9 @@ test("a fault holds the screen until the next touch, then the estate line comes 
     "none",
   );
 
-  await page.locator("[data-dock]").click();
+  await page.locator("[data-key='CLR']").click();
   await expect(
-    page.locator("[data-dock-screen]"),
+    page.locator("[data-screen]"),
     "a fault must not overwrite the estate line for the life of the page",
   ).toHaveText("INSERT PASS");
 });

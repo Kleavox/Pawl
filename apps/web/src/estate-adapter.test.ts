@@ -137,3 +137,71 @@ describe("an unrecognized role defaults to guest, not to visitor", () => {
     expect(model.access).toBe("guest");
   });
 });
+
+describe("what the machine needs to draw a person", () => {
+  it("names the pass holder only when someone is signed in", () => {
+    expect(
+      toMachineModel({ authenticated: false }, null, CATALOG, KEYS).holder,
+    ).toBeNull();
+    const named = toMachineModel(
+      {
+        authenticated: true,
+        identity: { role: "USER", username: "annisa", email: "a@x.test" },
+      },
+      estate(READ),
+      CATALOG,
+      KEYS,
+    );
+    expect(named.holder).toBe("annisa");
+    const unnamed = toMachineModel(
+      {
+        authenticated: true,
+        identity: { role: "USER", username: null, email: "rafi@x.test" },
+      },
+      estate(READ),
+      CATALOG,
+      KEYS,
+    );
+    expect(unnamed.holder).toBe("rafi");
+  });
+
+  it("gives a guest no counts at all, because an estate belongs to a person", () => {
+    expect(
+      toMachineModel({ authenticated: false }, null, CATALOG, KEYS).indicators,
+    ).toBeNull();
+  });
+
+  it("reads every bay's app, and calls an unread estate unknown rather than empty", () => {
+    const read = toMachineModel(ADMIN, estate(READ), CATALOG, KEYS);
+    expect(read.indicators?.["notes"]).toEqual({ count: 0, severity: null });
+    const unread = toMachineModel(ADMIN, null, CATALOG, KEYS);
+    expect(unread.indicators?.["notes"]).toBe("unknown");
+  });
+});
+
+describe("the ticker", () => {
+  it("welcomes a guest by the site's name", () => {
+    expect(
+      toMachineModel({ authenticated: false }, null, CATALOG, KEYS, "Pawl")
+        .ticker,
+    ).toBe("WELCOME TO PAWL · PICK A BAY · SIGN IN FOR MORE");
+  });
+
+  it("says an empty machine is ready, whoever stands there", () => {
+    expect(
+      toMachineModel({ authenticated: false }, null, [], KEYS, "Pawl").ticker,
+    ).toBe("NO APPS YET · PAWL IS READY");
+    expect(toMachineModel(ADMIN, estate(READ), [], KEYS, "Pawl").ticker).toBe(
+      "NO APPS YET · PAWL IS READY",
+    );
+  });
+
+  it("leads with the estate line, then each estate app's count, never a zero it did not read", () => {
+    expect(
+      toMachineModel(ADMIN, estate(READ), CATALOG, KEYS, "Pawl").ticker,
+    ).toBe("NOTHING NEEDS YOU · NOTE 0");
+    expect(toMachineModel(ADMIN, null, CATALOG, KEYS, "Pawl").ticker).toBe(
+      "ESTATE UNREADABLE · NOTE --",
+    );
+  });
+});

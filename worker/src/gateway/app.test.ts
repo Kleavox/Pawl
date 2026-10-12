@@ -39,6 +39,27 @@ describe("Gateway public namespace", () => {
     expect(response.status).toBe(404);
     expect(await response.text()).toContain("Page not found");
   });
+
+  it("names the site the manifest names, as the cabinet does", async () => {
+    const response = await app.request(
+      "https://product.test/no/such/path",
+      { headers: { accept: "text/html" } },
+      {
+        ASSETS: {
+          fetch: vi.fn(async () => new Response("nope", { status: 404 })),
+        },
+        PUBLIC_ORIGIN: "https://product.test",
+        ESTATE_MANIFEST: JSON.stringify({
+          site: { name: "Fixture" },
+          apps: [],
+        }),
+      } as unknown as Env,
+    );
+
+    const body = await response.text();
+    expect(body).toContain(">FIXTURE</a>");
+    expect(body).not.toContain(">PAWL</a>");
+  });
 });
 
 describe("Gateway estate endpoint", () => {

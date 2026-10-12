@@ -25,6 +25,13 @@ describe("selector mode", () => {
     expect(keypad.press("CLR")).toEqual({ kind: "ignored" });
   });
 
+  it("drops a picked bay on CLR, so GO no longer releases it", () => {
+    const keypad = createKeypad(["1", "3"]);
+    keypad.press("1");
+    expect(keypad.press("CLR")).toEqual({ kind: "cancelled" });
+    expect(keypad.press("GO")).toEqual({ kind: "ignored" });
+  });
+
   it("ignores GO with no pending selection", () => {
     const keypad = createKeypad(["1", "3"]);
     expect(keypad.press("GO")).toEqual({ kind: "ignored" });

@@ -191,6 +191,47 @@ describe("cancelling the bridge", () => {
   });
 });
 
+describe("CLR before GO", () => {
+  it("puts a picked bay back, so the screen returns to the estate line", () => {
+    const owner = initialState("owner", CATALOG);
+    const picked = reduce(owner, { type: "preselect", bay: "1" });
+    const cleared = reduce(picked, { type: "cancel" });
+    expect(cleared.selection).toBeNull();
+    expect(cleared.status).toBe("idle");
+  });
+
+  it("puts a refused bay back and forgets it, so the screen stops saying denied", () => {
+    const refused = reduce(initialState("guest", CATALOG), {
+      type: "select",
+      bay: "1",
+    });
+    const cleared = reduce(refused, { type: "cancel" });
+    expect(cleared.status).toBe("idle");
+    expect(cleared.selection).toBeNull();
+    expect(cleared.authRequest).toBeNull();
+  });
+
+  it("cannot pull back a bay that is already dropping, so the tray gets the bay that was paid for", () => {
+    const owner = initialState("owner", CATALOG);
+    const dropping = reduce(owner, { type: "select", bay: "1" });
+    const cleared = reduce(dropping, { type: "cancel" });
+    expect(cleared).toBe(dropping);
+    expect(reduce(cleared, { type: "preselect", bay: "3" }).selection).toBe(
+      "1",
+    );
+  });
+
+  it("cannot back out of a sign-in that is already being verified", () => {
+    const guest = initialState("guest", CATALOG);
+    const reading = reduce(guest, { type: "pass-tap" });
+    expect(reduce(reading, { type: "cancel" })).toBe(reading);
+    const methods = reduce(reading, { type: "reader-scanned" });
+    const sent = reduce(methods, { type: "otp-sent" });
+    const issuing = reduce(sent, { type: "verifying" });
+    expect(reduce(issuing, { type: "cancel" })).toBe(issuing);
+  });
+});
+
 describe("opening the bridge", () => {
   it("refuses a second bridge while one is already open", () => {
     const owner = initialState("owner", CATALOG);
@@ -257,69 +298,6 @@ describe("the otp buffer belongs to the reducer", () => {
     });
     const granted = reduce(typing, { type: "pass-issued", access: "visitor" });
     expect(granted.authDigits).toBe("");
-  });
-});
-
-describe("the console is machine state, not a private boolean", () => {
-  it("starts as a closed sheet", () => {
-    const guest = initialState("guest", CATALOG);
-    expect(guest.consoleOpen).toBe(false);
-    expect(guest.consoleLayout).toBe("sheet");
-  });
-
-  it("opens and closes the sheet", () => {
-    const opened = reduce(initialState("guest", CATALOG), {
-      type: "console",
-      open: true,
-    });
-    expect(opened.consoleOpen).toBe(true);
-    expect(reduce(opened, { type: "console", open: false }).consoleOpen).toBe(
-      false,
-    );
-  });
-
-  it("ignores an open request while the console is a column", () => {
-    const column = reduce(initialState("guest", CATALOG), {
-      type: "console-layout",
-      layout: "column",
-    });
-    expect(reduce(column, { type: "console", open: true })).toEqual(column);
-  });
-
-  it("keeps the sheet intent across a trip through the column", () => {
-    const opened = reduce(initialState("guest", CATALOG), {
-      type: "console",
-      open: true,
-    });
-    const column = reduce(opened, {
-      type: "console-layout",
-      layout: "column",
-    });
-    const back = reduce(column, { type: "console-layout", layout: "sheet" });
-    expect(column.consoleOpen).toBe(true);
-    expect(back.consoleOpen).toBe(true);
-  });
-
-  it("does not slam the console shut when the pass is removed", () => {
-    const opened = reduce(initialState("owner", CATALOG), {
-      type: "console",
-      open: true,
-    });
-    expect(opened.consoleOpen).toBe(true);
-
-    const outOfSheet = reduce(opened, { type: "pass-removed" });
-    expect(outOfSheet.access).toBe("guest");
-    expect(outOfSheet.consoleOpen).toBe(true);
-    expect(outOfSheet.consoleLayout).toBe("sheet");
-
-    const widened = reduce(opened, {
-      type: "console-layout",
-      layout: "column",
-    });
-    const outOfColumn = reduce(widened, { type: "pass-removed" });
-    expect(outOfColumn.access).toBe("guest");
-    expect(outOfColumn.consoleOpen).toBe(true);
-    expect(outOfColumn.consoleLayout).toBe("column");
   });
 });
 
@@ -438,5 +416,25 @@ describe("every declared state is reachable", () => {
     for (const step of Object.keys(ALL_AUTH_STEPS) as AuthStep[]) {
       expect(observed.has(step)).toBe(true);
     }
+  });
+});
+
+describe("stepping back from the code to the email", () => {
+  it("returns to the sign-in methods with the code forgotten", () => {
+    const guest = initialState("guest", CATALOG);
+    const reading = reduce(guest, { type: "pass-tap" });
+    const methods = reduce(reading, { type: "reader-scanned" });
+    const sent = reduce(methods, { type: "otp-sent" });
+    const typed = reduce(sent, { type: "otp-digits", digits: "123" });
+    const rejected = reduce(typed, { type: "otp-rejected", attemptsLeft: 3 });
+    const back = reduce(rejected, { type: "otp-back" });
+    expect(back.authStep).toBe("methods");
+    expect(back.authDigits).toBe("");
+    expect(back.authAttemptsLeft).toBeNull();
+  });
+
+  it("does nothing outside the code view", () => {
+    const guest = initialState("guest", CATALOG);
+    expect(reduce(guest, { type: "otp-back" })).toBe(guest);
   });
 });

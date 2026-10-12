@@ -96,6 +96,8 @@ pub struct Tool {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BayView {
     pub code: String,
+    pub key: String,
+    pub estate: bool,
     pub product: String,
     pub chars: usize,
     pub title: String,
@@ -342,6 +344,8 @@ impl Registry {
                 let chars = product.chars().count();
                 bays.push(BayView {
                     code: code.clone(),
+                    key: app.key.clone(),
+                    estate: app.estate,
                     product,
                     chars,
                     title: app.title.clone(),
@@ -416,6 +420,34 @@ mod tests {
                 .iter()
                 .any(|link| link.title == "Krynodes" && link.href == "https://kry.example.test")
         );
+    }
+
+    #[test]
+    fn tells_each_bay_which_app_it_holds_and_whether_it_reports_an_estate() {
+        let view = registry().public_view("https://example.test", "https://paw.example.test");
+        let notes = view
+            .bays
+            .iter()
+            .find(|bay| bay.title == "Notes")
+            .expect("notes bay");
+        assert_eq!(notes.key, "notes");
+        assert!(notes.estate);
+        let docs = view
+            .bays
+            .iter()
+            .find(|bay| bay.title == "Docs")
+            .expect("docs bay");
+        assert_eq!(docs.key, "docs");
+        assert!(!docs.estate);
+        let link = Registry::new(WITH_LINK)
+            .expect("valid")
+            .public_view("https://example.test", "https://paw.example.test");
+        let kry = link
+            .bays
+            .iter()
+            .find(|bay| bay.key == "kry")
+            .expect("kry bay");
+        assert!(!kry.estate);
     }
 
     #[test]

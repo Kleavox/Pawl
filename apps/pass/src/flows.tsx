@@ -3,10 +3,9 @@ import type { Identity } from "@pawl/core";
 import { createAccountCredential } from "@pawl/crypto";
 import { type FormEvent, useEffect, useState } from "react";
 
-import { ErrorScreen } from "@pawl/ui";
 import { api } from "./helpers";
 import type { FormState } from "./types";
-import { AuthForm, Field, ResultState } from "./ui";
+import { AuthForm, ErrorScreen, Field, ResultState } from "./ui";
 
 export function VerifyEmail() {
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
@@ -42,7 +41,7 @@ export function VerifyEmail() {
 
   return (
     <ResultState title="Verify email" state={state}>
-      <a className="primary-link" href="/">
+      <a className="pw-button pw-button-primary" href="/">
         Continue to sign in
       </a>
     </ResultState>
@@ -78,7 +77,8 @@ export function ResetPassword() {
   return (
     <AuthForm
       title="Choose a new password"
-      description="This change signs your account out everywhere."
+      kicker="New key"
+      description="This signs your account out everywhere and gives it a new encryption key."
       onSubmit={submit}
       state={state}
       submitLabel="Update password"
@@ -94,7 +94,7 @@ export function ResetPassword() {
         onChange={setPassword}
       />
       {state.status === "success" && (
-        <a className="primary-link" href="/">
+        <a className="pw-button pw-button-primary" href="/">
           Return to sign in
         </a>
       )}
@@ -149,7 +149,8 @@ export function Welcome({
   return (
     <AuthForm
       title="Pick your username"
-      description={`Signed in as ${user.email}. One last step before you continue.`}
+      kicker="Almost there"
+      description={`Signed in as ${user.email}. One last step before your pass is printed.`}
       onSubmit={submit}
       state={state}
       submitLabel="Continue"
@@ -222,20 +223,24 @@ export function LinkOAuth() {
   }
 
   return (
-    <section className="result" aria-label="Link sign-in provider">
-      <p className="section-label">Pawl</p>
+    <section className="screen-result" aria-label="Link sign-in provider">
+      <p className="pw-eyebrow">Pawl</p>
       {state.status === "success" ? (
         <>
-          <h2>{provider === "google" ? "Google" : "GitHub"} linked</h2>
-          <p>You can now use it to sign in to this account.</p>
-          <a className="primary-link" href="/">
+          <h2 className="pw-heading">
+            {provider === "google" ? "Google" : "GitHub"} linked
+          </h2>
+          <p className="pw-text">
+            You can now use it to sign in to this account.
+          </p>
+          <a className="pw-button pw-button-primary" href="/">
             Go to sign in
           </a>
         </>
       ) : (
         <>
-          <h2>Linking…</h2>
-          <div className="loading-lines" aria-label="Linking">
+          <h2 className="pw-heading">Linking…</h2>
+          <div className="pw-loading" aria-label="Linking">
             <span />
             <span />
           </div>

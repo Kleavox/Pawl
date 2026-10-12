@@ -1,5 +1,7 @@
 import type { Identity } from "@pawl/core";
-import { escapeHtml } from "@pawl/core";
+import { escapeHtml, renderMachinePage } from "@pawl/core";
+import { EMPTY_MANIFEST, registryFor } from "@pawl/registry";
+import { localWorkerOrigin } from "@pawl/topology";
 import type { Context } from "hono";
 import { pkceS256 } from "@pawl/oidc";
 
@@ -181,33 +183,49 @@ async function redirectWithCode(
   );
 }
 
-function consentPage(request: AuthorizeRequest, identity: Identity): string {
+const LOOPBACK = ["127.0.0.1", "localhost"];
+
+function cabinetOrigin(requestUrl: string, env: Env): string {
+  const hostname = new URL(requestUrl).hostname;
+  return LOOPBACK.includes(hostname)
+    ? localWorkerOrigin("gateway", hostname)
+    : `https://${env.ROOT_DOMAIN}`;
+}
+
+function consentPage(
+  request: AuthorizeRequest,
+  identity: Identity,
+  rootOrigin: string,
+  siteName: string,
+): string {
   const name = escapeHtml(request.client.name);
   const scopes = request.scopes
     .map((scope) => `<li>${escapeHtml(SCOPE_WORDS[scope] ?? scope)}</li>`)
     .join("");
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in to ${name} with Pawl</title>
-</head>
-<body>
-<main>
+  const who = escapeHtml(identity.username ?? identity.email);
+  return renderMachinePage({
+    title: `Sign in to ${request.client.name} with Pawl`,
+    status: "AN APP WANTS YOUR PASS",
+    sub: "NOTHING SHARED YET",
+    rootOrigin,
+    siteName,
+    caption: "CLR DENY · GO ALLOW",
+    keys: {
+      clr: { kind: "submit", form: "consent", name: "decision", value: "deny" },
+      go: { kind: "submit", form: "consent", name: "decision", value: "allow" },
+    },
+    body: `<p class="eyebrow">Consent</p>
 <h1>Sign in to ${name} with Pawl</h1>
-<p>${name} is registered to <strong>${escapeHtml(request.client.sector)}</strong>.
-You are signed in as <strong>${escapeHtml(identity.username ?? identity.email)}</strong>.</p>
+<p>${name} is registered to <strong>${escapeHtml(request.client.sector)}</strong>. You are signed in as <strong>${who}</strong>.</p>
 <p>If you allow it, ${name} receives:</p>
-<ul>${scopes}</ul>
-<form method="post" action="/oauth/consent">
+<ul class="scopes">${scopes}</ul>
+<p>It is asked once. You can disconnect it any time under Account &rarr; Apps.</p>
+<form id="consent" class="actions" method="post" action="/oauth/consent">
 <input type="hidden" name="request" value="${escapeHtml(request.query)}">
-<button type="submit" name="decision" value="allow">Allow</button>
-<button type="submit" name="decision" value="deny">Deny</button>
-</form>
-</main>
-</body>
-</html>`;
+<button class="button" type="submit" name="decision" value="deny">Deny</button>
+<button class="button button--primary" type="submit" name="decision" value="allow">Allow</button>
+</form>`,
+  });
 }
 
 function trustedOrigin(context: OidcContext): boolean {
@@ -534,7 +552,14 @@ export function registerOidcRoutes(app: PassApp): void {
       if (request.prompt === "none") {
         return context.redirect(refusal(request, "consent_required"), 302);
       }
-      return context.html(consentPage(request, session.identity));
+      return context.html(
+        consentPage(
+          request,
+          session.identity,
+          cabinetOrigin(context.req.url, context.env),
+          registryFor(context.env.ESTATE_MANIFEST ?? EMPTY_MANIFEST).siteName(),
+        ),
+      );
     }
     return redirectWithCode(context, request, userId);
   });
