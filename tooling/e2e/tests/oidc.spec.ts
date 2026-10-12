@@ -89,6 +89,7 @@ test("a person connects a third-party app, finds it in their account, and discon
   ).toHaveText("undefined");
 
   await page.goto(`${PROVIDER}/`);
+  await page.getByRole("tab", { name: "Apps" }).click();
   const disconnect = page.getByRole("button", { name: "Disconnect Docs" });
   await expect(disconnect).toBeVisible({ timeout: 20_000 });
   await disconnect.click();

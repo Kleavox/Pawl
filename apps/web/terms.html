@@ -3,90 +3,213 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0f17" />
     <meta
       name="description"
-      content="Terms governing access to and use of {{SITE_NAME}} services."
+      content="The terms you accept when you hold a {{SITE_NAME}} account."
     />
-    <link rel="canonical" href="{{ROOT_ORIGIN}}/terms" />
-    <title>Terms of Service | {{SITE_NAME}}</title>
+    <title>Terms of service · {{SITE_NAME}}</title>
     <script type="module" src="/src/legal.ts"></script>
   </head>
   <body>
-    <header class="hdr">
-      <div class="shell hdr-inner">
-        <a class="wm" href="/" aria-label="{{SITE_NAME}} home">{{SITE_NAME}}</a>
-        <a class="btn-nav" href="/">Home</a>
+    <main class="room room--receipt" aria-labelledby="receipt-title">
+      <div class="machine machine--printer">
+        {{MARQUEE_RECEIPT}}
+        <section class="printer-panel" aria-label="Receipt printer">
+          <div class="pw-bezel">
+            <div class="pw-lcd printer-panel__screen">
+              <p class="pw-lcd__status">
+                <span>Receipt printed</span>
+                <small>Terms of service · {{EFFECTIVE}}</small>
+              </p>
+            </div>
+          </div>
+          <div class="printer-panel__mouth" aria-hidden="true">
+            <span class="pw-printer__slot"></span>
+            <span class="printer-panel__label">RECEIPTS</span>
+          </div>
+        </section>
       </div>
-    </header>
 
-    <main class="legal-main">
-      <p class="section-label">POLICY / TERMS</p>
-      <h1>Use the system responsibly.</h1>
-      <p class="legal-intro">
-        These terms govern access to {{SITE_NAME}}, its identity service, and
-        every app it fronts. Effective June 7, 2026.
-      </p>
+      <article class="receipt" data-receipt>
+        <div class="receipt__head">
+          <p class="receipt__serial">PAWL-GW-01 · {{SITE_NAME_UPPER}}</p>
+          <h1 id="receipt-title">Terms of service</h1>
+          <dl class="receipt__meta">
+            <div>
+              <dt>Effective</dt>
+              <dd>{{EFFECTIVE}}</dd>
+            </div>
+            <div>
+              <dt>Site</dt>
+              <dd>{{ROOT_HOST}}</dd>
+            </div>
+            <div>
+              <dt>Contact</dt>
+              <dd><a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a></dd>
+            </div>
+          </dl>
+        </div>
 
-      <section class="legal-section">
-        <h2>Acceptable use</h2>
-        <p>
-          Do not use {{SITE_NAME}} to distribute malware, facilitate fraud,
-          violate privacy or intellectual-property rights, evade access
-          controls, abuse infrastructure, or conduct unlawful activity.
-        </p>
-      </section>
+        <section class="receipt__summary" aria-labelledby="terms-short">
+          <h2 id="terms-short">In one breath</h2>
+          <p>
+            Use {{SITE_NAME}} honestly, keep your password to yourself, and
+            remember that it is the only key to your encrypted data. The machine
+            is offered as is, and you can leave whenever you like.
+          </p>
+        </section>
 
-      <section class="legal-section">
-        <h2>Your account and content</h2>
-        <p>
-          You are responsible for activity performed through your account and
-          for content you submit. Keep credentials secure and ensure you have
-          the rights and permissions required to share any destination, file,
-          message, or monitoring target.
-        </p>
-      </section>
+        <section aria-labelledby="terms-1">
+          <h2 id="terms-1">1. Agreement</h2>
+          <p>
+            By creating an account or signing in to {{SITE_NAME}} at
+            {{ROOT_HOST}} or {{PASS_HOST}}, you accept these terms and the
+            <a href="/privacy.html">privacy policy</a>. If you do not accept
+            them, do not use the service.
+          </p>
+        </section>
 
-      <section class="legal-section">
-        <h2>Temporary services</h2>
-        <p>
-          Links, files, metrics, and related records may expire, be deleted,
-          become unavailable, or be limited to protect users and infrastructure.
-          {{SITE_NAME}} is not a permanent backup or archival service.
-        </p>
-      </section>
+        <section aria-labelledby="terms-2">
+          <h2 id="terms-2">2. What {{SITE_NAME}} is</h2>
+          <p>
+            {{SITE_NAME}} is an account and sign-in service and a front door to
+            a set of apps. One account signs you in to every app that works with
+            it, and the machine on {{ROOT_HOST}} shows those apps as bays you
+            can open. Each app is its own service with its own terms.
+          </p>
+        </section>
 
-      <section class="legal-section">
-        <h2>Availability and changes</h2>
-        <p>
-          Services are provided on an as-available basis. Features, limits, and
-          integrations may change. Access may be suspended or terminated when
-          necessary to address abuse, security risk, legal requirements, or
-          operational constraints.
-        </p>
-      </section>
+        <section aria-labelledby="terms-3">
+          <h2 id="terms-3">3. Your account</h2>
+          <ul>
+            <li>Give an email address you control and keep it current.</li>
+            <li>An account is for one person. Do not share it.</li>
+            <li>
+              You are responsible for what happens under your account. Sign out
+              devices you no longer use, under Account → Devices.
+            </li>
+            <li>Usernames must not impersonate anyone or mislead.</li>
+          </ul>
+        </section>
 
-      <section class="legal-section">
-        <h2>Disclaimers and liability</h2>
-        <p>
-          To the extent permitted by applicable law, {{SITE_NAME}} is provided
-          without warranties and is not liable for indirect, incidental,
-          special, consequential, or data-loss damages arising from use of the
-          service.
-        </p>
-      </section>
+        <section aria-labelledby="terms-4">
+          <h2 id="terms-4">4. Your password and encrypted data</h2>
+          <p>
+            Your password never reaches us, so we cannot recover it, and we
+            cannot recover anything encrypted with the key it protects.
+            Resetting a forgotten password gives your account a new key; data
+            encrypted to the old one becomes unreadable by design. Keep your
+            password safe and somewhere you will find it.
+          </p>
+        </section>
 
-      <section class="legal-section">
-        <h2>Privacy and contact</h2>
-        <p>
-          Data handling is described in the Privacy Policy. Questions about
-          these terms can be submitted through the operator's contact form.
-        </p>
-      </section>
+        <section aria-labelledby="terms-5">
+          <h2 id="terms-5">5. Acceptable use</h2>
+          <p>Do not:</p>
+          <ul>
+            <li>try to get into accounts that are not yours;</li>
+            <li>guess passwords or codes, or reuse leaked credentials;</li>
+            <li>
+              get around the human check, rate limits or other protections;
+            </li>
+            <li>
+              attack, overload, scrape or probe the service or the apps behind
+              it;
+            </li>
+            <li>use the service to break the law or to harm others.</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="terms-6">
+          <h2 id="terms-6">6. Apps you connect</h2>
+          <p>
+            When you allow an app to sign you in, it receives only what the
+            consent screen shows. That app's own terms and privacy policy govern
+            what it does next. You can disconnect any app at any time under
+            Account → Apps.
+          </p>
+        </section>
+
+        <section aria-labelledby="terms-7">
+          <h2 id="terms-7">7. Signing in with Google or GitHub</h2>
+          <p>
+            If you sign in with Google or GitHub, their terms apply to your
+            account with them. If either suspends your account there, you may
+            need another way to sign in here, such as a password or an email
+            code.
+          </p>
+        </section>
+
+        <section aria-labelledby="terms-8">
+          <h2 id="terms-8">8. Availability and changes to the service</h2>
+          <p>
+            The service is provided as is and as available. We may change, pause
+            or retire features or apps, and we do not promise any level of
+            uptime.
+          </p>
+        </section>
+
+        <section aria-labelledby="terms-9">
+          <h2 id="terms-9">9. Ending your account</h2>
+          <p>
+            You can delete your account at any time under Account → Security →
+            Delete this account. We may suspend or close accounts used against
+            section 5, or when the law requires it, and will tell you where we
+            can.
+          </p>
+        </section>
+
+        <section aria-labelledby="terms-10">
+          <h2 id="terms-10">10. Disclaimer</h2>
+          <p>
+            To the extent the law allows, the service comes without warranties
+            of any kind, express or implied, including fitness for a particular
+            purpose and uninterrupted or error-free operation.
+          </p>
+        </section>
+
+        <section aria-labelledby="terms-11">
+          <h2 id="terms-11">11. Limitation of liability</h2>
+          <p>
+            To the extent the law allows, we are not liable for indirect or
+            consequential losses, or for loss of data you could not decrypt
+            because a password was lost. Nothing here limits liability that the
+            law does not allow to be limited.
+          </p>
+        </section>
+
+        <section aria-labelledby="terms-12">
+          <h2 id="terms-12">12. Changes to these terms</h2>
+          <p>
+            When these terms change in a way that matters, the effective date at
+            the top of this receipt changes with it. Using the service after
+            that date means you accept the new terms.
+          </p>
+        </section>
+
+        <section aria-labelledby="terms-13">
+          <h2 id="terms-13">13. Contact</h2>
+          <p>
+            Questions about these terms:
+            <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a>.
+          </p>
+        </section>
+
+        <div class="receipt__end">
+          <p class="receipt__keep">— KEEP THIS RECEIPT —</p>
+          <span class="receipt__barcode" aria-hidden="true"></span>
+          <a class="pw-button pw-button-primary receipt__tear" href="/"
+            >Tear off and return to the machine</a
+          >
+          <p class="receipt__other">
+            Also printed: <a href="/privacy.html">Privacy policy</a>
+          </p>
+        </div>
+      </article>
+
+      <div class="receipt-plate">{{PLATE}}</div>
+      <span class="floor" aria-hidden="true"></span>
     </main>
-
-    <footer class="legal-footer">
-      <span>(c) {{YEAR}} {{SITE_NAME}}</span>
-      <a href="/privacy">Privacy Policy</a>
-    </footer>
   </body>
 </html>

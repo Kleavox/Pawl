@@ -160,6 +160,7 @@ test("every placeholder is readable against what sits behind it", async () => {
 test("pass: the account page lists devices and can revoke one", async () => {
   await page.goto(`${PASS}/`);
   await expect(page.getByRole("heading", { name: admin.user })).toBeVisible();
+  await page.getByRole("tab", { name: "Devices" }).click();
   await expect(page.getByText("Devices", { exact: true })).toBeVisible();
 
   const revokable = page.getByRole("button", { name: /^Revoke / });
@@ -175,6 +176,7 @@ test("pass: the account page lists devices and can revoke one", async () => {
 
 test("pass: every session control says which device it acts on", async () => {
   await page.goto(`${PASS}/`);
+  await page.getByRole("tab", { name: "Devices" }).click();
   await expect(page.locator(".row-device").first()).toBeVisible({
     timeout: 20000,
   });
@@ -420,6 +422,7 @@ test("pass: an account can delete itself", async () => {
     { timeout: 20000 },
   );
 
+  await worker.getByRole("tab", { name: "Security" }).click();
   await worker.getByRole("button", { name: "Delete this account" }).click();
   const confirm = worker.locator('input[type="email"]').last();
   await expect(confirm).toBeVisible({ timeout: 20000 });
@@ -447,11 +450,22 @@ test("pass: an account can delete itself", async () => {
   await fresh.close();
 });
 
-test("the header appears on the account origin and marks the right tool", async () => {
+test("the account origin is the same machine, seen close up", async () => {
   await page.goto(PASS);
-  const current = page.locator('[aria-current="page"]');
-  await expect(current).toHaveCount(1);
-  await expect(current).toContainText("pawl");
+  await expect(page.locator("[data-camera]")).toBeVisible();
+  await expect(page.locator("header, footer")).toHaveCount(0);
+  await expect(
+    page.getByRole("region", { name: "Service panel" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Privacy" })).toHaveAttribute(
+    "href",
+    /\/privacy\.html$/,
+  );
+  const digits = page.locator(".close-up__keypad .pw-key.is-unlit");
+  await expect(digits).toHaveCount(10);
+  await expect(
+    page.locator(".close-up__keypad button", { hasText: /^\d$/ }),
+  ).toHaveCount(0);
 });
 
 test("the machine says a failed estate call out loud instead of an all-clear", async () => {
@@ -484,23 +498,19 @@ test("the machine says a failed estate call out loud instead of an all-clear", a
     muted: false,
   });
 
-  const navCounts = page.locator(".pw-nav-count");
-  await expect(navCounts).toHaveCount(2);
+  const led = page.locator("[data-bay='2'] [data-led]");
+  await expect(led, "an unmeasured count is written --, never 0").toHaveText(
+    "--",
+  );
+  await expect(led).toBeVisible();
   await expect(
-    navCounts,
-    "an unmeasured count is written --, never nothing",
-  ).toHaveText(["--", "--"]);
-  for (const index of [0, 1]) {
-    await expect(navCounts.nth(index)).toBeVisible();
-  }
-  expect(
-    await navCounts.allTextContents(),
-    "an unmeasured count is written --, never 0",
-  ).not.toContain("0");
-  await expect(
-    page.locator(".pw-nav-tool .pw-pad-warn"),
-    "a tool whose count could not be read carries the alarm, not silence",
-  ).toHaveCount(2);
+    led,
+    "a count that could not be read carries its own state, not silence",
+  ).toHaveAttribute("data-severity", "unknown");
+  await expect(page.locator("[data-ticker-text]")).toContainText(
+    "ESTATE UNREADABLE",
+  );
+  await expect(page.locator("[data-ticker-text]")).toContainText("NOTE --");
 
   await page.unroute("**/api/estate");
   expectFailure = false;
@@ -509,6 +519,7 @@ test("the machine says a failed estate call out loud instead of an all-clear", a
 test("pass: signing out actually signs you out", async () => {
   await page.goto(`${PASS}/`);
   await expect(page.getByRole("heading", { name: admin.user })).toBeVisible();
+  await page.getByRole("tab", { name: "Devices" }).click();
   await page
     .getByRole("button", { name: "Sign out of this device" })
     .first()

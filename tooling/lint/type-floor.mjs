@@ -29,7 +29,18 @@ function collect(directory, found = []) {
   return found;
 }
 
-function resolveLength(value) {
+const TOKENS = new Map(
+  [
+    ...readFileSync(
+      resolve(root, "packages/ui/src/styles.css"),
+      "utf8",
+    ).matchAll(/(--pw-fs-[a-z0-9-]+)\s*:\s*([^;]+);/g),
+  ].map((match) => [match[1], match[2].trim()]),
+);
+
+function resolveLength(raw) {
+  const token = /^var\((--[a-z0-9-]+)\)$/i.exec(raw);
+  const value = token === null ? raw : (TOKENS.get(token[1]) ?? raw);
   const clamped = /^clamp\(\s*([^,]+),/i.exec(value);
   const literal = clamped === null ? value : clamped[1].trim();
   const match = /^(\d*\.?\d+)(rem|em|px)$/.exec(literal);

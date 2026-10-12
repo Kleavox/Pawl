@@ -128,7 +128,7 @@ export function useChallenge(
     status === "ready" ? null : (
       <div className="challenge-inline" aria-live="polite">
         {status === "error" ? (
-          <button className="text-action" type="button" onClick={retry}>
+          <button className="pw-link" type="button" onClick={retry}>
             Security check failed, retry
           </button>
         ) : (
@@ -171,11 +171,14 @@ export function ChallengePage() {
   });
 
   return (
-    <section className="result" aria-label="Security check">
-      <p className="section-label">Pawl</p>
-      <h2>Just a moment</h2>
+    <section className="screen-result" aria-label="Security check">
+      <p className="pw-eyebrow">Human check</p>
+      <h2 className="pw-heading">Just a moment</h2>
+      <p className="pw-text">
+        Cloudflare Turnstile is checking that a person stands at the machine.
+      </p>
       {!challenge.failed && (
-        <div className="loading-lines" aria-label="Verifying">
+        <div className="pw-loading" aria-label="Verifying">
           <span />
           <span />
         </div>

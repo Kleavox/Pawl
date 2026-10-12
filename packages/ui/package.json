@@ -15,17 +15,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1 && tsc -p tsconfig.test.json --noEmit --checkers 1"
   },
   "dependencies": {
-    "@pawl/core": "workspace:*",
-    "@pawl/registry": "workspace:*",
     "@pawl/topology": "workspace:*"
   },
-  "peerDependencies": {
-    "react": "catalog:"
-  },
   "devDependencies": {
+    "@pawl/core": "workspace:*",
     "@pawl/typescript": "workspace:*",
     "@types/node": "catalog:",
-    "@types/react": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
   }

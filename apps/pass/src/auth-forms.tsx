@@ -49,35 +49,46 @@ export function Login({
   return (
     <AuthForm
       title="Sign in"
-      description="Use your account or a connected provider."
+      kicker="Pass required"
+      description="One account for every bay in the machine."
       onSubmit={submit}
       state={state}
       submitLabel="Sign in"
     >
       {(providers.google || providers.github) && (
         <>
-          <div className="oauth">
+          <div className="screen-form__providers">
             {providers.google && (
-              <button type="button" onClick={() => startOAuth("google")}>
-                <span>G</span>
-                Google
+              <button
+                className="pw-button"
+                type="button"
+                onClick={() => startOAuth("google")}
+              >
+                <span className="pw-button__mark" aria-hidden="true">
+                  G
+                </span>
+                Continue with Google
               </button>
             )}
             {providers.github && (
-              <button type="button" onClick={() => startOAuth("github")}>
-                <span>GH</span>
-                GitHub
+              <button
+                className="pw-button"
+                type="button"
+                onClick={() => startOAuth("github")}
+              >
+                <span className="pw-button__mark" aria-hidden="true">
+                  GH
+                </span>
+                Continue with GitHub
               </button>
             )}
           </div>
-          <div className="divider">
-            <span>or</span>
-          </div>
+          <p className="pw-divider">Or use your password</p>
         </>
       )}
       {oauthError && (
         <p
-          className={`status status-${oauthError.kind === "info" ? "success" : "error"}`}
+          className={`pw-status ${oauthError.kind === "info" ? "is-info status-success" : "is-error status-error"}`}
           role={oauthError.kind === "info" ? "status" : "alert"}
         >
           {oauthError.text}
@@ -100,15 +111,19 @@ export function Login({
         onChange={setPassword}
       />
       <button
-        className="text-action align-right"
+        className="pw-link screen-form__aside"
         type="button"
         onClick={() => onModeChange("forgot")}
       >
         Forgot password?
       </button>
-      <p className="switch">
+      <p className="pw-text screen-form__switch">
         No account?{" "}
-        <button type="button" onClick={() => onModeChange("register")}>
+        <button
+          className="pw-link"
+          type="button"
+          onClick={() => onModeChange("register")}
+        >
           Create an account
         </button>
       </p>
@@ -159,7 +174,8 @@ export function Register({
   return (
     <AuthForm
       title="Create your account"
-      description="Create one identity for Pawl."
+      kicker="New pass"
+      description="One identity for every app in the machine."
       onSubmit={submit}
       state={state}
       submitLabel="Create account"
@@ -200,10 +216,14 @@ export function Register({
         value={confirmPassword}
         onChange={setConfirmPassword}
       />
-      <p className="switch form-trailing">
+      <p className="pw-text screen-form__switch">
         Already registered?{" "}
-        <button type="button" onClick={() => onModeChange("login")}>
-          Sign in
+        <button
+          className="pw-link"
+          type="button"
+          onClick={() => onModeChange("login")}
+        >
+          Back to sign in
         </button>
       </p>
       {challenge.widget}
@@ -245,7 +265,8 @@ export function ForgotPassword({
   return (
     <AuthForm
       title="Reset access"
-      description="Receive a short-lived reset link."
+      kicker="Lost key"
+      description="We email a reset link that lasts 15 minutes."
       onSubmit={submit}
       state={state}
       submitLabel="Send reset link"
@@ -259,7 +280,7 @@ export function ForgotPassword({
         onChange={setEmail}
       />
       <button
-        className="text-action form-trailing"
+        className="pw-link screen-form__switch"
         type="button"
         onClick={() => onModeChange("login")}
       >

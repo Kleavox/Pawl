@@ -1,4 +1,6 @@
 import { execSync } from "node:child_process";
+import { rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page } from "@playwright/test";
@@ -40,7 +42,7 @@ export function clearRateLimits(): void {
   let listed = "";
   try {
     listed = execSync(
-      "pnpm exec wrangler kv key list --binding SESSIONS --local",
+      "pnpm exec wrangler kv key list --binding SESSIONS --local --prefix rate:",
       { cwd: passDir, stdio: "pipe" },
     ).toString();
   } catch {
@@ -54,16 +56,21 @@ export function clearRateLimits(): void {
   } catch {
     return;
   }
-  for (const key of keys) {
-    if (!key.name.startsWith("rate:")) continue;
-    try {
-      execSync(
-        `pnpm exec wrangler kv key delete --binding SESSIONS --local "${key.name}"`,
-        { cwd: passDir, stdio: "pipe" },
-      );
-    } catch {
-      continue;
-    }
+  const stale = keys
+    .map((key) => key.name)
+    .filter((name) => name.startsWith("rate:"));
+  if (stale.length === 0) return;
+  const list = path.join(tmpdir(), `pawl-rate-keys-${process.pid}.json`);
+  writeFileSync(list, JSON.stringify(stale));
+  try {
+    execSync(
+      `pnpm exec wrangler kv bulk delete --binding SESSIONS --local --force "${list}"`,
+      { cwd: passDir, stdio: "pipe" },
+    );
+  } catch {
+    return;
+  } finally {
+    rmSync(list, { force: true });
   }
 }
 

@@ -26,8 +26,8 @@ function markEmailVerified(address: string): void {
 
 test("web home loads through the gateway", async ({ page }) => {
   await page.goto(`${GATEWAY}/`);
-  await expect(page.locator(".pw-brand")).toContainText("fixture");
-  await expect(page.locator("[data-signin]")).toBeVisible();
+  await expect(page.locator(".marquee__brand")).toHaveText("FIXTURE");
+  await expect(page.locator("[data-terminal-open]")).toBeVisible();
 });
 
 test("no horizontal overflow at 320px or 360px", async ({ browser }) => {
@@ -36,7 +36,13 @@ test("no horizontal overflow at 320px or 360px", async ({ browser }) => {
       viewport: { width, height: 740 },
     });
     const page = await context.newPage();
-    for (const url of [`${GATEWAY}/`, `${NOTES}/`, `${PASS}/`]) {
+    for (const url of [
+      `${GATEWAY}/`,
+      `${GATEWAY}/privacy.html`,
+      `${GATEWAY}/terms.html`,
+      `${NOTES}/`,
+      `${PASS}/`,
+    ]) {
       await page.goto(url);
       await page.waitForLoadState("networkidle");
       const overflow = await page.evaluate(
@@ -45,6 +51,18 @@ test("no horizontal overflow at 320px or 360px", async ({ browser }) => {
           document.documentElement.clientWidth,
       );
       expect(overflow, `${url} at ${width}px`).toBeLessThanOrEqual(0);
+      const past = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>("body *")]
+          .filter((element) => {
+            if (element.closest(".pw-marquee__ticker")) return false;
+            const box = element.getBoundingClientRect();
+            if (box.width === 0 || box.height === 0) return false;
+            if (getComputedStyle(element).visibility === "hidden") return false;
+            return box.right > innerWidth + 0.5 || box.left < -0.5;
+          })
+          .map((element) => `${element.tagName}.${element.className}`),
+      );
+      expect(past, `clipped at ${url}, ${width}px`).toEqual([]);
     }
     await context.close();
   }

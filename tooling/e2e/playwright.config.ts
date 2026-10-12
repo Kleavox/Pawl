@@ -16,6 +16,7 @@ export default defineConfig({
   testDir: "./tests",
   workers: 1,
   retries: process.env.CI ? 1 : 0,
+  maxFailures: process.env.CI ? 5 : 0,
   timeout: 45_000,
   reporter: process.env.CI ? "github" : "list",
   use: {

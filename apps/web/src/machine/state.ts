@@ -6,8 +6,6 @@ export type Catalog = BayView[];
 
 export type AccessRole = "guest" | "visitor" | "owner";
 
-type ConsoleLayout = "sheet" | "column";
-
 export type MachineState = {
   access: AccessRole;
   status: "idle" | "reading" | "granted" | "selected" | "denied" | "dispensing";
@@ -19,8 +17,6 @@ export type MachineState = {
   screenTransfer: BayCode | null;
   authDigits: string;
   authAttemptsLeft: number | null;
-  consoleLayout: ConsoleLayout;
-  consoleOpen: boolean;
   catalog: Catalog;
 };
 
@@ -36,11 +32,10 @@ export type MachineEvent =
   | { type: "pass-removed" }
   | { type: "otp-digits"; digits: string }
   | { type: "otp-rejected"; attemptsLeft: number }
-  | { type: "console"; open: boolean }
-  | { type: "console-layout"; layout: ConsoleLayout }
   | { type: "tray-ready" }
   | { type: "activate-tray" }
   | { type: "cancel" }
+  | { type: "otp-back" }
   | { type: "reset" };
 
 export type MachineHost = {
@@ -78,8 +73,6 @@ export function initialState(
     screenTransfer: null,
     authDigits: "",
     authAttemptsLeft: null,
-    consoleLayout: "sheet",
-    consoleOpen: false,
     catalog,
   };
 }
@@ -169,11 +162,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
     }
 
     case "pass-removed": {
-      return {
-        ...initialState("guest", state.catalog),
-        consoleLayout: state.consoleLayout,
-        consoleOpen: state.consoleOpen,
-      };
+      return initialState("guest", state.catalog);
     }
 
     case "otp-digits": {
@@ -187,15 +176,6 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         authDigits: "",
         authAttemptsLeft: event.attemptsLeft,
       };
-    }
-
-    case "console": {
-      if (state.consoleLayout !== "sheet") return state;
-      return { ...state, consoleOpen: event.open };
-    }
-
-    case "console-layout": {
-      return { ...state, consoleLayout: event.layout };
     }
 
     case "tray-ready": {
@@ -214,13 +194,33 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
     }
 
     case "cancel": {
+      if (
+        state.status === "dispensing" ||
+        state.status === "reading" ||
+        state.authStep === "issuing"
+      )
+        return state;
+      const putBack = state.status === "selected" || state.status === "denied";
       return {
         ...state,
+        selection: putBack ? null : state.selection,
+        status: putBack ? "idle" : state.status,
+        authRequest: state.status === "denied" ? null : state.authRequest,
         screenTransfer: null,
         authStep: "closed",
         authDigits: "",
         authAttemptsLeft: null,
         busy: false,
+      };
+    }
+
+    case "otp-back": {
+      if (state.authStep !== "otp-machine") return state;
+      return {
+        ...state,
+        authStep: "methods",
+        authDigits: "",
+        authAttemptsLeft: null,
       };
     }
 

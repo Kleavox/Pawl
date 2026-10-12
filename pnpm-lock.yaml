@@ -292,28 +292,19 @@ importers:
 
   packages/ui:
     dependencies:
-      '@pawl/core':
-        specifier: workspace:*
-        version: link:../core
-      '@pawl/registry':
-        specifier: workspace:*
-        version: link:../registry
       '@pawl/topology':
         specifier: workspace:*
         version: link:../topology
-      react:
-        specifier: 'catalog:'
-        version: 19.2.8
     devDependencies:
+      '@pawl/core':
+        specifier: workspace:*
+        version: link:../core
       '@pawl/typescript':
         specifier: workspace:*
         version: link:../../tooling/typescript
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19
-      '@types/react':
-        specifier: 'catalog:'
-        version: 19.2.17
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
