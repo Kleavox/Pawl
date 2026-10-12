@@ -3,6 +3,7 @@ interface Env {
   PUBLIC_ORIGIN: string;
   PROVIDER: string;
   CLIENT_ID: string;
+  CLIENT_SECRET?: string;
 }
 
 function redirectUri(url: URL): string {
@@ -132,13 +133,20 @@ export default {
         return new Response("state mismatch", { status: 400 });
       const token = await fetch(new URL("/oauth/token", env.PROVIDER), {
         method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          ...(env.CLIENT_SECRET
+            ? {
+                authorization: `Basic ${btoa(`${env.CLIENT_ID}:${env.CLIENT_SECRET}`)}`,
+              }
+            : {}),
+        },
         body: new URLSearchParams({
           grant_type: "authorization_code",
           code: url.searchParams.get("code") ?? "",
           redirect_uri: redirectUri(url),
           code_verifier: verifier ?? "",
-          client_id: env.CLIENT_ID,
+          ...(env.CLIENT_SECRET ? {} : { client_id: env.CLIENT_ID }),
         }),
       });
       if (!token.ok)
@@ -150,7 +158,7 @@ export default {
       const claims = payload(id_token);
       const access = payload(access_token);
       return new Response(
-        `<h1>signed in as ${String(claims.preferred_username)}</h1><p data-sub>${String(claims.sub)}</p><p data-aud>${String(claims.aud)}</p><p data-role>${String(access.role)}</p>`,
+        `<h1>signed in as ${String(claims.preferred_username)}</h1><p data-sub>${String(claims.sub)}</p><p data-aud>${String(claims.aud)}</p><p data-role>${String(access.role)}</p><p data-email>${String(claims.email)}</p>`,
         { headers: { "content-type": "text/html" } },
       );
     }

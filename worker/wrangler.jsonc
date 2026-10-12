@@ -1,0 +1,64 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "local-pawl",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-05",
+  "dev": { "port": 8786 },
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "ENVIRONMENT": "development",
+    "PUBLIC_ORIGIN": "https://example.test",
+    "OIDC_ISSUER": "http://127.0.0.1:8787",
+    "ROOT_DOMAIN": "example.test",
+    "FROM_EMAIL": "Pawl <no-reply@example.test>",
+  },
+  "assets": {
+    "directory": "assets",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": true,
+  },
+  "ratelimits": [
+    {
+      "name": "AUTHORIZE_RATE_LIMIT",
+      "namespace_id": "3401",
+      "simple": {
+        "limit": 30,
+        "period": 60,
+      },
+    },
+    {
+      "name": "TOKEN_RATE_LIMIT",
+      "namespace_id": "3402",
+      "simple": {
+        "limit": 60,
+        "period": 60,
+      },
+    },
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "00000000000000000000000000000000",
+    },
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "local-pawl",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+  "rules": [
+    {
+      "type": "CompiledWasm",
+      "globs": ["**/*.wasm"],
+      "fallthrough": true,
+    },
+  ],
+}

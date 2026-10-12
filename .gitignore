@@ -16,6 +16,7 @@ coverage/
 
 # Framework output
 .vite/
+/worker/assets/
 
 # Playwright
 test-results/

@@ -1,46 +1,51 @@
 # Pawl
 
 Pawl is an identity provider and the front door for a set of apps on one
-domain. This repository holds both Cloudflare Workers, their browser applications, the shared
-TypeScript packages, the Rust/WASM cryptography module, and their build and
-deployment tooling.
+domain. It deploys as one Cloudflare Worker, `pawl`, with one D1 database and
+one KV namespace, both also named `pawl`. This repository holds that Worker,
+its two browser applications, the shared TypeScript packages, the Rust
+modules, and the `pawl` operator binary that renders, provisions and deploys
+it.
 
 The apps it fronts live in their own repositories and are registered through a
 manifest; see [Registering apps](#registering-apps).
 
 ## Layout
 
-| Path                                                         | Contents                                                          |
-| ------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `apps/web`                                                   | Static Vite + TypeScript vending-machine home                     |
-| `apps/pass`                                                  | React account and authentication application                      |
-| `workers/gateway`                                            | Root-domain router and application gateway                        |
-| `workers/pass`                                               | Identity API backed by D1 and KV                                  |
-| `packages/protocol`                                          | Runtime-validated messages shared across application seams        |
-| `packages/topology`                                          | Canonical Worker names, hosts, origins, and local ports           |
-| `packages/auth`, `config`, `core`, `testing`, `ui`, `worker` | Shared TypeScript capabilities                                    |
-| `packages/crypto`, `crates/crypto`                           | Rust/WASM password derivation and streaming encryption            |
-| `packages/oidc`, `crates/oidc`                               | Rust/WASM ES256 signing and verification, PKCE, pairwise subjects |
-| `packages/registry`, `crates/registry`                       | Rust/WASM manifest validation and routing                         |
-| `crates/cli`                                                 | The `pawl` operator binary                                        |
-| `tooling`                                                    | Deployment, E2E, health-check, lint, TypeScript, and Vite tooling |
+| Path                                               | Contents                                                                                                                              |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `worker`                                           | The Worker: `src/pass` (the identity provider), `src/gateway` (the front door), `src/dispatch.ts` (which half answers), D1 migrations |
+| `apps/web`                                         | Static Vite + TypeScript vending-machine home (the cabinet)                                                                           |
+| `apps/pass`                                        | React account and authentication application                                                                                          |
+| `packages/protocol`                                | Runtime-validated messages shared across application seams                                                                            |
+| `packages/topology`                                | Canonical hosts, origins, and local ports                                                                                             |
+| `packages/auth`, `config`, `core`, `testing`, `ui` | Shared TypeScript capabilities                                                                                                        |
+| `packages/crypto`, `crates/crypto`                 | Rust/WASM password derivation and streaming encryption                                                                                |
+| `packages/oidc`, `crates/oidc`                     | Rust/WASM ES256 signing and verification, PKCE, pairwise subjects                                                                     |
+| `packages/registry`, `crates/registry`             | Rust/WASM manifest validation and routing                                                                                             |
+| `crates/cli`                                       | The `pawl` operator binary: assets, local configs, deploy, clients, admins                                                            |
+| `tooling`                                          | E2E, the local provider port, health-check, lint, TypeScript, and Vite tooling                                                        |
 
-`workers/pass/src/account/lifecycle.ts` owns credential rotation, session
+`worker/src/pass/account/lifecycle.ts` owns credential rotation, session
 invalidation, and cross-service account deletion.
 
 ```text
-Browser
-  |
-Gateway Worker ----- APP_<KEY> bindings ---- every app in the manifest
-  | PASS binding
-  |
-  +-- Pass Worker ---- D1 + session KV
+Browser ── pawl Worker ─┬─ paw.<root> ─────── provider half ── D1 pawl + KV pawl
+                        └─ everything else ── gateway half ─── APP_<KEY> bindings
 ```
 
-| Runtime | Responsibility                                                                                  |
-| ------- | ----------------------------------------------------------------------------------------------- |
-| Gateway | Public entry point, routing by the manifest, the static cabinet, `/api/estate`                  |
-| Pass    | Accounts, verifier-only authentication, sessions, the OpenID Connect provider, account deletion |
+| Half     | Answers                              | Responsibility                                                                                  |
+| -------- | ------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Gateway  | the root, `www.`, `gateway.internal` | Public entry point, routing by the manifest, the static cabinet, `/api/estate`                  |
+| Provider | `paw.<root>`, `pass.internal`        | Accounts, verifier-only authentication, sessions, the OpenID Connect provider, account deletion |
+
+The halves call each other in-process on their `.internal` names, which no
+request from the internet can carry, so the provider's `/internal/*` routes stay
+private. Every other request has its `x-pawl-*` headers removed before either
+half sees it. The Worker has one asset directory, `worker/assets`, assembled by
+`pawl assets` at build: the cabinet at its root, the account app under `/pass/`.
+The provider half serves `/pass/<path>` on its own host, the gateway half
+refuses `/pass/*`, and each host gets exactly one Content-Security-Policy.
 
 Pawl names no app of its own. Every app it fronts arrives through a manifest:
 the gateway binds each one as `APP_<KEY>`, reaches it on `<key>.internal`, and
@@ -82,45 +87,34 @@ Those origins are baked in at build time and each Worker serves its app from
 signs nobody in locally. `tooling/e2e/prepare.mjs` builds with the right values;
 so does a plain `pnpm build` once `.env.local` exists.
 
-### Running Workers
-
-Run all workspace development tasks:
+### Running the Worker
 
 ```bash
+pnpm build
 pnpm dev
 ```
 
-Build an application and run its Worker individually when working on one
-service:
+`pnpm dev` starts the Worker on 8786 and, on 8787, a forwarder from
+`tooling/dev` that hands every request, URL untouched, to the Worker. Locally
+the halves are told apart by port: 8787 is the provider, 8786 the cabinet,
+under either loopback name, so the two stay same-site as `paw.<root>` and
+`<root>` are. `pnpm lint:ports` fails the build if a port drifts from
+`packages/topology`.
 
-```bash
-pnpm --filter @pawl/pass-app build
-pnpm --dir workers/pass exec wrangler dev --port 8787
-```
-
-Wrangler's local service registry connects Workers started in separate
-terminals. The canonical local ports and service names are maintained in
-`packages/topology`, and each Worker's `wrangler.jsonc` pins its own `dev.port`
-to match. Without that pin every Worker takes Wrangler's default 8787, all of
-them bind the same socket, and only one of them answers, so `pnpm lint:ports`
-fails the build if the two ever disagree.
-
-Restart `wrangler dev` after any build: it serves stale assets from `dist`
-otherwise.
+Restart `wrangler dev` after any build: it serves stale assets otherwise.
 
 ### With apps
 
-Render local Worker configs from your manifest, then start the Workers with
-them:
+Render a local config from your manifest, then start the Worker with it:
 
 ```bash
-pnpm --filter @pawl/deploy exec deploy-config render-local --manifest estate.json --out .wrangler/local
-pnpm exec wrangler dev --config .wrangler/local/pass.json --port 8787 --persist-to workers/pass/.wrangler/state
-pnpm exec wrangler dev --config .wrangler/local/gateway.json --port 8786
+pnpm pawl render --local --manifest estate.json
+pnpm exec wrangler dev --config .wrangler/local/pawl.json --port 8786 --persist-to worker/.wrangler/state
+pnpm --dir tooling/dev exec wrangler dev
 ```
 
-The rendered pass config carries a throwaway signing key made for that run.
-Start each app's own Worker on the `local.port` its manifest entry names.
+The rendered config carries a throwaway signing key made for that run. Start
+each app's own Worker on the `local.port` its manifest entry names.
 
 ## Check
 
@@ -135,16 +129,17 @@ Start each app's own Worker on the `local.port` its manifest entry names.
 | `pnpm format:check`                                                 | Verify repository formatting                                                 |
 | `pnpm native:check`                                                 | Validate Rust formatting and tests                                           |
 | `pnpm check`                                                        | Run the complete static, unit, native, and build verification gate           |
-| `pnpm e2e`                                                          | Reset local Wrangler state and test Gateway, Pass and the fixture apps       |
+| `pnpm e2e`                                                          | Reset local Wrangler state and test the Worker and the fixture apps          |
 | `pnpm health:check`                                                 | Verify deployed public service health endpoints                              |
-| `pnpm pawl keygen`                                                  | Make the provider signing key and pairwise subject secret, printed once      |
+| `pnpm pawl deploy`                                                  | Provision, migrate and deploy the Worker (what the deploy job runs)          |
 | `pnpm pawl manifest check estate.json`                              | Validate a manifest and print where each app sits in the cabinet             |
 | `pnpm pawl manifest pin estate.json`                                | Write the current bay placement into the manifest so it never moves          |
 | `pnpm admin:client -- --id <id> --name <name> --redirect-uri <uri>` | Register an OpenID Connect client; a confidential one prints its secret once |
 | `pnpm admin:promote -- --email <email>`                             | Promote an existing verified account to admin                                |
 
-`pnpm e2e` registers two fixture apps from `tooling/e2e/fixture/estate.json` and
-boots them as a fixture Worker. Each Worker has a health check, so the run stops
+`pnpm e2e` registers two fixture apps from `tooling/e2e/fixture/estate.json`
+and boots them as fixture Workers, plus a third relying party on 8792 that
+signs in with a client secret, as an app behind Cloudflare Access does. Each Worker has a health check, so the run stops
 before any test when one of them is down rather than passing by not testing.
 
 Authentication protocol changes must pass both verification gates:
@@ -156,20 +151,45 @@ pnpm e2e
 
 ## Production
 
-Pull requests run the `Validate` workflow, including unit, native, build, and
-E2E checks selected by changed paths.
+A push to `main` runs the `Validate` workflow; when it passes, its `deploy` job
+ships the Worker. **Run workflow** on `Validate` deploys by hand. The job runs
+`pnpm pawl deploy`, which:
 
-Production deployment is manual through `.github/workflows/deploy.yml` and the
-protected GitHub `production` environment. Run it first with `domains=none`,
-verify migrations and Workers, then run it with `domains=canonical` to attach
-public domains. The workflow is the source of truth for required variables,
-secrets, deployment order, migrations, and health checks.
+1. finds the D1 database `pawl` and the KV namespace `pawl`, creating them when
+   missing, so no id is stored anywhere but Cloudflare;
+2. renders the Worker's config from `ROOT_DOMAIN` and `ESTATE_MANIFEST`;
+3. applies D1 migrations;
+4. makes, once, each secret the Worker does not already hold:
+   `OIDC_SIGNING_KEY`, `OIDC_SUB_SECRET`, `IP_HASH_SECRET`, and the cabinet's
+   `OIDC_CLIENT_SECRET`, registering the cabinet as the client `gateway` with
+   its hash. They go straight into the Worker's secrets, are never printed, and
+   a later deploy keeps them;
+5. deploys with the domains `<root>`, `www.<root>` and `paw.<root>` attached;
+6. promotes the account in `ADMIN_EMAIL` to admin once it exists and its
+   address is verified: sign up with that address after the first deploy,
+   verify it, then deploy again. An unverified account is never promoted.
+
+Then the job checks the public health endpoints.
+
+Settings live in GitHub (Settings → Secrets and variables → Actions); nothing
+of a deployment lives in this repository:
+
+| Kind     | Name                                                                                                                                                                                                                               |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Variable | `ROOT_DOMAIN`, the bare domain (`example.com`); optional `ESTATE_MANIFEST`                                                                                                                                                         |
+| Secret   | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `TURNSTILE_SITE_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_GITHUB_CLIENT_ID`, `OAUTH_GITHUB_CLIENT_SECRET`, `ADMIN_EMAIL` |
+
+Mail is sent as `Pawl <no-reply@ROOT_DOMAIN>`. The API token needs Workers
+Scripts Edit, Workers KV Storage Edit, D1 Edit and Account Settings Read, and on
+the domain's zone Zone Read, Workers Routes Edit and DNS Edit. A domain still attached to
+another Worker fails the deploy at the route step; detach it in the dashboard
+first.
+
+Deleting the `pawl` Worker deletes its secrets. The next deploy makes new ones,
+and with a new `OIDC_SUB_SECRET` every third-party app sees every person as
+someone new.
 
 No production credential is required to build or test this repository.
-
-Before the gateway is deployed with its client, register it (see
-[Apps as clients](#apps-as-clients)) and set `GATEWAY_CLIENT_ID` and
-`GATEWAY_CLIENT_SECRET`; deploy-config refuses to render a gateway without them.
 
 ## The OpenID Connect provider
 
@@ -228,16 +248,40 @@ keep their own session; nothing is shared across subdomains.
   posts to `POST /oauth/logout`, which ends the Pawl session too.
 
 The cabinet sends e-mailed codes to Pawl itself, so the Pawl session lands on
-`paw.`, and then makes the silent round trip. Register each first-party app
-once:
+`paw.`, and then makes the silent round trip. The deploy registers the cabinet
+as the client `gateway`. Any other app is registered once by hand:
 
 ```bash
-pnpm admin:client -- --id gateway --name "Cabinet" --redirect-uri https://<root>/auth/callback --first-party
+pnpm admin:client -- --id <id> --name <name> --redirect-uri https://<app>/auth/callback [--first-party]
 ```
 
-and store the printed secret as that Worker's `OIDC_CLIENT_SECRET` (the gateway
-reads it from the `GATEWAY_CLIENT_SECRET` repository secret, and its id from the
-`GATEWAY_CLIENT_ID` variable).
+and its printed secret goes where that app reads it. `pawl` finds the D1
+database `pawl` by name, so it needs only `wrangler login`.
+
+### Signing in to an app behind Cloudflare Access
+
+An app that Cloudflare Access guards can use Pawl as its login: Access's
+generic OpenID Connect login accepts ES256 tokens, `client_secret_basic` and
+PKCE, which is what Pawl serves.
+
+1. Register Access as a client, with your Zero Trust team name:
+
+   ```bash
+   pnpm admin:client -- --id <app>-access --name "<App>" --redirect-uri https://<team>.cloudflareaccess.com/cdn-cgi/access/callback
+   ```
+
+2. In Zero Trust → Settings → Authentication → Login methods, add
+   **OpenID Connect** with the printed client id and secret, and from
+   `https://paw.<root>/.well-known/openid-configuration` the auth URL
+   (`authorization_endpoint`), token URL (`token_endpoint`) and certificate URL
+   (`jwks_uri`). Turn **PKCE** on: Pawl refuses a sign-in without it. Scopes
+   `openid email profile`; the email claim is `email`.
+3. Choose that login method in the app's Access application.
+
+A person consents once, on Pawl, the first time. Pawl sends `email` only when
+the address is verified, so an unverified account cannot pass a policy that
+names an address. To list the app in the cabinet, give it a manifest entry with
+a `subdomain` and nothing else (see below).
 
 ## Registering apps
 
@@ -273,22 +317,22 @@ The manifest is one JSON document:
 }
 ```
 
-| Field                | Rule                                                                                                                                                                                         |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `site.name`          | 1–32 printable characters; the cabinet's wordmark, the header brand and the legal pages' operator name                                                                                       |
-| `site.reservedSlugs` | optional, each `[a-z0-9-]{1,32}`; added to the apex slug reservation                                                                                                                         |
-| `key`                | `^[a-z][a-z0-9]{1,15}$`, unique, not `gateway`, `pass`, `pawl`. Binding `APP_<KEY>`, internal host `<key>.internal`                                                                          |
-| `label`              | `^[a-z0-9-]{1,12}$`; printed on the cartridge in capitals. Four characters or fewer makes a tall cartridge, more makes a wide one                                                            |
-| `title`              | 1–32 printable characters                                                                                                                                                                    |
-| `subdomain`          | optional, `^[a-z][a-z0-9-]{0,30}$`, unique, not `paw`, `pass`, `www`. An app with a subdomain takes a bay; at most nine                                                                      |
-| `service`            | Worker name suffix (`<WORKER_PREFIX>-<service>`); required when `subdomain`, `proxy`, `apex`, `estate` or `purge` is set                                                                     |
-| `proxy`              | prefixes starting and ending with `/`, unique and non-overlapping, never under `/api/estate`, `/api/session`, `/api/logout`, `/api/auth/`, `/oauth/`, `/.well-known/`, `/health`, `/assets/` |
-| `apex`               | at most one app; `resolve` starts and ends with `/`; `fileSlugPrefix` optional, like `n_`                                                                                                    |
-| `estate`, `purge`    | the app implements the contract below                                                                                                                                                        |
-| `header`             | optional `{ noun }`, requires `estate`; the app appears in the shared header with its count                                                                                                  |
-| `access`             | optional `public` (default), `visitor` or `owner`: who may take the app's bay                                                                                                                |
-| `bay`                | optional pin `"1"`–`"9"`. Bays are placed automatically from the key; `pawl manifest pin` writes the current placement so a later app never moves an earlier one                             |
-| `local`              | optional `{ port }` or `{ vitePort }`, unique, not 8786, 8787, 3000, 3001                                                                                                                    |
+| Field                | Rule                                                                                                                                                                                                                       |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `site.name`          | 1–32 printable characters; the cabinet's wordmark, the header brand and the legal pages' operator name                                                                                                                     |
+| `site.reservedSlugs` | optional, each `[a-z0-9-]{1,32}`; added to the apex slug reservation                                                                                                                                                       |
+| `key`                | `^[a-z][a-z0-9]{1,15}$`, unique, not `gateway`, `pass`, `pawl`. Binding `APP_<KEY>`, internal host `<key>.internal`                                                                                                        |
+| `label`              | `^[a-z0-9-]{1,12}$`; printed on the cartridge in capitals. Four characters or fewer makes a tall cartridge, more makes a wide one                                                                                          |
+| `title`              | 1–32 printable characters                                                                                                                                                                                                  |
+| `subdomain`          | optional, `^[a-z][a-z0-9-]{0,30}$`, unique, not `paw`, `pass`, `www`. An app with a subdomain takes a bay; at most nine. With no `service` the app is only a link, listed at `https://<subdomain>.<root>` and never routed |
+| `service`            | the app's Worker name, bound as written (locally `local-<service>`); required when `proxy`, `apex`, `estate` or `purge` is set                                                                                             |
+| `proxy`              | prefixes starting and ending with `/`, unique and non-overlapping, never under `/api/estate`, `/api/session`, `/api/logout`, `/api/auth/`, `/oauth/`, `/.well-known/`, `/health`, `/assets/`                               |
+| `apex`               | at most one app; `resolve` starts and ends with `/`; `fileSlugPrefix` optional, like `n_`                                                                                                                                  |
+| `estate`, `purge`    | the app implements the contract below                                                                                                                                                                                      |
+| `header`             | optional `{ noun }`, requires `estate`; the app appears in the shared header with its count                                                                                                                                |
+| `access`             | optional `public` (default), `visitor` or `owner`: who may take the app's bay                                                                                                                                              |
+| `bay`                | optional pin `"1"`–`"9"`. Bays are placed automatically from the key; `pawl manifest pin` writes the current placement so a later app never moves an earlier one                                                           |
+| `local`              | optional `{ port }` or `{ vitePort }`, unique, not 8786, 8787, 3000, 3001                                                                                                                                                  |
 
 Unknown fields are refused, so a typo is an error rather than a missing app.
 
@@ -297,10 +341,10 @@ Where the manifest lives:
 - **Locally:** `estate.json` at the repository root. It is gitignored; never
   commit a deployment's manifest.
 - **In CI:** `tooling/e2e/fixture/estate.json`, which registers two invented
-  apps that the end-to-end suite boots as a fixture Worker.
+  apps that the end-to-end suite boots as fixture Workers.
 - **In deploy:** the GitHub Actions variable `ESTATE_MANIFEST` (Settings →
   Secrets and variables → Actions → Variables), holding the whole JSON
-  document. `deploy-config render` refuses to run without it.
+  document. Without it Pawl deploys alone.
 
 ## The app contract
 
@@ -367,6 +411,8 @@ Worker (Wrangler's `assets.run_worker_first`).
 - Drop encryption is end-to-end: the key lives only in the URL fragment. Pawl
   adds no credential path and carries no key material.
 - No admin account-deletion or role-promotion endpoint exists.
+- The provider's keys and the cabinet's client secret are made by the deploy,
+  stored only as the Worker's secrets, and never printed.
 
 ## Why there is no ESLint
 

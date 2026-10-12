@@ -1,6 +1,6 @@
 import { publicOrigin } from "@pawl/topology";
 
-const rootDomain = requiredEnvironment("APP_ROOT_DOMAIN");
+const rootDomain = requiredEnvironment("ROOT_DOMAIN");
 const origins = {
   gateway: process.env.GATEWAY_ORIGIN ?? publicOrigin(rootDomain, "gateway"),
   pass: process.env.PASS_ORIGIN ?? publicOrigin(rootDomain, "pass"),

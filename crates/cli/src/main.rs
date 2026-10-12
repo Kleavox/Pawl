@@ -1,13 +1,20 @@
 mod admin;
+mod assets;
 mod client;
 mod d1;
+mod deploy;
 mod keygen;
 mod manifest;
+mod render;
 
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::{env, fs};
 
 const USAGE: &str = "usage:
+  pawl assets
+  pawl deploy
+  pawl render --local --manifest <file> [--out <dir>]
   pawl keygen
   pawl manifest check <file>
   pawl manifest pin <file>
@@ -32,6 +39,28 @@ fn values(args: &[String], flag: &str) -> Vec<String> {
 
 fn has(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
+}
+
+pub fn root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .map(Path::to_path_buf)
+        .unwrap_or_default()
+}
+
+fn render_local(args: &[String]) -> Result<(), String> {
+    let manifest = value(args, "--manifest").ok_or(USAGE)?;
+    let root = root();
+    let out = root.join(value(args, "--out").unwrap_or(".wrangler/local"));
+    let key = keygen::generate().signing_key;
+    let config = render::local(&root, &read(manifest)?, &key)?;
+    fs::create_dir_all(&out).map_err(|error| format!("{}: {error}", out.display()))?;
+    let file = out.join("pawl.json");
+    fs::write(&file, format!("{config:#}\n"))
+        .map_err(|error| format!("{}: {error}", file.display()))?;
+    println!("Rendered {}.", file.display());
+    Ok(())
 }
 
 fn read(file: &str) -> Result<String, String> {
@@ -73,6 +102,12 @@ fn run(args: &[String]) -> Result<(), String> {
         .filter(|arg| *arg != "--")
         .collect();
     match words.as_slice() {
+        ["assets", ..] => {
+            println!("{}", assets::assemble(&root())?);
+            Ok(())
+        }
+        ["render", ..] if local => render_local(args),
+        ["deploy", ..] => deploy::run(),
         ["keygen", ..] => {
             let generated = keygen::generate();
             let kid = oidc::public_jwk(&generated.signing_key)

@@ -321,46 +321,20 @@ importers:
         specifier: 'catalog:'
         version: 8.1.5(@types/node@22.19.19)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
 
-  packages/worker:
-    dependencies:
-      '@pawl/core':
-        specifier: workspace:*
-        version: link:../core
+  tooling/dev:
     devDependencies:
       '@cloudflare/workers-types':
         specifier: 'catalog:'
         version: 5.20260724.1
       '@pawl/typescript':
         specifier: workspace:*
-        version: link:../../tooling/typescript
-      hono:
-        specifier: 'catalog:'
-        version: 4.12.31
-      typescript:
-        specifier: 'catalog:'
-        version: 7.0.2
-
-  tooling/deploy:
-    dependencies:
-      '@pawl/registry':
-        specifier: workspace:*
-        version: link:../../packages/registry
-      '@pawl/topology':
-        specifier: workspace:*
-        version: link:../../packages/topology
-    devDependencies:
-      '@pawl/typescript':
-        specifier: workspace:*
         version: link:../typescript
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.19
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
-      vitest:
+      wrangler:
         specifier: 'catalog:'
-        version: 4.1.10(@types/node@22.19.19)(jsdom@30.0.1)(vite@8.1.5(@types/node@22.19.19)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 4.114.0(@cloudflare/workers-types@5.20260724.1)
 
   tooling/e2e:
     devDependencies:
@@ -407,81 +381,38 @@ importers:
         specifier: 'catalog:'
         version: 8.1.5(@types/node@22.19.19)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
 
-  workers/gateway:
+  worker:
     dependencies:
       '@pawl/auth':
         specifier: workspace:*
-        version: link:../../packages/auth
-      '@pawl/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@pawl/oidc':
-        specifier: workspace:*
-        version: link:../../packages/oidc
-      '@pawl/registry':
-        specifier: workspace:*
-        version: link:../../packages/registry
-      '@pawl/topology':
-        specifier: workspace:*
-        version: link:../../packages/topology
-      '@pawl/web-app':
-        specifier: workspace:*
-        version: link:../../apps/web
-      hono:
-        specifier: 'catalog:'
-        version: 4.12.31
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: 'catalog:'
-        version: 5.20260724.1
-      '@pawl/typescript':
-        specifier: workspace:*
-        version: link:../../tooling/typescript
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.19
-      typescript:
-        specifier: 'catalog:'
-        version: 7.0.2
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.10(@types/node@22.19.19)(jsdom@30.0.1)(vite@8.1.5(@types/node@22.19.19)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-      wrangler:
-        specifier: 'catalog:'
-        version: 4.114.0(@cloudflare/workers-types@5.20260724.1)
-
-  workers/pass:
-    dependencies:
-      '@pawl/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
+        version: link:../packages/auth
       '@pawl/config':
         specifier: workspace:*
-        version: link:../../packages/config
+        version: link:../packages/config
       '@pawl/core':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../packages/core
       '@pawl/crypto':
         specifier: workspace:*
-        version: link:../../packages/crypto
+        version: link:../packages/crypto
       '@pawl/oidc':
         specifier: workspace:*
-        version: link:../../packages/oidc
+        version: link:../packages/oidc
       '@pawl/pass-app':
         specifier: workspace:*
-        version: link:../../apps/pass
+        version: link:../apps/pass
       '@pawl/protocol':
         specifier: workspace:*
-        version: link:../../packages/protocol
+        version: link:../packages/protocol
       '@pawl/registry':
         specifier: workspace:*
-        version: link:../../packages/registry
+        version: link:../packages/registry
       '@pawl/topology':
         specifier: workspace:*
-        version: link:../../packages/topology
-      '@pawl/worker':
+        version: link:../packages/topology
+      '@pawl/web-app':
         specifier: workspace:*
-        version: link:../../packages/worker
+        version: link:../apps/web
       hono:
         specifier: 'catalog:'
         version: 4.12.31
@@ -494,7 +425,7 @@ importers:
         version: 5.20260724.1
       '@pawl/typescript':
         specifier: workspace:*
-        version: link:../../tooling/typescript
+        version: link:../tooling/typescript
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19

@@ -24,18 +24,19 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `pnpm exec wrangler dev --config ../../.wrangler/local/pass.json --port ${LOCAL_WORKER_PORTS.pass} --persist-to ../../workers/pass/.wrangler/state`,
+      command: `pnpm exec wrangler dev --config ../../.wrangler/local/pawl.json --port ${LOCAL_WORKER_PORTS.gateway} --persist-to ../../worker/.wrangler/state`,
+      url: `${localWorkerOrigin("gateway")}/health`,
+      reuseExistingServer: reuse,
+      timeout: 90_000,
+    },
+    {
+      command: `pnpm exec wrangler dev --config ../dev/wrangler.jsonc --port ${LOCAL_WORKER_PORTS.pass}`,
       url: `${localWorkerOrigin("pass")}/health`,
       reuseExistingServer: reuse,
       timeout: 90_000,
     },
     fixture("notes", 8790),
     fixture("docs", 8791),
-    {
-      command: `pnpm exec wrangler dev --config ../../.wrangler/local/gateway.json --port ${LOCAL_WORKER_PORTS.gateway}`,
-      url: `${localWorkerOrigin("gateway")}/health`,
-      reuseExistingServer: reuse,
-      timeout: 90_000,
-    },
+    fixture("monitor", 8792),
   ],
 });

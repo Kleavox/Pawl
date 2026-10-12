@@ -1,0 +1,17 @@
+{
+  "name": "local-monitor",
+  "main": "worker.ts",
+  "compatibility_date": "2026-06-05",
+  "dev": {
+    "port": 8792,
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "APP_KEY": "monitor",
+    "PUBLIC_ORIGIN": "http://127.0.0.1:8792",
+    "PROVIDER": "http://127.0.0.1:8787",
+    "CLIENT_ID": "fixture-monitor",
+    "CLIENT_SECRET": "fixture-monitor-secret",
+  },
+}

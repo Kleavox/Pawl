@@ -9,7 +9,6 @@ import {
   applicationForSubdomain,
   localWorkerOrigin,
   publicHost,
-  workerName,
 } from "./index";
 
 describe("Pawl topology", () => {
@@ -35,7 +34,6 @@ describe("Pawl topology", () => {
     expect(applicationForSubdomain("paw")).toBe("pass");
     expect(localWorkerOrigin("pass")).toBe("http://127.0.0.1:8787");
     expect(applicationForSubdomain("port")).toBeUndefined();
-    expect(workerName("pawl", "pass")).toBe("pawl-pass");
   });
 
   it("keeps internal URLs attached to their declared host", () => {

@@ -1,0 +1,16 @@
+{
+  "name": "@pawl/dev",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@pawl/typescript": "workspace:*",
+    "typescript": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

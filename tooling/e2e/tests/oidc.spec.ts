@@ -116,3 +116,20 @@ test("the cabinet trusts only its own session, and gets one from Pawl without a 
     timeout: 20_000,
   });
 });
+
+const BEHIND_ITS_OWN_LOGIN = "http://localhost:8792";
+
+test("an app behind its own login, as Cloudflare Access is, signs a person in with a client secret", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const account = await freshAccount(page, "probeaccess");
+  await signInAtProvider(page, account);
+  await page.goto(`${BEHIND_ITS_OWN_LOGIN}/login`);
+  await page.getByRole("button", { name: "Allow" }).click();
+  await expect(
+    page.getByRole("heading", { name: `signed in as ${account.user}` }),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("[data-aud]")).toHaveText("fixture-monitor");
+  await expect(page.locator("[data-email]")).toHaveText(account.email);
+});

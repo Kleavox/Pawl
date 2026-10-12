@@ -13,12 +13,11 @@ const password = "playwright-password-1";
 
 function markEmailVerified(address: string): void {
   execSync(
-    `pnpm exec wrangler d1 execute local-pass --local --command "UPDATE users SET email_verified_at = datetime('now') WHERE email = '${address}'"`,
+    `pnpm exec wrangler d1 execute local-pawl --local --command "UPDATE users SET email_verified_at = datetime('now') WHERE email = '${address}'"`,
     {
       cwd: path.join(
         fileURLToPath(new URL("../../../", import.meta.url)),
-        "workers",
-        "pass",
+        "worker",
       ),
       stdio: "pipe",
     },

@@ -2,7 +2,10 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::{env, fs};
 
-struct Scratch(PathBuf);
+use crate::render::{WORKER, compatibility_date};
+use crate::root;
+
+pub struct Scratch(pub PathBuf);
 
 impl Drop for Scratch {
     fn drop(&mut self) {
@@ -10,56 +13,80 @@ impl Drop for Scratch {
     }
 }
 
-fn required(name: &str) -> Result<String, String> {
-    env::var(name)
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            format!("Missing environment variable {name} (required for --remote). Set WORKER_PREFIX and PASS_D1_ID, or use --local.")
-        })
-}
-
-fn compatibility_date() -> Result<String, String> {
-    let config = fs::read_to_string("workers/pass/wrangler.jsonc")
-        .map_err(|error| format!("workers/pass/wrangler.jsonc: {error}"))?;
-    let start = config
-        .find("\"compatibility_date\"")
-        .ok_or("workers/pass/wrangler.jsonc names no compatibility_date")?;
-    config[start..]
-        .split('"')
-        .nth(3)
-        .map(str::to_owned)
-        .ok_or_else(|| {
-            "workers/pass/wrangler.jsonc has an unreadable compatibility_date".to_owned()
-        })
-}
-
-fn scratch() -> Result<Scratch, String> {
-    let dir = Scratch(env::temp_dir().join(format!("pass-d1-{}", std::process::id())));
+pub fn scratch(label: &str) -> Result<Scratch, String> {
+    let dir = Scratch(env::temp_dir().join(format!("pawl-{label}-{}", std::process::id())));
     fs::create_dir_all(&dir.0).map_err(|error| error.to_string())?;
     Ok(dir)
 }
 
-fn wrangler(local: bool, scratch: &Scratch) -> Result<Command, String> {
-    let config = if local {
-        PathBuf::from("workers/pass/wrangler.jsonc")
-    } else {
-        let name = format!("{}-pass", required("WORKER_PREFIX")?);
-        let body = serde_json::json!({
-            "name": name,
-            "compatibility_date": compatibility_date()?,
-            "d1_databases": [{ "binding": "DB", "database_name": name, "database_id": required("PASS_D1_ID")? }],
-        });
-        let path = scratch.0.join("pass.json");
-        fs::write(&path, body.to_string()).map_err(|error| error.to_string())?;
-        path
-    };
+pub fn wrangler() -> Command {
     let mut command = Command::new(if cfg!(windows) { "pnpm.cmd" } else { "pnpm" });
+    command.current_dir(root()).args(["exec", "wrangler"]);
+    command
+}
+
+pub fn capture(args: &[&str]) -> Result<String, String> {
+    let output = wrangler()
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|error| format!("could not run wrangler: {error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        Err(format!(
+            "wrangler {} exited with {}:\n{}{stdout}",
+            args.first().copied().unwrap_or_default(),
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ))
+    }
+}
+
+fn json_part(text: &str) -> &str {
+    let start = text.find(['[', '{']).unwrap_or(0);
+    &text[start..]
+}
+
+pub fn find(list: &str, key: &str, wanted: &str, id: &str) -> Result<Option<String>, String> {
+    let parsed: serde_json::Value = serde_json::from_str(json_part(list))
+        .map_err(|_| format!("Could not read wrangler's list:\n{list}"))?;
+    Ok(parsed
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|entry| entry[key] == wanted)
+        .and_then(|entry| entry[id].as_str().map(str::to_owned)))
+}
+
+pub fn database_id() -> Result<Option<String>, String> {
+    find(&capture(&["d1", "list", "--json"])?, "name", WORKER, "uuid")
+}
+
+fn config(local: bool, scratch: &Scratch) -> Result<PathBuf, String> {
+    let root = root();
+    if local {
+        return Ok(root.join("worker/wrangler.jsonc"));
+    }
+    let id = database_id()?.ok_or(
+        "There is no D1 database named pawl in this Cloudflare account yet. Deploy once first.",
+    )?;
+    let body = serde_json::json!({
+        "name": WORKER,
+        "compatibility_date": compatibility_date(&root)?,
+        "d1_databases": [{ "binding": "DB", "database_name": WORKER, "database_id": id }],
+    });
+    let path = scratch.0.join("pawl.json");
+    fs::write(&path, body.to_string()).map_err(|error| error.to_string())?;
+    Ok(path)
+}
+
+fn execute(local: bool, scratch: &Scratch) -> Result<Command, String> {
+    let config = config(local, scratch)?;
+    let mut command = wrangler();
     command
         .args([
-            "exec",
-            "wrangler",
             "d1",
             "execute",
             "DB",
@@ -71,10 +98,10 @@ fn wrangler(local: bool, scratch: &Scratch) -> Result<Command, String> {
 }
 
 pub fn run(sql: &str, local: bool) -> Result<(), String> {
-    let dir = scratch()?;
+    let dir = scratch("d1")?;
     let file = dir.0.join("statement.sql");
     fs::write(&file, sql).map_err(|error| error.to_string())?;
-    let status = wrangler(local, &dir)?
+    let status = execute(local, &dir)?
         .arg("--file")
         .arg(&file)
         .status()
@@ -87,8 +114,8 @@ pub fn run(sql: &str, local: bool) -> Result<(), String> {
 }
 
 pub fn query(sql: &str, local: bool) -> Result<Vec<serde_json::Value>, String> {
-    let dir = scratch()?;
-    let output = wrangler(local, &dir)?
+    let dir = scratch("d1")?;
+    let output = execute(local, &dir)?
         .args(["--json", "--command", sql])
         .stdin(Stdio::null())
         .output()
@@ -98,7 +125,7 @@ pub fn query(sql: &str, local: bool) -> Result<Vec<serde_json::Value>, String> {
         return Err(format!("wrangler exited with {}.", output.status));
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+    let parsed: serde_json::Value = serde_json::from_str(json_part(&stdout))
         .map_err(|_| format!("Could not parse wrangler output:\n{stdout}"))?;
     let first = if parsed.is_array() {
         parsed[0].clone()
@@ -106,4 +133,25 @@ pub fn query(sql: &str, local: bool) -> Result<Vec<serde_json::Value>, String> {
         parsed
     };
     Ok(first["results"].as_array().cloned().unwrap_or_default())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_a_resource_by_name_in_a_wrangler_list() {
+        let d1 = r#"[{"uuid":"a","name":"other"},{"uuid":"b","name":"pawl"}]"#;
+        assert_eq!(
+            find(d1, "name", "pawl", "uuid").unwrap().as_deref(),
+            Some("b")
+        );
+        let kv = "Listing namespaces\n[{\"id\":\"k1\",\"title\":\"pawl\"}]";
+        assert_eq!(
+            find(kv, "title", "pawl", "id").unwrap().as_deref(),
+            Some("k1")
+        );
+        assert_eq!(find("[]", "name", "pawl", "uuid").unwrap(), None);
+        assert!(find("not json", "name", "pawl", "uuid").is_err());
+    }
 }

@@ -31,11 +31,8 @@
       ],
       "playwright": false
     },
-    "workers/gateway": {
-      "ignoreDependencies": ["@pawl/web-app"]
-    },
-    "workers/pass": {
-      "ignoreDependencies": ["@pawl/pass-app"]
+    "worker": {
+      "ignoreDependencies": ["@pawl/pass-app", "@pawl/web-app"]
     }
   }
 }

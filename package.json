@@ -22,7 +22,6 @@
     "rust:fmt": "cargo fmt --all --check",
     "rust:test": "cargo test --workspace --locked",
     "native:check": "pnpm rust:fmt && pnpm rust:test",
-    "deploy:render": "node tooling/deploy/dist/cli.js render",
     "e2e": "pnpm --filter @pawl/topology build && pnpm --filter @pawl/e2e e2e",
     "health:check": "pnpm --filter @pawl/topology build && pnpm --filter @pawl/health check",
     "admin:promote": "cargo run -q -p cli -- admin promote",
