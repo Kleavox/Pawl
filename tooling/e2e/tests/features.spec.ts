@@ -25,8 +25,7 @@ let expectFailure = false;
 
 const passDir = path.join(
   fileURLToPath(new URL("../../../", import.meta.url)),
-  "workers",
-  "pass",
+  "worker",
 );
 
 async function attempt(): Promise<string | null> {

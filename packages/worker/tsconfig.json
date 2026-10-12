@@ -1,9 +1,0 @@
-{
-  "extends": "@pawl/typescript/library.json",
-  "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src",
-    "types": ["@cloudflare/workers-types"]
-  },
-  "include": ["src/**/*.ts"]
-}

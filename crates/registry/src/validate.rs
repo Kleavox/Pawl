@@ -99,11 +99,7 @@ fn check_app(app: &App, problems: &mut Vec<String>) {
             problems.push(format!("app {name}: subdomain {subdomain} belongs to Pawl"));
         }
     }
-    let routed = app.subdomain.is_some()
-        || !app.proxy.is_empty()
-        || app.apex.is_some()
-        || app.estate
-        || app.purge;
+    let routed = !app.proxy.is_empty() || app.apex.is_some() || app.estate || app.purge;
     if routed && app.service.as_deref().is_none_or(str::is_empty) {
         problems.push(format!("app {name}: a routed app needs a service"));
     }
@@ -296,6 +292,31 @@ mod tests {
         assert!(parse(&manifest(&format!("{NOTES},{DOCS}"))).is_ok());
     }
 
+    const KRY: &str = r#"{
+        "key": "kry", "label": "kry", "title": "Krynodes", "subdomain": "kry"
+    }"#;
+
+    #[test]
+    fn accepts_an_app_that_is_only_a_link_to_its_own_subdomain() {
+        assert!(parse(&manifest(KRY)).is_ok());
+    }
+
+    #[test]
+    fn still_refuses_an_app_the_gateway_must_reach_without_a_service() {
+        for routed in [
+            r#""proxy": ["/api/kry/"]"#,
+            r#""apex": { "resolve": "/internal/resolve/" }"#,
+            r#""estate": true"#,
+            r#""purge": true"#,
+        ] {
+            let json = manifest(&KRY.replace(
+                r#""subdomain": "kry""#,
+                &format!(r#""subdomain": "kry", {routed}"#),
+            ));
+            assert!(errors(&json).contains("needs a service"), "{routed}");
+        }
+    }
+
     #[test]
     fn accepts_a_manifest_with_no_apps() {
         assert!(parse(r#"{ "site": { "name": "Pawl" } }"#).is_ok());
@@ -353,12 +374,6 @@ mod tests {
             "\"service\": \"docs\", \"apex\": { \"resolve\": \"/r/\" }",
         );
         assert!(errors(&manifest(&format!("{NOTES},{docs}"))).contains("apex"));
-    }
-
-    #[test]
-    fn refuses_a_routed_app_without_a_service() {
-        let json = manifest(&DOCS.replace("\"service\": \"docs\",", ""));
-        assert!(errors(&json).contains("service"));
     }
 
     #[test]

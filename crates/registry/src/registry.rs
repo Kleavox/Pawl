@@ -392,6 +392,47 @@ mod tests {
         Registry::new(JSON).expect("valid")
     }
 
+    const WITH_LINK: &str = r#"{
+      "site": { "name": "Example" },
+      "apps": [
+        { "key": "docs", "label": "docs", "title": "Docs", "subdomain": "docs",
+          "service": "docs" },
+        { "key": "kry", "label": "kry", "title": "Krynodes", "subdomain": "kry" }
+      ]
+    }"#;
+
+    #[test]
+    fn lists_a_link_only_app_at_its_own_subdomain() {
+        let view = Registry::new(WITH_LINK)
+            .expect("valid")
+            .public_view("https://example.test", "https://paw.example.test");
+        assert!(
+            view.bays
+                .iter()
+                .any(|bay| bay.title == "Krynodes" && bay.href == "https://kry.example.test")
+        );
+        assert!(
+            view.footer
+                .iter()
+                .any(|link| link.title == "Krynodes" && link.href == "https://kry.example.test")
+        );
+    }
+
+    #[test]
+    fn never_routes_or_binds_a_link_only_app() {
+        let registry = Registry::new(WITH_LINK).expect("valid");
+        assert_eq!(
+            registry.route("kry.example.test", "example.test", "/"),
+            Route::None
+        );
+        assert!(
+            registry
+                .bindings()
+                .iter()
+                .all(|binding| binding.binding != binding_for("kry"))
+        );
+    }
+
     #[test]
     fn routes_an_app_subdomain_to_its_binding() {
         assert_eq!(

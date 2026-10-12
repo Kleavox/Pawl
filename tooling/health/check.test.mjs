@@ -32,7 +32,7 @@ test("passes when Pawl's own two Workers are healthy, asking no app", async (con
     cwd: import.meta.dirname,
     env: {
       ...process.env,
-      APP_ROOT_DOMAIN: "example.com",
+      ROOT_DOMAIN: "example.com",
       GATEWAY_ORIGIN: `${origin}/gateway`,
       PASS_ORIGIN: `${origin}/pass`,
       HEALTH_ATTEMPTS: "1",

@@ -1,5 +1,3 @@
-export const COMPATIBILITY_DATE = "2026-06-05";
-
 export const PUBLIC_SUBDOMAINS = {
   gateway: "",
   pass: "paw",
@@ -57,13 +55,6 @@ export function localViteOrigin(
   hostname = "localhost",
 ): string {
   return `http://${hostname}:${LOCAL_VITE_PORTS[application]}`;
-}
-
-export function workerName(
-  prefix: string,
-  application: PublicApplication,
-): string {
-  return `${prefix}-${application}`;
 }
 
 export function applicationForSubdomain(

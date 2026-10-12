@@ -17,6 +17,8 @@ if (!block) {
   process.exit(1);
 }
 
+const CONFIGS = { gateway: "worker", pass: "tooling/dev" };
+
 const declared = new Map();
 for (const line of block[1].matchAll(/(\w+):\s*(\d+)/g)) {
   declared.set(line[1], Number(line[2]));
@@ -25,7 +27,7 @@ for (const line of block[1].matchAll(/(\w+):\s*(\d+)/g)) {
 const drift = [];
 const elsewhere = [];
 for (const [application, port] of declared) {
-  const path = resolve(root, "workers", application, "wrangler.jsonc");
+  const path = resolve(root, CONFIGS[application] ?? "", "wrangler.jsonc");
   let config = "";
   try {
     config = readFileSync(path, "utf8");

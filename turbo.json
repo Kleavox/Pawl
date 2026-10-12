@@ -35,6 +35,15 @@
       ],
       "outputs": ["dist/**", "pkg/**"]
     },
+    "@pawl/worker#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../crates/cli/src/**",
+        "../crates/cli/Cargo.toml"
+      ],
+      "outputs": ["dist/**", "assets/**"]
+    },
     "@pawl/oidc#test": {
       "dependsOn": ["build"],
       "outputs": []

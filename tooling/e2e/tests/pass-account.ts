@@ -11,7 +11,7 @@ const repoRoot = path.resolve(
   "..",
 );
 
-const passDir = path.join(repoRoot, "workers", "pass");
+const passDir = path.join(repoRoot, "worker");
 const PASS = localWorkerOrigin("pass", "localhost");
 
 export const PROBE_PASSWORD = "probe-password-1";
@@ -20,14 +20,14 @@ export type PassAccount = { user: string; email: string };
 
 export function passSql(command: string): void {
   execSync(
-    `pnpm exec wrangler d1 execute local-pass --local --command "${command}"`,
+    `pnpm exec wrangler d1 execute local-pawl --local --command "${command}"`,
     { cwd: passDir, stdio: "pipe" },
   );
 }
 
 export function passQuery(command: string): Record<string, unknown>[] {
   const output = execSync(
-    `pnpm exec wrangler d1 execute local-pass --local --json --command "${command}"`,
+    `pnpm exec wrangler d1 execute local-pawl --local --json --command "${command}"`,
     { cwd: passDir, stdio: "pipe" },
   ).toString();
   const parsed = JSON.parse(output.slice(output.indexOf("["))) as {

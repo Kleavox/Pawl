@@ -1,0 +1,4 @@
+{
+  "extends": "@pawl/typescript/worker.json",
+  "include": ["src/**/*.ts"]
+}
