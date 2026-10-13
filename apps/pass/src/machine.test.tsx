@@ -21,8 +21,7 @@ describe("the panel close-up", () => {
         <p>view</p>
       </Machine>,
     );
-    const digits =
-      html.match(/<span class="pw-key[^"]*"[^>]*>\d<\/span>/g) ?? [];
+    const digits = html.match(/<span class="pw-key[^"]*"[^>]*>\d</g) ?? [];
     expect(digits).toHaveLength(10);
     for (const digit of digits) expect(digit).toContain('aria-hidden="true"');
     expect(html).not.toMatch(/<button[^>]*>\d<\/button>/);
@@ -80,6 +79,38 @@ describe("the panel close-up", () => {
     expect(owner).toContain("OWNER MODE");
     expect(owner).toContain("annisa");
     expect(owner).toContain("OWNER PASS");
+  });
+
+  it("carries the braille cell of every digit, as an accessible machine does", () => {
+    const html = markup(
+      <Machine {...BASE} go={false} holder={null}>
+        <p>view</p>
+      </Machine>,
+    );
+    expect(html).toContain('data-braille="1"');
+    expect(html).toContain('data-braille="245"');
+    expect(html.match(/class="pw-braille"/g)).toHaveLength(10);
+  });
+
+  it("shows an empty pocket's outline until a pass stands in it", () => {
+    const guest = markup(
+      <Machine {...BASE} go={false} holder={null}>
+        <p>view</p>
+      </Machine>,
+    );
+    expect(guest).toContain("pw-pocket-ghost");
+    expect(guest).toContain("pw-pocket__slot is-ready");
+    const owner = markup(
+      <Machine
+        {...BASE}
+        go={false}
+        holder={{ handle: "annisa", role: "ADMIN" }}
+      >
+        <p>view</p>
+      </Machine>,
+    );
+    expect(owner).not.toContain("pw-pocket-ghost");
+    expect(owner).not.toContain("is-ready");
   });
 
   it("links both receipts on the cabinet's origin and has no page header or footer", () => {

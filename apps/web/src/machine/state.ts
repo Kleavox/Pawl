@@ -12,7 +12,8 @@ export type MachineState = {
   selection: BayCode | null;
   tray: BayCode | null;
   busy: boolean;
-  authStep: "closed" | "methods" | "otp-machine" | "oauth" | "issuing";
+  authStep:
+    "closed" | "methods" | "email" | "otp-machine" | "oauth" | "issuing";
   authRequest: BayCode | null;
   screenTransfer: BayCode | null;
   authDigits: string;
@@ -25,6 +26,7 @@ export type MachineEvent =
   | { type: "preselect"; bay: BayCode }
   | { type: "pass-tap" }
   | { type: "reader-scanned" }
+  | { type: "email-chosen" }
   | { type: "otp-sent" }
   | { type: "oauth-started" }
   | { type: "verifying" }
@@ -35,7 +37,7 @@ export type MachineEvent =
   | { type: "tray-ready" }
   | { type: "activate-tray" }
   | { type: "cancel" }
-  | { type: "otp-back" }
+  | { type: "back" }
   | { type: "reset" };
 
 export type MachineHost = {
@@ -115,8 +117,13 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
       return { ...state, status: "idle", authStep: "methods", busy: true };
     }
 
-    case "otp-sent": {
+    case "email-chosen": {
       if (state.authStep !== "methods") return state;
+      return { ...state, authStep: "email" };
+    }
+
+    case "otp-sent": {
+      if (state.authStep !== "email") return state;
       return { ...state, authStep: "otp-machine", busy: true };
     }
 
@@ -214,14 +221,26 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
       };
     }
 
-    case "otp-back": {
-      if (state.authStep !== "otp-machine") return state;
-      return {
-        ...state,
-        authStep: "methods",
-        authDigits: "",
-        authAttemptsLeft: null,
-      };
+    case "back": {
+      if (state.authStep === "otp-machine") {
+        return {
+          ...state,
+          authStep: "email",
+          authDigits: "",
+          authAttemptsLeft: null,
+        };
+      }
+      if (state.authStep === "email") return { ...state, authStep: "methods" };
+      if (state.authStep === "methods") {
+        return {
+          ...state,
+          authStep: "closed",
+          authDigits: "",
+          authAttemptsLeft: null,
+          busy: false,
+        };
+      }
+      return state;
     }
 
     case "reset": {

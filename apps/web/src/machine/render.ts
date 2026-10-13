@@ -6,7 +6,8 @@ import type { MachineModel } from "../estate-adapter";
 
 const OTP_LENGTH = 6;
 
-export type ScreenView = "idle" | "signed-in" | "signin" | "code" | "working";
+export type ScreenView =
+  "idle" | "signed-in" | "signin" | "email" | "code" | "working";
 
 function entryOf(catalog: Catalog, bay: BayCode) {
   return catalog.find((entry) => entry.code === bay);
@@ -42,6 +43,7 @@ type ScreenCopy = { main: string; sub: string };
 
 export function viewFor(state: MachineState): ScreenView {
   if (state.authStep === "methods") return "signin";
+  if (state.authStep === "email") return "email";
   if (state.authStep === "otp-machine") return "code";
   if (state.authStep === "oauth" || state.authStep === "issuing") {
     return "working";
@@ -82,11 +84,14 @@ function screenCopy(state: MachineState, model: MachineModel): ScreenCopy {
     }
     return {
       main: `EMAIL CODE ${state.authDigits.length}/${OTP_LENGTH}`,
-      sub: "TYPE THE CODE FROM YOUR EMAIL",
+      sub: "CODE FROM YOUR EMAIL",
     };
   }
   if (state.authStep === "methods") {
-    return { main: "CHOOSE A METHOD", sub: "ON THE SCREEN BELOW" };
+    return { main: "CHOOSE A METHOD", sub: "PRESS 1, 2 OR 3" };
+  }
+  if (state.authStep === "email") {
+    return { main: "ENTER YOUR EMAIL", sub: "GO SENDS THE CODE" };
   }
   if (state.authStep === "oauth") {
     return { main: "OPENING PROVIDER", sub: "FINISH IN THE NEW PAGE" };
@@ -103,7 +108,7 @@ function screenCopy(state: MachineState, model: MachineModel): ScreenCopy {
     }
     return {
       main: `${state.selection} DENIED, ${denialReason(state.catalog, state.selection)}`,
-      sub: "TAP YOUR PASS TO UNLOCK IT",
+      sub: "INSERT PASS TO UNLOCK",
     };
   }
   if (state.status === "dispensing" && state.selection !== null) {
@@ -115,7 +120,7 @@ function screenCopy(state: MachineState, model: MachineModel): ScreenCopy {
   if (state.tray !== null) {
     return {
       main: `${state.tray} DELIVERED, ${productOf(state.catalog, state.tray)}`,
-      sub: "TAKE IT FROM THE DELIVERY BAY",
+      sub: "OPEN THE FLAP BELOW",
     };
   }
   if (state.status === "selected" && state.selection !== null) {
@@ -178,7 +183,8 @@ export function litKeys(
 ): ReadonlySet<string> {
   const view = viewFor(state);
   if (view === "working") return new Set();
-  if (view === "signin") return new Set(["CLR", "GO"]);
+  if (view === "signin") return new Set(["1", "2", "3", "CLR"]);
+  if (view === "email") return new Set(["CLR", "GO"]);
   if (view === "code") {
     return new Set(
       state.authDigits.length < OTP_LENGTH ? [...DIGITS, "CLR"] : ["CLR", "GO"],

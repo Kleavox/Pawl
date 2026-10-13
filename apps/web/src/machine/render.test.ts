@@ -46,6 +46,7 @@ function root(): HTMLElement {
         <section data-view-panel="idle"><button data-terminal-open></button><p data-say></p></section>
         <section data-view-panel="signed-in" hidden><span data-account-name></span><span data-account-role></span><p data-say></p></section>
         <section data-view-panel="signin" data-terminal hidden><p data-say></p></section>
+        <section data-view-panel="email" hidden><p data-say></p></section>
         <section data-view-panel="code" hidden>
           <span data-code-cell></span><span data-code-cell></span><span data-code-cell></span>
           <span data-code-cell></span><span data-code-cell></span><span data-code-cell></span>
@@ -402,6 +403,11 @@ describe("the touchscreen shows one view at a time", () => {
         model,
         "signin",
       ],
+      [
+        { ...initialState("guest", CATALOG), authStep: "email" },
+        model,
+        "email",
+      ],
       [otpAt("12"), model, "code"],
       [
         { ...initialState("guest", CATALOG), authStep: "oauth" },
@@ -562,7 +568,9 @@ function signingIn(): MachineState {
 }
 
 function typing(digits: string): MachineState {
-  const sent = reduce(signingIn(), { type: "otp-sent" });
+  const sent = reduce(reduce(signingIn(), { type: "email-chosen" }), {
+    type: "otp-sent",
+  });
   return reduce(sent, { type: "otp-digits", digits });
 }
 
@@ -613,8 +621,15 @@ describe("a key is lit only when it does something on this screen", () => {
     expect(keys(dropping)).toEqual([]);
   });
 
-  it("offers only GO and CLR on the sign-in view: send the code, or go back", () => {
-    expect(keys(signingIn())).toEqual(["CLR", "GO"]);
+  it("lights 1, 2 and 3 for the numbered ways to sign in, and CLR to go back", () => {
+    expect(keys(signingIn())).toEqual(["1", "2", "3", "CLR"]);
+  });
+
+  it("offers GO and CLR on the address screen: send the code, or go back", () => {
+    expect(keys(reduce(signingIn(), { type: "email-chosen" }))).toEqual([
+      "CLR",
+      "GO",
+    ]);
   });
 
   it("lights the digits for a code until it is whole, then GO", () => {

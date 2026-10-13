@@ -111,9 +111,28 @@ describe("the sign-in terminal steps", () => {
         type: "reader-scanned",
       },
     );
-    const sent = reduce(scanned, { type: "otp-sent" });
+    const sent = reduce(reduce(scanned, { type: "email-chosen" }), {
+      type: "otp-sent",
+    });
     expect(sent.authStep).toBe("otp-machine");
     expect(sent.busy).toBe(true);
+  });
+
+  it("asks for the address before a code can be sent", () => {
+    const scanned = reduce(
+      reduce(initialState("guest", CATALOG), { type: "pass-tap" }),
+      { type: "reader-scanned" },
+    );
+    expect(reduce(scanned, { type: "otp-sent" })).toBe(scanned);
+    const email = reduce(scanned, { type: "email-chosen" });
+    expect(email.authStep).toBe("email");
+    expect(email.busy).toBe(true);
+    expect(reduce(email, { type: "oauth-started" })).toBe(email);
+  });
+
+  it("offers the email step only from the choice of ways", () => {
+    const guest = initialState("guest", CATALOG);
+    expect(reduce(guest, { type: "email-chosen" })).toBe(guest);
   });
 
   it("otp-sent is ignored if the terminal was never opened", () => {
@@ -141,7 +160,9 @@ describe("the sign-in terminal steps", () => {
         type: "reader-scanned",
       },
     );
-    const sent = reduce(scanned, { type: "otp-sent" });
+    const sent = reduce(reduce(scanned, { type: "email-chosen" }), {
+      type: "otp-sent",
+    });
     const started = reduce(sent, { type: "oauth-started" });
     expect(started).toEqual(sent);
   });
@@ -153,7 +174,9 @@ describe("the sign-in terminal steps", () => {
         type: "reader-scanned",
       },
     );
-    const sent = reduce(scanned, { type: "otp-sent" });
+    const sent = reduce(reduce(scanned, { type: "email-chosen" }), {
+      type: "otp-sent",
+    });
     const verifying = reduce(sent, { type: "verifying" });
     expect(verifying.authStep).toBe("issuing");
     expect(verifying.busy).toBe(true);
@@ -226,7 +249,9 @@ describe("CLR before GO", () => {
     const reading = reduce(guest, { type: "pass-tap" });
     expect(reduce(reading, { type: "cancel" })).toBe(reading);
     const methods = reduce(reading, { type: "reader-scanned" });
-    const sent = reduce(methods, { type: "otp-sent" });
+    const sent = reduce(reduce(methods, { type: "email-chosen" }), {
+      type: "otp-sent",
+    });
     const issuing = reduce(sent, { type: "verifying" });
     expect(reduce(issuing, { type: "cancel" })).toBe(issuing);
   });
@@ -304,9 +329,12 @@ describe("the otp buffer belongs to the reducer", () => {
 describe("a rejected email code", () => {
   it("records how many tries are left and empties the buffer", () => {
     const sent = reduce(
-      reduce(reduce(initialState("guest", CATALOG), { type: "pass-tap" }), {
-        type: "reader-scanned",
-      }),
+      reduce(
+        reduce(reduce(initialState("guest", CATALOG), { type: "pass-tap" }), {
+          type: "reader-scanned",
+        }),
+        { type: "email-chosen" },
+      ),
       { type: "otp-sent" },
     );
     const typed = reduce(sent, { type: "otp-digits", digits: "123456" });
@@ -325,9 +353,12 @@ describe("a rejected email code", () => {
 
   it("is forgotten once the pass is issued", () => {
     const sent = reduce(
-      reduce(reduce(initialState("guest", CATALOG), { type: "pass-tap" }), {
-        type: "reader-scanned",
-      }),
+      reduce(
+        reduce(reduce(initialState("guest", CATALOG), { type: "pass-tap" }), {
+          type: "reader-scanned",
+        }),
+        { type: "email-chosen" },
+      ),
       { type: "otp-sent" },
     );
     const rejected = reduce(sent, { type: "otp-rejected", attemptsLeft: 1 });
@@ -355,6 +386,7 @@ const ALL_STATUSES: Record<Status, true> = {
 const ALL_AUTH_STEPS: Record<AuthStep, true> = {
   closed: true,
   methods: true,
+  email: true,
   "otp-machine": true,
   oauth: true,
   issuing: true,
@@ -401,13 +433,15 @@ describe("every declared state is reachable", () => {
         type: "reader-scanned",
       },
     );
-    const otpSent = reduce(scanned, { type: "otp-sent" });
+    const emailChosen = reduce(scanned, { type: "email-chosen" });
+    const otpSent = reduce(emailChosen, { type: "otp-sent" });
     const oauthStarted = reduce(scanned, { type: "oauth-started" });
     const issuingFromOtp = reduce(otpSent, { type: "verifying" });
 
     const observed = new Set<AuthStep>([
       initialState("guest", CATALOG).authStep,
       scanned.authStep,
+      emailChosen.authStep,
       otpSent.authStep,
       oauthStarted.authStep,
       issuingFromOtp.authStep,
@@ -419,22 +453,44 @@ describe("every declared state is reachable", () => {
   });
 });
 
-describe("stepping back from the code to the email", () => {
-  it("returns to the sign-in methods with the code forgotten", () => {
+describe("stepping back, one screen at a time", () => {
+  function atCode(): MachineState {
     const guest = initialState("guest", CATALOG);
     const reading = reduce(guest, { type: "pass-tap" });
     const methods = reduce(reading, { type: "reader-scanned" });
-    const sent = reduce(methods, { type: "otp-sent" });
-    const typed = reduce(sent, { type: "otp-digits", digits: "123" });
+    const email = reduce(methods, { type: "email-chosen" });
+    return reduce(email, { type: "otp-sent" });
+  }
+
+  it("goes from the code back to the address, with the code forgotten", () => {
+    const typed = reduce(atCode(), { type: "otp-digits", digits: "123" });
     const rejected = reduce(typed, { type: "otp-rejected", attemptsLeft: 3 });
-    const back = reduce(rejected, { type: "otp-back" });
-    expect(back.authStep).toBe("methods");
+    const back = reduce(rejected, { type: "back" });
+    expect(back.authStep).toBe("email");
     expect(back.authDigits).toBe("");
     expect(back.authAttemptsLeft).toBeNull();
   });
 
-  it("does nothing outside the code view", () => {
+  it("goes from the address back to the choice of ways", () => {
+    const email = reduce(atCode(), { type: "back" });
+    expect(reduce(email, { type: "back" }).authStep).toBe("methods");
+  });
+
+  it("leaves the sign-in from the choice of ways, keeping the bay asked for", () => {
+    const refused = reduce(initialState("guest", CATALOG), {
+      type: "select",
+      bay: "1",
+    });
+    const reading = reduce(refused, { type: "pass-tap" });
+    const methods = reduce(reading, { type: "reader-scanned" });
+    const left = reduce(methods, { type: "back" });
+    expect(left.authStep).toBe("closed");
+    expect(left.busy).toBe(false);
+    expect(left.authRequest).toBe("1");
+  });
+
+  it("does nothing outside the sign-in", () => {
     const guest = initialState("guest", CATALOG);
-    expect(reduce(guest, { type: "otp-back" })).toBe(guest);
+    expect(reduce(guest, { type: "back" })).toBe(guest);
   });
 });

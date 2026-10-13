@@ -118,15 +118,42 @@
 }
 
 .close-up__screen {
-  min-height: 600px;
+  display: grid;
+  grid-template-rows: 70px minmax(0, 1fr) 34px;
+  height: 600px;
+}
+
+.close-up__screen > .pw-lcd__status,
+.close-up__screen > .pw-lcd__hint {
+  margin: 0;
+  overflow: hidden;
+}
+
+.close-up__screen > .pw-lcd__status {
+  align-content: center;
 }
 
 .close-up__view {
   display: flex;
-  flex: 1;
   flex-direction: column;
   min-width: 0;
-  padding: 24px 26px 20px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 24px 28px;
+  scrollbar-color: var(--pw-cobalt) transparent;
+  scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    var(--pw-black) calc(100% - 22px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    180deg,
+    var(--pw-black) calc(100% - 22px),
+    transparent
+  );
+  padding: 24px 26px 28px;
   animation: view-in var(--pw-t-view) var(--pw-ease-mech) 1 both;
 }
 
@@ -189,21 +216,40 @@
     inset 0 -10px 20px rgb(0 0 0 / 30%);
 }
 
-.close-up__slot {
+.close-up__pocket {
+  left: 50%;
+  bottom: 10px;
+  width: 168px;
+  transform: translateX(-50%);
+}
+
+.close-up__ghost,
+.close-up__reader .pawl-card {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 9px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--pw-black);
-  box-shadow: inset 0 2px 3px rgb(0 0 0 / 80%);
+  left: 50%;
+  bottom: 24px;
+  margin-left: -60px;
+}
+
+.close-up__ghost {
+  width: 120px;
+  height: 76px;
 }
 
 .close-up__reader .pawl-card {
-  width: 176px;
-  margin-bottom: 8px;
+  z-index: 1;
+  width: 120px;
+  padding: 6px 8px 8px;
   animation: card-in var(--pw-t5) var(--pw-ease-mech) 1 both;
+}
+
+.close-up__reader .pawl-card .pawl-card__brand {
+  font-size: var(--pw-fs-micro);
+}
+
+.close-up__reader .pawl-card .pawl-card__chip {
+  width: 20px;
+  height: 14px;
 }
 
 @keyframes card-in {
@@ -215,14 +261,6 @@
     opacity: 1;
     transform: none;
   }
-}
-
-.close-up__dock {
-  color: var(--pw-off);
-  font-family: var(--pw-mono);
-  font-size: var(--pw-fs-micro);
-  font-weight: 700;
-  letter-spacing: 0.14em;
 }
 
 .close-up__printer {
@@ -429,12 +467,8 @@
     padding: 12px;
   }
 
-  .close-up__screen {
-    min-height: 0;
-  }
-
   .close-up__view {
-    padding: 18px 16px 16px;
+    padding: 18px 16px 28px;
   }
 
   .account__facts > div {
@@ -463,5 +497,11 @@
 @media (max-width: 899px) {
   .close-up__service {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .close-up {
+    animation: none;
   }
 }

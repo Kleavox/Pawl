@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { renderMachinePage } from "./machine-page";
+import { MACHINE_PAGE_CSS, renderMachinePage } from "./machine-page";
 
 describe("renderMachinePage", () => {
   it("draws the panel close-up with no page header or footer", () => {
@@ -96,5 +96,11 @@ describe("renderMachinePage", () => {
     });
     expect(html).toContain("OUT &lt;OF&gt; ORDER");
     expect(html).toContain('class="sign"');
+  });
+
+  it("keeps one screen height whatever the page says, and scrolls a long view inside it", () => {
+    expect(MACHINE_PAGE_CSS).toMatch(/\.screen\{[^}]*height:560px/);
+    expect(MACHINE_PAGE_CSS).not.toMatch(/\.screen\{[^}]*min-height/);
+    expect(MACHINE_PAGE_CSS).toMatch(/\.view\{[^}]*overflow-y:auto/);
   });
 });

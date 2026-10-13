@@ -39,12 +39,16 @@
           </section>
 
           <section class="panel" aria-label="Service panel">
-            <div class="pw-grille panel__grille" aria-hidden="true">
-              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
-              ><i></i><i></i><i></i>
+            <div class="panel__top" aria-hidden="true">
+              <span class="panel__speaker"></span>
+              <span class="panel__sensor"></span>
             </div>
 
             <div class="pw-bezel panel__bezel" data-screen-zone>
+              <span class="screw screw--tl" aria-hidden="true"></span>
+              <span class="screw screw--tr" aria-hidden="true"></span>
+              <span class="screw screw--bl" aria-hidden="true"></span>
+              <span class="screw screw--br" aria-hidden="true"></span>
               <div class="pw-lcd screen">
                 <p
                   class="pw-lcd__status screen__status"
@@ -66,7 +70,7 @@
                     <h2 class="pw-heading" id="view-idle-title">
                       {{IDLE_HEADING}}
                     </h2>
-                    <p class="pw-text">{{IDLE_LINE}}</p>
+                    <p class="pw-text view__aside">{{IDLE_LINE}}</p>
                     <div class="view__actions">
                       <button
                         class="pw-button pw-button-primary"
@@ -98,7 +102,7 @@
                       Signed in as <span data-account-name></span>
                     </h2>
                     <p class="pw-text" data-account-role></p>
-                    <p class="pw-text">
+                    <p class="pw-text view__aside">
                       Pick a bay on the keypad to open an app.
                     </p>
                     <div class="view__actions">
@@ -127,33 +131,86 @@
                     aria-labelledby="terminal-title"
                     hidden
                   >
+                    <p class="pw-eyebrow">Sign in</p>
                     <h2 class="pw-heading" id="terminal-title">
                       Sign in to {{SITE_NAME}}
                     </h2>
-                    <div class="view__stack">
-                      <button
-                        class="pw-button"
-                        type="button"
-                        data-terminal-provider="google"
-                        data-autofocus
-                      >
-                        <span class="pw-button__mark" aria-hidden="true"
-                          >G</span
+                    <ol class="view__choices">
+                      <li>
+                        <button
+                          class="pw-button choice"
+                          type="button"
+                          data-terminal-provider="google"
+                          aria-keyshortcuts="1"
+                          data-autofocus
                         >
-                        Continue with Google
-                      </button>
-                      <button
-                        class="pw-button"
-                        type="button"
-                        data-terminal-provider="github"
-                      >
-                        <span class="pw-button__mark" aria-hidden="true"
-                          >GH</span
+                          <kbd class="choice__key" aria-hidden="true">1</kbd>
+                          <span class="pw-button__mark" aria-hidden="true"
+                            >G</span
+                          >
+                          Continue with Google
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          class="pw-button choice"
+                          type="button"
+                          data-terminal-provider="github"
+                          aria-keyshortcuts="2"
                         >
-                        Continue with GitHub
-                      </button>
-                    </div>
-                    <p class="pw-divider">Or email a code</p>
+                          <kbd class="choice__key" aria-hidden="true">2</kbd>
+                          <span class="pw-button__mark" aria-hidden="true"
+                            >GH</span
+                          >
+                          Continue with GitHub
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          class="pw-button choice"
+                          type="button"
+                          data-terminal-email-choice
+                          aria-keyshortcuts="3"
+                        >
+                          <kbd class="choice__key" aria-hidden="true">3</kbd>
+                          <span class="pw-button__mark" aria-hidden="true"
+                            >@</span
+                          >
+                          Email me a code
+                        </button>
+                      </li>
+                    </ol>
+                    <p class="pw-text view__note view__aside">
+                      Have a password?
+                      <a href="{{PASS_SIGNIN_HREF}}">Sign in on {{PASS_HOST}}</a
+                      >.
+                    </p>
+                    <p
+                      class="pw-status is-error view__error"
+                      role="alert"
+                      data-terminal-error
+                      data-say
+                    ></p>
+                    <button
+                      class="pw-link view__back"
+                      type="button"
+                      data-terminal-close
+                      data-step-back
+                    >
+                      Back
+                    </button>
+                  </section>
+
+                  <section
+                    class="view"
+                    data-view-panel="email"
+                    aria-labelledby="email-title"
+                    hidden
+                  >
+                    <p class="pw-eyebrow">Email code</p>
+                    <h2 class="pw-heading" id="email-title">
+                      Where should the code go?
+                    </h2>
                     <form class="view__email" data-terminal-form novalidate>
                       <label class="pw-field" for="terminal-email">
                         <span>Email address</span>
@@ -165,11 +222,12 @@
                         autocomplete="email"
                         placeholder="name@example.com"
                         data-terminal-email
+                        data-autofocus
                       />
                       <p
                         class="pw-status is-error view__error"
                         role="alert"
-                        data-terminal-error
+                        data-email-error
                         data-say
                       ></p>
                       <button
@@ -180,16 +238,14 @@
                         Send the code
                       </button>
                     </form>
-                    <p class="pw-text view__note">
-                      The code is six digits; you type it on the keypad below.
-                      Have a password?
-                      <a href="{{PASS_SIGNIN_HREF}}">Sign in on {{PASS_HOST}}</a
-                      >.
+                    <p class="pw-text view__note view__aside">
+                      Six digits arrive by email; type them on the keypad.
                     </p>
                     <button
                       class="pw-link view__back"
                       type="button"
-                      data-terminal-close
+                      data-email-close
+                      data-step-back
                     >
                       Back
                     </button>
@@ -207,7 +263,7 @@
                     <h2 class="pw-heading" id="view-code-title">
                       Type the 6 digits on the keypad
                     </h2>
-                    <p class="pw-text">
+                    <p class="pw-text view__aside">
                       Sent to <strong data-code-email></strong>. The code lasts
                       10 minutes.
                     </p>
@@ -219,7 +275,10 @@
                       <span class="code-cell" data-code-cell></span>
                       <span class="code-cell" data-code-cell></span>
                     </div>
-                    <p class="pw-text view__tries" data-code-tries></p>
+                    <p
+                      class="pw-text view__tries view__aside"
+                      data-code-tries
+                    ></p>
                     <p
                       class="pw-status is-error view__error"
                       role="alert"
@@ -230,6 +289,7 @@
                       class="pw-link view__back"
                       type="button"
                       data-code-close
+                      data-step-back
                     >
                       Use another email
                     </button>
@@ -239,6 +299,7 @@
                     class="view"
                     data-view-panel="working"
                     aria-labelledby="view-working-title"
+                    tabindex="-1"
                     hidden
                   >
                     <p class="pw-eyebrow">One moment</p>
@@ -262,13 +323,18 @@
                     <kbd class="is-go">GO</kbd> take it</span
                   >
                   <span data-hint-for="signin"
-                    ><kbd class="is-go">GO</kbd> sends the code ·
-                    <kbd>CLR</kbd> or Esc goes back</span
+                    ><kbd>1</kbd>–<kbd>3</kbd> choose ·
+                    <kbd>CLR</kbd> back</span
+                  >
+                  <span data-hint-for="email"
+                    ><kbd class="is-go">GO</kbd> send ·
+                    <kbd>CLR</kbd> back</span
                   >
                   <span data-hint-for="code"
-                    ><kbd>0</kbd>–<kbd>9</kbd> digits · <kbd>CLR</kbd> delete ·
-                    <kbd class="is-go">GO</kbd> check · <kbd>CLR</kbd> on empty
-                    goes back</span
+                    ><kbd>0</kbd>–<kbd>9</kbd
+                    ><span class="screen__hint-word"> type</span> ·
+                    <kbd>CLR</kbd> undo ·
+                    <kbd class="is-go">GO</kbd> check</span
                   >
                   <span data-hint-for="working"
                     >Hold on, the machine is busy</span
@@ -277,28 +343,110 @@
               </div>
             </div>
 
+            <ol class="placard" aria-hidden="true">
+              <li>
+                <span class="placard__n">1</span>
+                <span class="placard__icon placard__icon--coil"></span>
+                <span class="placard__text">Pick a bay</span>
+              </li>
+              <li>
+                <span class="placard__n">2</span>
+                <span class="placard__icon placard__icon--card"></span>
+                <span class="placard__text">Insert pass</span>
+              </li>
+              <li>
+                <span class="placard__n">3</span>
+                <span class="placard__icon placard__icon--flap"></span>
+                <span class="placard__text">Take it below</span>
+              </li>
+            </ol>
+
             <div
               class="keypad pw-keypad"
               role="group"
               aria-label="Bay selector and email code keypad"
             >
-              <span class="keypad-mode pw-keypad__mode">
-                <span data-keypad-mode="selector">BAY SELECT</span>
-                <span data-keypad-mode="otp">EMAIL CODE</span>
+              <span class="keypad-mode pw-keypad__mode" aria-hidden="true">
+                <span class="mode-lamp" data-keypad-mode="selector"
+                  ><i></i>Select</span
+                >
+                <span class="mode-lamp" data-keypad-mode="otp"
+                  ><i></i>Code</span
+                >
               </span>
-              <button class="key pw-key" type="button" data-key="1">1</button>
-              <button class="key pw-key" type="button" data-key="2">2</button>
-              <button class="key pw-key" type="button" data-key="3">3</button>
-              <button class="key pw-key" type="button" data-key="4">4</button>
-              <button class="key pw-key" type="button" data-key="5">5</button>
-              <button class="key pw-key" type="button" data-key="6">6</button>
-              <button class="key pw-key" type="button" data-key="7">7</button>
-              <button class="key pw-key" type="button" data-key="8">8</button>
-              <button class="key pw-key" type="button" data-key="9">9</button>
+              <button class="key pw-key" type="button" data-key="1">
+                1<span
+                  class="pw-braille"
+                  data-braille="1"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button class="key pw-key" type="button" data-key="2">
+                2<span
+                  class="pw-braille"
+                  data-braille="12"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button class="key pw-key" type="button" data-key="3">
+                3<span
+                  class="pw-braille"
+                  data-braille="14"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button class="key pw-key" type="button" data-key="4">
+                4<span
+                  class="pw-braille"
+                  data-braille="145"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button class="key pw-key" type="button" data-key="5">
+                5<span
+                  class="pw-braille"
+                  data-braille="15"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button class="key pw-key" type="button" data-key="6">
+                6<span
+                  class="pw-braille"
+                  data-braille="124"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button class="key pw-key" type="button" data-key="7">
+                7<span
+                  class="pw-braille"
+                  data-braille="1245"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button class="key pw-key" type="button" data-key="8">
+                8<span
+                  class="pw-braille"
+                  data-braille="125"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button class="key pw-key" type="button" data-key="9">
+                9<span
+                  class="pw-braille"
+                  data-braille="24"
+                  aria-hidden="true"
+                ></span>
+              </button>
               <button class="key pw-key key--fn" type="button" data-key="CLR">
                 CLR
               </button>
-              <button class="key pw-key" type="button" data-key="0">0</button>
+              <button class="key pw-key" type="button" data-key="0">
+                0<span
+                  class="pw-braille"
+                  data-braille="245"
+                  aria-hidden="true"
+                ></span>
+              </button>
               <button
                 class="key pw-key pw-key--go key--go"
                 type="button"
@@ -309,7 +457,9 @@
             </div>
 
             <div class="reader">
-              <span class="reader__slot" aria-hidden="true"></span>
+              <span class="pw-pocket reader__plate" aria-hidden="true">
+                <span class="pw-pocket__slot reader__slot"></span>
+              </span>
               <div class="pawl-card" aria-hidden="true">
                 <span class="pawl-card__brand">{{SITE_NAME_UPPER}}</span>
                 <span class="pawl-card__chip"></span>
@@ -322,28 +472,39 @@
                 class="pass-reader"
                 type="button"
                 data-reader
-                aria-label="Tap your pass to sign in"
+                aria-label="Insert your pass to sign in"
               >
-                <span class="contactless-mark" aria-hidden="true"
-                  ><i></i><i></i><i></i
-                ></span>
-                <span class="pass-reader__label">Tap pass</span>
+                <span class="pass-reader__label">Insert pass</span>
+                <span class="pass-reader__or">
+                  <span class="contactless-mark" aria-hidden="true"
+                    ><i></i><i></i><i></i
+                  ></span>
+                  or tap
+                </span>
               </button>
             </div>
 
             <div class="status-bank" aria-hidden="true">
-              <span class="led led--ready" data-led-state="ready"></span>
-              <span>READY</span>
-              <span class="led led--reading" data-led-state="reading"></span>
-              <span>READING</span>
-              <span class="led led--denied" data-led-state="denied"></span>
-              <span>DENIED</span>
+              <span class="lens"
+                ><span class="led led--ready" data-led-state="ready"></span
+                >Ready</span
+              >
+              <span class="lens"
+                ><span class="led led--reading" data-led-state="reading"></span
+                >Reading</span
+              >
+              <span class="lens"
+                ><span class="led led--denied" data-led-state="denied"></span
+                >Denied</span
+              >
             </div>
 
             <div class="pw-printer panel__printer" aria-hidden="true">
-              <span class="pw-printer__slot"></span>
+              <span class="pw-printer__slot"><i class="panel__paper"></i></span>
               <span>RECEIPTS</span>
             </div>
+
+            <span class="panel__louvres" aria-hidden="true"></span>
           </section>
         </div>
 

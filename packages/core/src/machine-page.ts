@@ -35,10 +35,10 @@ export const MACHINE_PAGE_CSS = [
   ".chip i{width:8px;height:8px;border-radius:50%;background:#ffb020;box-shadow:0 0 8px #ffb020}",
   `.panel{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:14px;padding:14px;border:1px solid #5c6672;border-radius:10px;background:${STEEL};box-shadow:inset 0 1px 0 rgb(255 255 255/45%)}`,
   ".bezel{padding:10px;border-radius:10px;background:linear-gradient(180deg,#3c4552,#1a2230);box-shadow:inset 0 1px 0 rgb(255 255 255/12%)}",
-  ".screen{position:relative;display:flex;flex-direction:column;min-height:440px;overflow:hidden;border:2px solid #000000;border-radius:6px;background:radial-gradient(120% 70% at 50% 0%,#0a1730 0%,#06101f 70%);box-shadow:inset 0 0 22px rgb(47 107 255/22%)}",
+  ".screen{position:relative;display:flex;flex-direction:column;height:560px;overflow:hidden;border:2px solid #000000;border-radius:6px;background:radial-gradient(120% 70% at 50% 0%,#0a1730 0%,#06101f 70%);box-shadow:inset 0 0 22px rgb(47 107 255/22%)}",
   `.status{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;margin:0;padding:10px 16px;border-bottom:1px solid #1f2d45;color:#9cc2ff;font:700 .75rem/1.4 ${MONO};letter-spacing:.08em;text-transform:uppercase}`,
   ".status small{color:#8fa0b4;font-size:.6875rem}",
-  ".view{display:flex;flex:1;flex-direction:column;gap:12px;padding:24px}",
+  ".view{display:flex;flex:1;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-color:#2f6bff transparent;scrollbar-width:thin;padding:24px}",
   `.eyebrow{margin:0;color:#9cc2ff;font:700 .75rem/1 ${MONO};letter-spacing:.16em;text-transform:uppercase}`,
   ".eyebrow--danger{color:#ff4d5e}",
   "h1{margin:0;color:#e9eef4;font-size:1.625rem;font-weight:650;line-height:1.15}",
@@ -69,7 +69,7 @@ export const MACHINE_PAGE_CSS = [
   ".sign::before{left:18%;transform:rotate(24deg);transform-origin:bottom}",
   ".sign::after{right:18%;transform:rotate(-24deg);transform-origin:bottom}",
   ".has-sign .view{padding-top:132px}",
-  "@media (max-width:700px){.panel{grid-template-columns:minmax(0,1fr)}.screen{min-height:0}.brand{font-size:1.375rem}.actions{grid-template-columns:minmax(0,1fr)}}",
+  "@media (max-width:700px){.panel{grid-template-columns:minmax(0,1fr)}.brand{font-size:1.375rem}.actions{grid-template-columns:minmax(0,1fr)}}",
   "@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}",
 ].join("\n");
 
