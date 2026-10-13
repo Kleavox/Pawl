@@ -3,6 +3,7 @@ import type { MachineHost } from "./state";
 
 const AUTH_VIEWS: ReadonlySet<ScreenView> = new Set([
   "signin",
+  "email",
   "code",
   "working",
 ]);
@@ -10,17 +11,17 @@ const AUTH_VIEWS: ReadonlySet<ScreenView> = new Set([
 const CONTROL = "button:not([disabled]), a[href], input:not([disabled])";
 
 export function mountTerminal(root: ParentNode, machine: MachineHost): void {
-  root
-    .querySelector<HTMLButtonElement>("[data-terminal-close]")
-    ?.addEventListener("click", () => machine.dispatch({ type: "cancel" }));
-  root
-    .querySelector<HTMLButtonElement>("[data-code-close]")
-    ?.addEventListener("click", () => machine.dispatch({ type: "otp-back" }));
+  for (const back of root.querySelectorAll<HTMLButtonElement>(
+    "[data-step-back]",
+  )) {
+    back.addEventListener("click", () => machine.dispatch({ type: "back" }));
+  }
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) return;
     const step = machine.read().authStep;
-    if (step !== "methods" && step !== "otp-machine") return;
+    if (step !== "methods" && step !== "email" && step !== "otp-machine")
+      return;
     event.preventDefault();
     machine.dispatch({ type: "cancel" });
   });

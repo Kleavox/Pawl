@@ -66,6 +66,7 @@ const PRESSABLE = new Set([
   "CLR",
 ]);
 const TYPING = "input, textarea, select, button, a, [contenteditable]";
+const TEXT_ENTRY = "input, textarea, select, [contenteditable]";
 const FAULT_HOLD_MS = 2000;
 const OTP_LENGTH = 6;
 const NARROW = "(max-width: 899px)";
@@ -87,6 +88,7 @@ let checking = false;
 let bridging: AbortController | null = null;
 let faultWords: string | null = null;
 let retrying = false;
+let sending = false;
 
 const keypad = createKeypad(BAY_CODES);
 const sound = mountSound(document);
@@ -338,18 +340,21 @@ async function adoptPass(identity: Identity): Promise<void> {
 }
 
 async function sendCode(): Promise<void> {
+  if (sending) return;
   const email = emailField?.value.trim() ?? "";
   if (email === "") {
     say("Enter the email address your code should go to.");
     return;
   }
   say("");
-  openMethods();
+  sending = true;
   try {
     await startOtp(email);
   } catch (error) {
     say(messageOf(error));
     return;
+  } finally {
+    sending = false;
   }
   otpEmail = email;
   keypad.reset();
@@ -357,10 +362,7 @@ async function sendCode(): Promise<void> {
     target.textContent = masked(email);
   }
   const next = dispatch({ type: "otp-sent" });
-  if (next.authStep !== "otp-machine") {
-    say("Tap your pass on the machine, then send the code.");
-    return;
-  }
+  if (next.authStep !== "otp-machine") return;
   keypad.setMode("otp");
 }
 
@@ -373,8 +375,8 @@ async function reconcileVerify(): Promise<void> {
   }
   if (session?.authenticated !== true || !session.identity) {
     say(
-      "The machine could not tell whether your code went through. Press GO " +
-        "to send the same code again, and ask for a new code if it is refused.",
+      "The machine could not tell whether your code went through. " +
+        "Press GO to try it again.",
     );
     return;
   }
@@ -447,8 +449,7 @@ function keepRequest(): boolean {
   const wanted = state.authRequest;
   if (wanted === null || rememberRequest(wanted)) return true;
   say(
-    "This browser will not hold your bay request, so the machine cannot " +
-      "open it for you when you come back. Sign in, then pick the bay again.",
+    "This browser cannot hold your bay request. Sign in, then pick the bay again.",
   );
   return false;
 }
@@ -477,6 +478,12 @@ function press(key: string): void {
   setTimeout(() => cap.classList.remove("is-pressed"), 120);
 }
 
+const WAYS: Readonly<Record<string, string>> = {
+  "1": "google",
+  "2": "github",
+  "3": "email",
+};
+
 function unlit(key: string): boolean {
   return (
     document
@@ -489,8 +496,15 @@ async function pressKey(key: string): Promise<void> {
   if (unlit(key)) return;
   sound.click();
   if (state.authStep === "methods") {
+    const way = WAYS[key];
+    if (way === "email") dispatch({ type: "email-chosen" });
+    else if (way !== undefined) await startProvider(way);
+    if (key === "CLR") dispatch({ type: "back" });
+    return;
+  }
+  if (state.authStep === "email") {
     if (key === "GO") terminalForm?.requestSubmit();
-    if (key === "CLR") dispatch({ type: "cancel" });
+    if (key === "CLR") dispatch({ type: "back" });
     return;
   }
   const otp = state.authStep === "otp-machine";
@@ -519,7 +533,7 @@ async function pressKey(key: string): Promise<void> {
     return;
   }
   if (result.kind === "cancelled" || (!otp && key === "CLR")) {
-    dispatch({ type: otp ? "otp-back" : "cancel" });
+    dispatch({ type: otp ? "back" : "cancel" });
   }
 }
 
@@ -542,7 +556,6 @@ for (const key of document.querySelectorAll<HTMLButtonElement>("[data-key]")) {
 document.addEventListener("keydown", (event) => {
   if (event.defaultPrevented) return;
   if (event.ctrlKey || event.metaKey || event.altKey) return;
-  if (event.target instanceof Element && event.target.closest(TYPING)) return;
   const pressed =
     event.key === "Enter"
       ? "GO"
@@ -550,6 +563,8 @@ document.addEventListener("keydown", (event) => {
         ? "CLR"
         : event.key;
   if (!PRESSABLE.has(pressed)) return;
+  const guarded = pressed === "GO" ? TYPING : TEXT_ENTRY;
+  if (event.target instanceof Element && event.target.closest(guarded)) return;
   event.preventDefault();
   if (unlit(pressed)) return;
   press(pressed);
@@ -587,6 +602,10 @@ terminalForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   void sendCode();
 });
+
+document
+  .querySelector<HTMLButtonElement>("[data-terminal-email-choice]")
+  ?.addEventListener("click", () => dispatch({ type: "email-chosen" }));
 
 for (const provider of document.querySelectorAll<HTMLButtonElement>(
   "[data-terminal-provider]",

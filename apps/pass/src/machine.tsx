@@ -7,6 +7,19 @@ export const SCREEN_FORM = "screen-form";
 const MODES: readonly Mode[] = ["login", "register", "forgot"];
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
+const BRAILLE: Readonly<Record<string, string>> = {
+  "1": "1",
+  "2": "12",
+  "3": "14",
+  "4": "145",
+  "5": "15",
+  "6": "124",
+  "7": "1245",
+  "8": "125",
+  "9": "24",
+  "0": "245",
+};
+
 export function initialMode(search: string): Mode {
   const wanted = new URLSearchParams(search).get("mode");
   return MODES.find((mode) => mode === wanted) ?? "login";
@@ -106,6 +119,10 @@ export function Machine({
                     key={digit}
                   >
                     {digit}
+                    <span
+                      className="pw-braille"
+                      data-braille={BRAILLE[digit]}
+                    />
                   </span>
                 ))}
                 <button
@@ -118,6 +135,7 @@ export function Machine({
                 </button>
                 <span className="pw-key is-unlit" aria-hidden="true">
                   0
+                  <span className="pw-braille" data-braille={BRAILLE["0"]} />
                 </span>
                 {go ? (
                   <button
@@ -134,7 +152,13 @@ export function Machine({
                 )}
               </div>
               <div className="close-up__reader" aria-hidden="true">
-                <span className="close-up__slot" />
+                <span className="pw-pocket close-up__pocket">
+                  <span
+                    className={
+                      holder ? "pw-pocket__slot" : "pw-pocket__slot is-ready"
+                    }
+                  />
+                </span>
                 {holder ? (
                   <span className="pawl-card">
                     <span className="pawl-card__brand">{site}</span>
@@ -149,7 +173,7 @@ export function Machine({
                     </span>
                   </span>
                 ) : (
-                  <span className="close-up__dock">PASS DOCK · EMPTY</span>
+                  <span className="pw-pocket-ghost close-up__ghost" />
                 )}
               </div>
               <div className="pw-printer close-up__printer" aria-hidden="true">

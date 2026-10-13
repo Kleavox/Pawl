@@ -24,8 +24,8 @@ function screen(): HTMLElement {
   const root = document.createElement("div");
   root.innerHTML = `
     <section data-view-panel="idle"><button data-terminal-open>Sign in</button><a href="#">Create an account</a></section>
-    <section data-view-panel="signin" hidden><button data-autofocus>Continue with Google</button><button data-terminal-close>Back</button></section>
-    <section data-view-panel="code" tabindex="-1" data-autofocus hidden><button data-code-close>Use another email</button></section>
+    <section data-view-panel="signin" hidden><button data-autofocus>Continue with Google</button><button data-terminal-close data-step-back>Back</button></section>
+    <section data-view-panel="code" tabindex="-1" data-autofocus hidden><button data-code-close data-step-back>Use another email</button></section>
     <section data-view-panel="signed-in" tabindex="-1" hidden><a href="/account">Manage account</a></section>`;
   document.body.append(root);
   return root;
@@ -61,9 +61,10 @@ describe("mountTerminal", () => {
     const root = screen();
     mountTerminal(root, host);
     opened(host);
+    host.dispatch({ type: "email-chosen" });
     host.dispatch({ type: "otp-sent" });
     root.querySelector<HTMLButtonElement>("[data-code-close]")!.click();
-    expect(host.read().authStep).toBe("methods");
+    expect(host.read().authStep).toBe("email");
   });
 
   it("keeps the bay the guest asked for, so a later pass still opens it", () => {

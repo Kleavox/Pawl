@@ -285,29 +285,23 @@ test("the keypad says which mode it is in, not only what colour", async ({
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openBooted(page);
-  const legend = page.locator(".keypad-mode");
-  const selector = page.locator("[data-keypad-mode='selector']");
-  const otp = page.locator("[data-keypad-mode='otp']");
+  const marker = (mode: string) =>
+    page
+      .locator(`[data-keypad-mode='${mode}']`)
+      .evaluate((node) => getComputedStyle(node, "::before").content);
 
-  await expect(legend).toHaveText("BAY SELECT", { useInnerText: true });
-  await expect(selector).toBeVisible();
-  await expect(otp).toBeHidden();
+  await expect(page.locator(".keypad-mode")).toHaveText(/SELECT\s*CODE/i, {
+    useInnerText: true,
+  });
+  expect(await marker("selector")).toBe('"▸"');
+  expect(await marker("otp")).toBe("none");
 
   await page.evaluate(() => {
     document.querySelector<HTMLElement>("[data-machine]")!.dataset.input =
       "otp";
   });
-  await expect(legend).toHaveText("EMAIL CODE", { useInnerText: true });
-  await expect(otp).toBeVisible();
-  await expect(selector).toBeHidden();
-
-  await page.evaluate(() => {
-    document.querySelector<HTMLElement>("[data-machine]")!.dataset.input =
-      "selector";
-  });
-  await expect(legend).toHaveText("BAY SELECT", { useInnerText: true });
-  await expect(selector).toBeVisible();
-  await expect(otp).toBeHidden();
+  expect(await marker("otp")).toBe('"▸"');
+  expect(await marker("selector")).toBe("none");
 });
 
 test("the screen words sit inside a polite status region", async ({ page }) => {
@@ -547,7 +541,7 @@ test("the pass card is off the machine until the reader is reading", async ({
     };
   });
   await expect(card).toBeVisible();
-  expect(reading.name).toBe("pawl-card-return");
+  expect(reading.name).toBe("pawl-card-insert");
   expect(seconds(reading.duration)).toBe(seconds(reading.move));
   expect(reading.count).toBe("1");
 
@@ -812,6 +806,188 @@ test("the receipts print from the machine's printer, whole and without a header"
   await expect(page.locator("[data-receipt]")).toContainText(
     "openid email profile",
   );
+});
+
+const OWNER_SESSION = {
+  authenticated: true,
+  identity: {
+    id: "probe",
+    email: "probe.with.a.long.address@example.com",
+    username: "maximilian_ananda_01",
+    role: "ADMIN",
+  },
+};
+
+async function hardwareOn(page: Page, screen: string): Promise<string> {
+  if (screen === "signed-in") {
+    await page.route("**/api/session", (route) =>
+      route.fulfill({ json: OWNER_SESSION }),
+    );
+    await page.route("**/api/estate", (route) =>
+      route.fulfill({ json: { role: "ADMIN", tools: {}, attention: [] } }),
+    );
+  }
+  await page.route("**/api/auth/otp/start", (route) =>
+    route.fulfill({ json: { ok: true } }),
+  );
+  await page.goto(GATEWAY);
+  if (screen === "signed-in") {
+    await expect(page.locator("[data-view-panel='signed-in']")).toBeVisible();
+  }
+  if (screen === "signin" || screen === "email" || screen === "code") {
+    await page.locator("[data-terminal-open]").click();
+    await expect(page.locator("[data-terminal]")).toBeVisible();
+  }
+  if (screen === "email" || screen === "code") {
+    await page.locator("[data-terminal-email-choice]").click();
+  }
+  if (screen === "code") {
+    await page
+      .locator("[data-terminal-email]")
+      .fill("someone.with.a.long.name@example-domain.test");
+    await page.locator("[data-terminal-send]").click();
+    await expect(page.locator("[data-view-panel='code']")).toBeVisible();
+  }
+  return page.evaluate(() =>
+    [
+      "[data-machine]",
+      ".cabinet",
+      "[aria-label='Service panel']",
+      "[data-screen-zone]",
+      ".keypad",
+      "[data-tray]",
+    ]
+      .map((selector) => {
+        const box = document.querySelector(selector)!.getBoundingClientRect();
+        return `${selector} ${box.width}x${box.height}@${box.top + scrollY}`;
+      })
+      .join(" | "),
+  );
+}
+
+const SCREENS = ["idle", "signin", "email", "code", "signed-in"];
+
+test("the machine keeps its size whatever the screen shows", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  for (const width of [1440, 1000, 390]) {
+    const seen = new Map<string, string>();
+    for (const screen of SCREENS) {
+      const page = await browser.newPage({
+        viewport: { width, height: 900 },
+      });
+      seen.set(screen, await hardwareOn(page, screen));
+      await page.close();
+    }
+    const boxes = new Set(seen.values());
+    expect(boxes.size, `${width}px: ${[...seen].join("\n")}`).toBe(1);
+  }
+});
+
+async function fitOf(page: Page): Promise<{
+  spare: number;
+  status: number;
+  hint: number;
+  wide: number;
+}> {
+  return page.evaluate(() => {
+    const view = document.querySelector<HTMLElement>(
+      "[data-view-panel]:not([hidden])",
+    )!;
+    const pushed = [
+      ...view.querySelectorAll<HTMLElement>(".view__actions, .view__back"),
+    ];
+    for (const node of pushed) node.style.marginTop = "0";
+    const shown = [...view.children].filter(
+      (node) => node.getClientRects().length > 0,
+    );
+    const last = shown[shown.length - 1]!.getBoundingClientRect();
+    const needed =
+      last.bottom -
+      view.getBoundingClientRect().top +
+      parseFloat(getComputedStyle(view).paddingBottom);
+    for (const node of pushed) node.style.marginTop = "";
+    const status = document.querySelector<HTMLElement>(".screen__status")!;
+    const hint = document.querySelector<HTMLElement>(".screen__hint")!;
+    return {
+      spare: Math.floor(view.clientHeight - needed),
+      status: status.scrollHeight - status.clientHeight,
+      hint: hint.scrollWidth - hint.clientWidth,
+      wide: view.scrollWidth - view.clientWidth,
+    };
+  });
+}
+
+const LONGEST_SAY =
+  "The machine could not tell whether your code went through. Press GO to try it again.";
+
+const WIDE_TYPE = `:root {
+  --pw-ui: Verdana, "DejaVu Sans", sans-serif;
+  --pw-display: Verdana, "DejaVu Sans", sans-serif;
+  --pw-mono: "Courier New", "DejaVu Sans Mono", monospace;
+}`;
+
+test("every view fits the fixed screen it is shown on, message and wide type included", async ({
+  browser,
+}) => {
+  test.setTimeout(180_000);
+  for (const width of [1440, 1000, 390, 320]) {
+    for (const screen of SCREENS) {
+      const page = await browser.newPage({
+        viewport: { width, height: 900 },
+      });
+      await hardwareOn(page, screen);
+      const states: [string, () => Promise<void>][] = [
+        ["bare", async () => {}],
+        [
+          "with its longest message",
+          () =>
+            page.evaluate((words) => {
+              const view = document.querySelector(
+                "[data-view-panel]:not([hidden])",
+              )!;
+              view.querySelector("[data-say]")!.textContent = words;
+              const tries = view.querySelector("[data-code-tries]");
+              if (tries !== null) {
+                tries.textContent = "That code was not right. 4 tries left.";
+              }
+            }, LONGEST_SAY),
+        ],
+        [
+          "in wide type",
+          async () => {
+            await page.addStyleTag({ content: WIDE_TYPE });
+          },
+        ],
+      ];
+      for (const [state, apply] of states) {
+        await apply();
+        const fit = await fitOf(page);
+        const where = `${screen} ${state} at ${width}px`;
+        expect(fit.spare, where).toBeGreaterThanOrEqual(0);
+        expect(fit.status, `${where}: status`).toBeLessThanOrEqual(0);
+        expect(fit.hint, `${where}: hint`).toBeLessThanOrEqual(0);
+        expect(fit.wide, `${where}: sideways`).toBeLessThanOrEqual(0);
+      }
+      await page.close();
+    }
+  }
+});
+
+test("the keyboard's digits and Backspace work the screen even while a choice has focus", async ({
+  page,
+}) => {
+  await page.goto(GATEWAY);
+  await page.locator("[data-terminal-open]").click();
+  await expect(page.locator("[data-terminal-provider='google']")).toBeFocused();
+  await page.keyboard.press("Backspace");
+  await expect(page.locator("[data-terminal]")).toBeHidden();
+
+  await page.locator("[data-terminal-open]").click();
+  await expect(page.locator("[data-terminal-provider='google']")).toBeFocused();
+  await page.keyboard.press("3");
+  await expect(page.locator("[data-view-panel='email']")).toBeVisible();
 });
 
 test("a guest is told to insert a pass and cannot take NOTE", async ({
@@ -1182,11 +1358,12 @@ test("a broken session endpoint is a fault, not a calm guest", async ({
 async function reachOtpMode(page: Page): Promise<void> {
   await page.locator("[data-reader]").click();
   await expect(page.locator("[data-terminal]")).toBeVisible();
+  await page.locator("[data-terminal-email-choice]").click();
   await page
     .locator("[data-terminal-email]")
     .fill(`otpprobe-${Date.now().toString().slice(-6)}@example.com`);
   await page.locator("[data-terminal-send]").click();
-  await expect(page.locator("[data-terminal]")).toBeHidden();
+  await expect(page.locator("[data-view-panel='email']")).toBeHidden();
   await expect(page.locator("[data-machine]")).toHaveAttribute(
     "data-input",
     "otp",
@@ -1469,8 +1646,9 @@ test.describe("codes typed on the machine keypad", () => {
 
     await typeCode(page, "123");
     await page.getByRole("button", { name: "Use another email" }).click();
-    await expect(page.locator("[data-terminal]")).toBeVisible();
+    await expect(page.locator("[data-view-panel='email']")).toBeVisible();
     await expect(page.locator("[data-terminal-email]")).toHaveValue(email);
+    await expect(page.locator("[data-terminal-email]")).toBeFocused();
 
     await page.locator("[data-terminal-send]").click();
     await expect(page.locator("[data-machine]")).toHaveAttribute(
@@ -1497,6 +1675,13 @@ test.describe("codes typed on the machine keypad", () => {
     await page.locator("[data-reader]").click();
     await expect(page.locator("[data-terminal]")).toBeVisible();
     await expect(key("7")).toHaveAttribute("aria-disabled", "true");
+    await expect(key("3")).toHaveAttribute("aria-disabled", "false");
+    await expect(key("GO")).toHaveAttribute("aria-disabled", "true");
+
+    await key("3").click();
+    await expect(page.locator("[data-view-panel='email']")).toBeVisible();
+    await expect(page.locator("[data-terminal-email]")).toBeFocused();
+    await expect(key("3")).toHaveAttribute("aria-disabled", "true");
     await expect(key("GO")).toHaveAttribute("aria-disabled", "false");
 
     await page
@@ -1508,6 +1693,30 @@ test.describe("codes typed on the machine keypad", () => {
       "otp",
     );
     await expect(key("0")).toHaveAttribute("aria-disabled", "false");
+  });
+
+  test("GO pressed twice sends one email, and leaving mid-send says nothing false", async ({
+    page,
+  }) => {
+    let starts = 0;
+    await page.route("**/api/auth/otp/start", async (route) => {
+      starts += 1;
+      await new Promise((settled) => setTimeout(settled, 1200));
+      await route.fulfill({ json: { ok: true } });
+    });
+    await page.goto(GATEWAY);
+    await page.locator("[data-reader]").click();
+    await expect(page.locator("[data-terminal]")).toBeVisible();
+    await page.locator("[data-terminal-email-choice]").click();
+    await page.locator("[data-terminal-email]").fill("twice@example.com");
+    await page.locator("[data-terminal-send]").click();
+    await page.locator("[data-terminal-send]").click();
+    await page.locator("[data-key='CLR']").click();
+    await expect(page.locator("[data-terminal]")).toBeVisible();
+    await page.waitForTimeout(1600);
+    expect(starts).toBe(1);
+    await expect(page.locator("[data-terminal]")).toBeVisible();
+    await expect(page.locator("[data-terminal-error]")).toHaveText("");
   });
 
   test("a second code cannot race the first one being checked", async ({

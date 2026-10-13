@@ -468,6 +468,56 @@ test("the account origin is the same machine, seen close up", async () => {
   ).toHaveCount(0);
 });
 
+test("pass: the screen keeps its size across every view it shows", async ({
+  browser,
+}) => {
+  const size = (target: Page) =>
+    target.locator(".close-up__screen").evaluate((node) => {
+      const box = node.getBoundingClientRect();
+      return `${box.width}x${box.height}`;
+    });
+  const seen = new Map<string, string>();
+  const own = await context.newPage();
+  await own.emulateMedia({ reducedMotion: "reduce" });
+  await own.setViewportSize({ width: 1440, height: 900 });
+  await own.goto(`${PASS}/`);
+  for (const tab of ["Profile", "Devices", "Apps", "Security"]) {
+    await own.getByRole("tab", { name: tab }).click();
+    seen.set(tab, await size(own));
+  }
+  await own.close();
+  const guest = await browser.newPage({
+    viewport: { width: 1440, height: 900 },
+    reducedMotion: "reduce",
+  });
+  await guest.goto(`${PASS}/`);
+  seen.set("sign in", await size(guest));
+  await guest.goto(`${PASS}/?mode=register`);
+  await expect(guest.locator('input[name="username"]')).toBeVisible();
+  seen.set("register", await size(guest));
+  await guest.close();
+  expect(new Set(seen.values()).size, [...seen].join(" | ")).toBe(1);
+});
+
+test("pass: a control reached by Tab is clear of the screen's fade", async ({
+  browser,
+}) => {
+  const guest = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+    reducedMotion: "reduce",
+  });
+  await guest.goto(`${PASS}/?mode=register`);
+  const back = guest.getByRole("button", { name: "Back to sign in" });
+  await expect(back).toBeVisible();
+  await back.focus();
+  const gap = await back.evaluate((node) => {
+    const view = node.closest(".close-up__view")!.getBoundingClientRect();
+    return view.bottom - node.getBoundingClientRect().bottom;
+  });
+  expect(gap).toBeGreaterThanOrEqual(22);
+  await guest.close();
+});
+
 test("the machine says a failed estate call out loud instead of an all-clear", async () => {
   await page.route("**/api/estate", (route) => route.fulfill({ status: 500 }));
   expectFailure = true;
