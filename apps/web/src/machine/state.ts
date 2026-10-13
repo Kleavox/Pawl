@@ -8,12 +8,18 @@ export type AccessRole = "guest" | "visitor" | "owner";
 
 export type MachineState = {
   access: AccessRole;
-  status: "idle" | "reading" | "granted" | "selected" | "denied" | "dispensing";
+  status: "idle" | "granted" | "selected" | "denied" | "dispensing";
   selection: BayCode | null;
   tray: BayCode | null;
   busy: boolean;
   authStep:
-    "closed" | "methods" | "email" | "otp-machine" | "oauth" | "issuing";
+    | "closed"
+    | "methods"
+    | "email"
+    | "otp-machine"
+    | "oauth"
+    | "issuing"
+    | "account";
   authRequest: BayCode | null;
   screenTransfer: BayCode | null;
   authDigits: string;
@@ -24,8 +30,8 @@ export type MachineState = {
 export type MachineEvent =
   | { type: "select"; bay: BayCode }
   | { type: "preselect"; bay: BayCode }
-  | { type: "pass-tap" }
-  | { type: "reader-scanned" }
+  | { type: "open-sign-in" }
+  | { type: "open-account" }
   | { type: "email-chosen" }
   | { type: "otp-sent" }
   | { type: "oauth-started" }
@@ -106,15 +112,16 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
       return { ...state, selection: event.bay, status: "selected" };
     }
 
-    case "pass-tap": {
+    case "open-sign-in": {
       if (state.busy || state.access !== "guest") return state;
-      return { ...state, status: "reading", busy: true };
+      if (state.authStep !== "closed") return state;
+      return { ...state, status: "idle", authStep: "methods", busy: true };
     }
 
-    case "reader-scanned": {
-      if (state.authStep !== "closed" || state.status !== "reading")
-        return state;
-      return { ...state, status: "idle", authStep: "methods", busy: true };
+    case "open-account": {
+      if (state.busy || state.access === "guest") return state;
+      if (state.authStep !== "closed") return state;
+      return { ...state, authStep: "account" };
     }
 
     case "email-chosen": {
@@ -201,11 +208,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
     }
 
     case "cancel": {
-      if (
-        state.status === "dispensing" ||
-        state.status === "reading" ||
-        state.authStep === "issuing"
-      )
+      if (state.status === "dispensing" || state.authStep === "issuing")
         return state;
       const putBack = state.status === "selected" || state.status === "denied";
       return {
@@ -231,6 +234,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         };
       }
       if (state.authStep === "email") return { ...state, authStep: "methods" };
+      if (state.authStep === "account") return { ...state, authStep: "closed" };
       if (state.authStep === "methods") {
         return {
           ...state,

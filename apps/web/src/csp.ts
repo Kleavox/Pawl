@@ -1,3 +1,5 @@
+import { CAMERA_HINT_HASH } from "@pawl/core";
+
 const LOOPBACK = ["127.0.0.1", "localhost"];
 
 function spellings(origin: string): string[] {
@@ -14,7 +16,7 @@ export function headersFile(passOrigin: string): string {
   const pass = spellings(passOrigin).join(" ");
   const policy = [
     "default-src 'self'",
-    "script-src 'self'",
+    `script-src 'self' ${CAMERA_HINT_HASH}`,
     `connect-src 'self' ${pass}`,
     "img-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",

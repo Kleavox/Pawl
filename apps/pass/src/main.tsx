@@ -5,29 +5,40 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import { displayHandle } from "@pawl/core";
 import "@pawl/ui/styles.css";
-import { ROOT_ORIGIN } from "@pawl/ui";
+import "@pawl/ui/machine.css";
+import { arrivalFraming, cleanCamHint, settle } from "@pawl/ui";
 import "./styles.css";
 import { Account, type Tab } from "./account";
 import { ForgotPassword, Login, Register } from "./auth-forms";
 import { ChallengePage } from "./challenge";
 import { LinkOAuth, ResetPassword, VerifyEmail, Welcome } from "./flows";
 import { api, returnTo } from "./helpers";
-import { Machine, initialMode, type Holder } from "./machine";
+import { departTo, mountDepartures } from "./depart";
+import { initialMode, type Holder, type Screen } from "./machine";
+import { machineParts, paintMachine } from "./parts";
 import type { Mode, OAuthProviders, SessionResponse } from "./types";
-import { SITE } from "./site";
 import { LoadingState } from "./ui";
 
-type Screen = {
-  status: string;
-  sub?: string;
-  go: boolean;
-  back?: () => void;
-};
+const WIPE_MS = 220;
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+const parts = machineParts(document);
+const camera = document.querySelector<HTMLElement>("[data-camera]");
+const view = document.getElementById("screen");
+const goBack: { current: (() => void) | undefined } = { current: undefined };
+
+function reducedMotion(): boolean {
+  try {
+    return globalThis.matchMedia(REDUCED_MOTION_QUERY).matches;
+  } catch {
+    return false;
+  }
+}
 
 function App() {
   const [session, setSession] = useState<SessionResponse | null>(null);
@@ -59,7 +70,7 @@ function App() {
           returnTo &&
           nextSession.user?.username
         ) {
-          window.location.assign(returnTo);
+          departTo(returnTo);
           return;
         }
         setProviders(nextProviders);
@@ -110,7 +121,7 @@ function App() {
     if (session === null) {
       return {
         content: <LoadingState />,
-        screen: { status: "READING PASS", sub: "ONE MOMENT", go: false },
+        screen: { status: "ONE MOMENT", sub: "CHECKING YOUR PASS", go: false },
       };
     }
     if (session.authenticated && session.user) {
@@ -121,7 +132,7 @@ function App() {
               user={session.user}
               onCompleted={(next) => {
                 if (returnTo) {
-                  window.location.assign(returnTo);
+                  departTo(returnTo);
                   return;
                 }
                 setSession({ authenticated: true, user: next });
@@ -185,7 +196,7 @@ function App() {
           onModeChange={setMode}
           onAuthenticated={(next) => {
             if (returnTo) {
-              window.location.assign(returnTo);
+              departTo(returnTo);
               return;
             }
             setSession({ authenticated: true, user: next });
@@ -196,22 +207,50 @@ function App() {
     };
   }, [accountGo, keepAccountGo, mode, providers, route, session, tab, toLogin]);
 
-  return (
-    <Machine
-      siteName={SITE.site.name}
-      rootOrigin={ROOT_ORIGIN}
-      status={screen.status}
-      sub={screen.sub}
-      go={screen.go}
-      back={screen.back}
-      holder={holder}
-    >
-      {content}
-    </Machine>
-  );
+  const shown = useRef<string | null>(null);
+
+  useEffect(() => {
+    goBack.current = screen.back;
+    if (parts !== null) paintMachine(parts, screen, holder);
+  }, [screen, holder]);
+
+  useEffect(() => {
+    const before = shown.current;
+    shown.current = screen.status;
+    if (before === null || before === screen.status) return;
+    if (view === null || reducedMotion()) return;
+    view.classList.remove("is-wiping");
+    void view.offsetWidth;
+    view.classList.add("is-wiping");
+    const done = setTimeout(() => view.classList.remove("is-wiping"), WIPE_MS);
+    return () => clearTimeout(done);
+  }, [screen.status]);
+
+  return content;
 }
 
-createRoot(document.getElementById("root")!).render(
+parts?.clr.addEventListener("click", () => goBack.current?.());
+mountDepartures(document);
+
+const arrived = arrivalFraming(window.location.hash);
+cleanCamHint(window.location, window.history);
+if (camera !== null) {
+  void settle(camera, arrived, "screen", { moving: "in" });
+}
+document.querySelector(".plate")?.setAttribute("inert", "");
+
+window.addEventListener("pageshow", (event) => {
+  if (!event.persisted || camera === null) return;
+  view?.classList.remove("is-scanning-off");
+  delete document.querySelector<HTMLElement>("[data-machine]")?.dataset.leaving;
+  void settle(
+    camera,
+    arrivalFraming(`#cam=${camera.dataset.framing ?? ""}`),
+    "screen",
+  );
+});
+
+createRoot(view!).render(
   <StrictMode>
     <App />
   </StrictMode>,

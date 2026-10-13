@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  DENIED_BLINK_MS,
   RELEASE_SEQUENCE_MS,
   forgetRequest,
   motionDelay,
   readRememberedRequest,
   rememberRequest,
   runDispense,
-  runReaderScan,
   runRelease,
   runScreenTransfer,
   type Dispatch,
@@ -147,13 +147,57 @@ describe("the release sequence", () => {
     expect(m.read().busy).toBe(false);
   });
 
-  it("never lands a locked bay in the tray", async () => {
+  it("never lands a locked bay in the tray; a guest is shown the sign-in after the refusal blinks", async () => {
     reduceMotion(true);
     const m = machine("guest");
     await runDispense(m, "1");
-    expect(m.seen).toEqual(["select"]);
+    expect(m.seen).toEqual(["select", "open-sign-in"]);
     expect(m.read().tray).toBeNull();
+    expect(m.read().authStep).toBe("methods");
+    expect(m.read().authRequest).toBe("1");
+  });
+
+  it("lets the refusal blink before the sign-in replaces the products", async () => {
+    reduceMotion(false);
+    vi.useFakeTimers();
+    const m = machine("guest");
+    const done = runDispense(m, "1");
+    await vi.advanceTimersByTimeAsync(DENIED_BLINK_MS - 1);
     expect(m.read().status).toBe("denied");
+    expect(m.read().authStep).toBe("closed");
+    await vi.advanceTimersByTimeAsync(1);
+    await done;
+    expect(m.read().authStep).toBe("methods");
+  });
+
+  it("does not open the sign-in when the refusal was put back while it blinked", async () => {
+    reduceMotion(true);
+    const m = machine("guest");
+    const done = runDispense(m, "1");
+    m.dispatch({ type: "cancel" });
+    await done;
+    expect(m.read().authStep).toBe("closed");
+    expect(m.seen).toEqual(["select", "cancel"]);
+  });
+
+  it("keeps a visitor on the products when a bay needs the owner's pass", async () => {
+    reduceMotion(true);
+    let state = initialState("visitor", [
+      { ...CATALOG[0]!, access: "owner" as const },
+      CATALOG[1]!,
+    ]);
+    const seen: string[] = [];
+    const host = {
+      read: () => state,
+      dispatch: (event: MachineEvent) => {
+        seen.push(event.type);
+        return (state = reduce(state, event));
+      },
+    };
+    await runDispense(host, "1");
+    expect(seen).toEqual(["select"]);
+    expect(state.status).toBe("denied");
+    expect(state.authStep).toBe("closed");
   });
 
   it("shortens under reduced motion without dropping a state change", async () => {
@@ -206,26 +250,6 @@ describe("finishing a release the reducer already began", () => {
     await runRelease(m);
     expect(m.seen).toEqual([]);
     expect(m.read().tray).toBeNull();
-  });
-});
-
-describe("the reader scan", () => {
-  it("holds the machine in reading, then opens the terminal", async () => {
-    reduceMotion(true);
-    const m = machine("guest");
-    const scanning = runReaderScan(m.dispatch);
-    expect(m.read().status).toBe("reading");
-    await scanning;
-    expect(m.seen).toEqual(["pass-tap", "reader-scanned"]);
-    expect(m.read().authStep).toBe("methods");
-  });
-
-  it("does nothing for a machine that already holds a pass", async () => {
-    reduceMotion(true);
-    const m = machine("owner");
-    await runReaderScan(m.dispatch);
-    expect(m.seen).toEqual(["pass-tap"]);
-    expect(m.read().status).toBe("idle");
   });
 });
 

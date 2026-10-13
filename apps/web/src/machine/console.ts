@@ -1,14 +1,15 @@
 import type { ScreenView } from "./render";
 import type { MachineHost } from "./state";
 
-const AUTH_VIEWS: ReadonlySet<ScreenView> = new Set([
-  "signin",
-  "email",
-  "code",
-  "working",
-]);
+const CONTROL =
+  "button:not([disabled]):not([hidden]), a[href]:not([hidden]), input:not([disabled]):not([hidden])";
 
-const CONTROL = "button:not([disabled]), a[href], input:not([disabled])";
+const LEAVES_ON_ESCAPE = new Set([
+  "methods",
+  "email",
+  "otp-machine",
+  "account",
+]);
 
 export function mountTerminal(root: ParentNode, machine: MachineHost): void {
   for (const back of root.querySelectorAll<HTMLButtonElement>(
@@ -19,9 +20,7 @@ export function mountTerminal(root: ParentNode, machine: MachineHost): void {
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) return;
-    const step = machine.read().authStep;
-    if (step !== "methods" && step !== "email" && step !== "otp-machine")
-      return;
+    if (!LEAVES_ON_ESCAPE.has(machine.read().authStep)) return;
     event.preventDefault();
     machine.dispatch({ type: "cancel" });
   });
@@ -31,19 +30,27 @@ export function followView(
   root: ParentNode,
   previous: ScreenView | null,
   next: ScreenView,
+  returnTo: HTMLElement | null = null,
 ): void {
   if (previous === null || previous === next) return;
   const panel = root.querySelector<HTMLElement>(`[data-view-panel="${next}"]`);
   if (panel === null) return;
+  if (
+    returnTo !== null &&
+    returnTo.isConnected &&
+    panel.contains(returnTo) &&
+    returnTo.matches(CONTROL)
+  ) {
+    returnTo.focus({ preventScroll: true });
+    return;
+  }
   const marked = panel.matches("[data-autofocus]")
     ? panel
     : panel.querySelector<HTMLElement>("[data-autofocus]");
   const target =
     marked ??
-    (AUTH_VIEWS.has(previous)
-      ? panel.matches("[tabindex]")
-        ? panel
-        : panel.querySelector<HTMLElement>(CONTROL)
-      : null);
+    (panel.matches("[tabindex]")
+      ? panel
+      : panel.querySelector<HTMLElement>(CONTROL));
   target?.focus({ preventScroll: true });
 }

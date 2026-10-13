@@ -1,4 +1,13 @@
 export { ROOT_ORIGIN, PASS_ORIGIN } from "./origins";
+export {
+  arrivalFraming,
+  cleanCamHint,
+  leave,
+  settle,
+  shouldAnimateClick,
+  withCamHint,
+  type Framing,
+} from "./camera";
 export { formatAge, type AgeDirection } from "./age";
 export {
   navCountsFrom,

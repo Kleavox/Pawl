@@ -12,27 +12,12 @@
     <script type="module" src="/src/legal.ts"></script>
   </head>
   <body>
-    <main class="room room--receipt" aria-labelledby="receipt-title">
-      <div class="machine machine--printer">
-        {{MARQUEE_RECEIPT}}
-        <section class="printer-panel" aria-label="Receipt printer">
-          <div class="pw-bezel">
-            <div class="pw-lcd printer-panel__screen">
-              <p class="pw-lcd__status">
-                <span>Receipt printed</span>
-                <small>Terms of service · {{EFFECTIVE}}</small>
-              </p>
-            </div>
-          </div>
-          <div class="printer-panel__mouth" aria-hidden="true">
-            <span class="pw-printer__slot"></span>
-            <span class="printer-panel__label">RECEIPTS</span>
-          </div>
-        </section>
-      </div>
+    {{MACHINE_TERMS}}
 
+    <main class="receipt-feed" aria-labelledby="receipt-title">
       <article class="receipt" data-receipt>
         <div class="receipt__head">
+          <a class="receipt__tear-top" href="/" data-tear>Tear off</a>
           <p class="receipt__serial">PAWL-GW-01 · {{SITE_NAME_UPPER}}</p>
           <h1 id="receipt-title">Terms of service</h1>
           <dl class="receipt__meta">
@@ -199,7 +184,10 @@
         <div class="receipt__end">
           <p class="receipt__keep">— KEEP THIS RECEIPT —</p>
           <span class="receipt__barcode" aria-hidden="true"></span>
-          <a class="pw-button pw-button-primary receipt__tear" href="/"
+          <a
+            class="pw-button pw-button-primary receipt__tear"
+            href="/"
+            data-tear
             >Tear off and return to the machine</a
           >
           <p class="receipt__other">
@@ -207,9 +195,6 @@
           </p>
         </div>
       </article>
-
-      <div class="receipt-plate">{{PLATE}}</div>
-      <span class="floor" aria-hidden="true"></span>
     </main>
   </body>
 </html>

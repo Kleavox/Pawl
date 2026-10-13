@@ -15,6 +15,17 @@ async function signInAtProvider(page: Page, account: PassAccount) {
   });
 }
 
+async function partSizes(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(() =>
+    Object.fromEntries(
+      [...document.querySelectorAll<HTMLElement>("[data-part]")].map((node) => [
+        node.dataset.part!,
+        `${node.offsetWidth}x${node.offsetHeight}`,
+      ]),
+    ),
+  );
+}
+
 test("a relying party on another host signs a person in through Pawl", async ({
   page,
 }) => {
@@ -78,7 +89,20 @@ test("a person connects a third-party app, finds it in their account, and discon
   test.setTimeout(180_000);
   const account = await freshAccount(page, "probeconnect");
   await signInAtProvider(page, account);
+  await page.goto(`${CABINET}/`);
+  const cabinet = await partSizes(page);
   await page.goto(`${THIRD_PARTY}/login`);
+  await expect(page.locator("[data-screen]")).toHaveText(
+    "AN APP WANTS YOUR PASS",
+  );
+  expect(
+    await partSizes(page),
+    "the consent page draws the same machine as the cabinet",
+  ).toEqual(cabinet);
+  await expect(page.locator("[data-camera]")).toHaveAttribute(
+    "data-framing",
+    "screen",
+  );
   await page.getByRole("button", { name: "Allow" }).click();
   await expect(
     page.getByRole("heading", { name: `signed in as ${account.user}` }),

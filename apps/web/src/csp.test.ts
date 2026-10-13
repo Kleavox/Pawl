@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { CAMERA_HINT_HASH } from "@pawl/core";
+
 import { headersFile } from "./csp";
 
 function directive(file: string, name: string): string {
@@ -25,7 +27,9 @@ describe("the cabinet's content security policy", () => {
 
   it("opens nothing else", () => {
     const file = headersFile("https://paw.product.test");
-    expect(directive(file, "script-src")).toBe("script-src 'self'");
+    expect(directive(file, "script-src")).toBe(
+      `script-src 'self' ${CAMERA_HINT_HASH}`,
+    );
     expect(directive(file, "default-src")).toBe("default-src 'self'");
     expect(directive(file, "frame-ancestors")).toBe("frame-ancestors 'none'");
   });

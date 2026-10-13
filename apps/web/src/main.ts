@@ -1,10 +1,17 @@
 import type { Identity } from "@pawl/core";
 import "@pawl/ui/styles.css";
-import "./styles/room.css";
-import "./styles/machine.css";
-import "./styles/panel.css";
-import "./styles/base.css";
-import { PASS_ORIGIN, type Overview } from "@pawl/ui";
+import "@pawl/ui/machine.css";
+import "./styles/display.css";
+import {
+  PASS_ORIGIN,
+  arrivalFraming,
+  cleanCamHint,
+  leave,
+  settle,
+  shouldAnimateClick,
+  withCamHint,
+  type Overview,
+} from "@pawl/ui";
 import {
   OtpVerifyError,
   signOut,
@@ -21,6 +28,7 @@ import {
   viewFor,
   type ScreenView,
 } from "./machine/render";
+import { scanWipe } from "./wipe";
 import { SITE } from "./site";
 import { mountSound } from "./sound";
 import {
@@ -28,7 +36,6 @@ import {
   readRememberedRequest,
   rememberRequest,
   runDispense,
-  runReaderScan,
   runRelease,
   runScreenTransfer,
 } from "./machine/sequence";
@@ -69,8 +76,8 @@ const TYPING = "input, textarea, select, button, a, [contenteditable]";
 const TEXT_ENTRY = "input, textarea, select, [contenteditable]";
 const FAULT_HOLD_MS = 2000;
 const OTP_LENGTH = 6;
-const NARROW = "(max-width: 899px)";
 const TICKER_SPEED = 40;
+const SIGNED_OUT_KEY = "pawl:signed-out";
 
 function modelFor(
   session: GatewaySession,
@@ -82,6 +89,7 @@ function modelFor(
 let model: MachineModel = modelFor({ authenticated: false }, null);
 let state: MachineState = initialState("guest", CATALOG);
 let shownView: ScreenView | null = null;
+let returnTo: HTMLElement | null = null;
 let shownTicker = "";
 let otpEmail = "";
 let checking = false;
@@ -101,24 +109,9 @@ const emailField = document.querySelector<HTMLInputElement>(
 const terminalForm = document.querySelector<HTMLFormElement>(
   "[data-terminal-form]",
 );
-const screenZone = document.querySelector<HTMLElement>("[data-screen-zone]");
-
-function narrow(): boolean {
-  try {
-    return globalThis.matchMedia(NARROW).matches;
-  } catch {
-    return false;
-  }
-}
-
-function bringScreenIntoView(): void {
-  if (!narrow() || screenZone === null) return;
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  screenZone.scrollIntoView({
-    block: "center",
-    behavior: still ? "auto" : "smooth",
-  });
-}
+const screenViews = document.querySelector<HTMLElement>("[data-screen-views]");
+const camera = document.querySelector<HTMLElement>("[data-camera]");
+const machine = document.querySelector<HTMLElement>("[data-machine]");
 
 function armTicker(): void {
   const text = document.querySelector<HTMLElement>("[data-ticker-text]");
@@ -145,10 +138,22 @@ function paint(): void {
     faultWords !== null,
   );
   const view = viewFor(state);
-  followView(document, shownView, view);
   if (shownView !== null && view !== shownView) {
-    if (view === "signin" || view === "code") bringScreenIntoView();
+    const previous = document.querySelector<HTMLElement>(
+      `[data-view-panel="${shownView}"]`,
+    );
+    if (shownView === "products") {
+      const active = document.activeElement;
+      returnTo =
+        active instanceof HTMLElement && previous?.contains(active) === true
+          ? active
+          : null;
+    }
+    if (screenViews !== null && previous !== null) {
+      scanWipe(screenViews, previous);
+    }
   }
+  followView(document, shownView, view, view === "products" ? returnTo : null);
   shownView = view;
   armTicker();
 }
@@ -311,19 +316,22 @@ function cancelBridge(): void {
   trayAction?.focus({ preventScroll: true });
 }
 
-function openMethods(): void {
-  if (state.access !== "guest") return;
-  if (state.authStep !== "closed" || state.status === "reading") return;
-  const reading = dispatch({ type: "pass-tap" });
-  if (reading.status !== "reading") return;
-  dispatch({ type: "reader-scanned" });
+function signedOutJustNow(): boolean {
+  try {
+    const was = sessionStorage.getItem(SIGNED_OUT_KEY) === "1";
+    sessionStorage.removeItem(SIGNED_OUT_KEY);
+    return was;
+  } catch {
+    return false;
+  }
 }
 
-async function tapPass(): Promise<void> {
+function markSignedOut(on: boolean): void {
   try {
-    await runReaderScan(dispatch);
+    if (on) sessionStorage.setItem(SIGNED_OUT_KEY, "1");
+    else sessionStorage.removeItem(SIGNED_OUT_KEY);
   } catch {
-    fault("PASS READER FAULT");
+    return;
   }
 }
 
@@ -385,7 +393,7 @@ async function reconcileVerify(): Promise<void> {
   dispatch({ type: "verifying" });
   if (session.identity.username === null) {
     if (!keepRequest()) await hold(FAULT_HOLD_MS);
-    leaveFor(new URL("/welcome", PASS_ORIGIN));
+    leaveFor(new URL("/welcome", PASS_ORIGIN), true);
     return;
   }
   await adoptPass(session.identity);
@@ -423,7 +431,7 @@ async function submitCode(code: string): Promise<void> {
 
   if (verified.needsSetup) {
     if (!keepRequest()) await hold(FAULT_HOLD_MS);
-    leaveFor(new URL("/welcome", PASS_ORIGIN));
+    leaveFor(new URL("/welcome", PASS_ORIGIN), true);
     return;
   }
 
@@ -454,12 +462,56 @@ function keepRequest(): boolean {
   return false;
 }
 
-function leaveFor(url: URL): void {
+function leaveFor(url: URL, toScreen = false): void {
   url.searchParams.set(
     "returnTo",
     new URL(silentSignInPath(window.location), window.location.origin).href,
   );
+  if (toScreen && camera !== null) {
+    void leave(camera, "screen", withCamHint(url.toString(), "screen"), {
+      stay: comeBack,
+    });
+    return;
+  }
   window.location.assign(url.toString());
+}
+
+function framingNow(): ReturnType<typeof arrivalFraming> {
+  return arrivalFraming(`#cam=${camera?.dataset.framing ?? ""}`);
+}
+
+function comeBack(): void {
+  if (camera === null) return;
+  delete machine?.dataset.leaving;
+  for (const lit of document.querySelectorAll(".is-leaving")) {
+    lit.classList.remove("is-leaving");
+  }
+  void settle(camera, framingNow(), "whole");
+  paint();
+}
+
+function depart(
+  link: HTMLAnchorElement,
+  to: "printer" | "screen",
+  words: string,
+): void {
+  link.addEventListener("click", (event) => {
+    if (camera === null || !shouldAnimateClick(event)) return;
+    event.preventDefault();
+    if (to === "printer" && machine !== null) {
+      machine.dataset.leaving = "printer";
+    } else {
+      link.classList.add("is-leaving");
+    }
+    for (const [selector, line] of [
+      ["[data-screen]", words],
+      ["[data-screen-sub]", "ONE MOMENT"],
+    ] as const) {
+      const node = document.querySelector(selector);
+      if (node !== null) node.textContent = line;
+    }
+    void leave(camera, to, withCamHint(link.href, to), { stay: comeBack });
+  });
 }
 
 async function startProvider(provider: string): Promise<void> {
@@ -495,6 +547,10 @@ function unlit(key: string): boolean {
 async function pressKey(key: string): Promise<void> {
   if (unlit(key)) return;
   sound.click();
+  if (state.authStep === "account") {
+    if (key === "CLR") dispatch({ type: "back" });
+    return;
+  }
   if (state.authStep === "methods") {
     const way = WAYS[key];
     if (way === "email") dispatch({ type: "email-chosen" });
@@ -539,6 +595,31 @@ async function pressKey(key: string): Promise<void> {
 
 mountTerminal(document, host);
 
+for (const link of document.querySelectorAll<HTMLAnchorElement>(
+  ".plate__links a",
+)) {
+  depart(link, "printer", "PRINTING RECEIPT");
+}
+for (const link of document.querySelectorAll<HTMLAnchorElement>(
+  "[data-account-manage]",
+)) {
+  depart(link, "screen", "OPENING ACCOUNT");
+}
+for (const link of document.querySelectorAll<HTMLAnchorElement>(
+  "[data-view-panel='signin'] .view__note a",
+)) {
+  depart(link, "screen", "OPENING SIGN-IN");
+}
+
+const arrived = arrivalFraming(window.location.hash);
+cleanCamHint(window.location, window.history);
+if (camera !== null) void settle(camera, arrived, "whole");
+if (arrived === "screen" && screenViews !== null) scanWipe(screenViews, null);
+
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) comeBack();
+});
+
 for (const cartridge of document.querySelectorAll<HTMLButtonElement>(
   "[data-cartridge]",
 )) {
@@ -572,14 +653,20 @@ document.addEventListener("keydown", (event) => {
 });
 
 document
-  .querySelector<HTMLButtonElement>("[data-reader]")
-  ?.addEventListener("click", () => void tapPass());
-
-document
   .querySelector<HTMLButtonElement>("[data-logout]")
   ?.addEventListener("click", () => {
-    signOut().catch(() => fault("SIGN-OUT FAILED, TRY AGAIN"));
+    markSignedOut(true);
+    signOut().catch(() => {
+      markSignedOut(false);
+      fault("SIGN-OUT FAILED, TRY AGAIN");
+    });
   });
+
+for (const opener of document.querySelectorAll<HTMLButtonElement>(
+  "[data-account-open]",
+)) {
+  opener.addEventListener("click", () => dispatch({ type: "open-account" }));
+}
 
 trayAction?.addEventListener("click", () => void takeDelivery());
 
@@ -595,7 +682,7 @@ bridge?.addEventListener("cancel", (event) => {
 for (const opener of document.querySelectorAll<HTMLButtonElement>(
   "[data-terminal-open]",
 )) {
-  opener.addEventListener("click", openMethods);
+  opener.addEventListener("click", () => dispatch({ type: "open-sign-in" }));
 }
 
 terminalForm?.addEventListener("submit", (event) => {
@@ -636,9 +723,17 @@ async function boot(): Promise<void> {
 
   if (model.access === "guest") {
     if (!unread) forgetRequest();
+    if (signedOutJustNow()) {
+      model = {
+        ...model,
+        screen: "SIGNED OUT",
+        ticker: `SIGNED OUT · ${model.ticker}`,
+      };
+    }
     paint();
     return;
   }
+  signedOutJustNow();
 
   dispatch({ type: "pass-issued", access: model.access });
   dispatch({ type: "reset" });

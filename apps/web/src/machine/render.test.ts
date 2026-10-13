@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { litKeys, render, say } from "./render";
+import { litKeys, render, say, viewFor } from "./render";
 import { initialState, reduce } from "./state";
 import type { MachineState } from "./state";
 import { CATALOG } from "./catalog.testkit";
@@ -28,12 +28,12 @@ if (typeof HTMLDialogElement.prototype.showModal !== "function") {
 function root(): HTMLElement {
   const element = document.createElement("div");
   element.innerHTML = `
-    <div data-machine data-access="guest" data-status="idle" data-input="selector" data-view="idle">
+    <div data-machine data-access="guest" data-status="idle" data-input="selector" data-view="products">
       <span data-cabinet-state="guest"><span data-cabinet-word>GUEST MODE</span></span>
       <span data-ticker-text></span>
       <section class="cabinet">
-        <div data-bay="1"><button data-cartridge="1"></button><i data-backlight></i><span data-rail><span data-led data-severity="none">—</span></span></div>
-        <div data-bay="3"><button data-cartridge="3"></button><i data-backlight></i><span data-rail><span data-led data-severity="link">OPEN ↗</span></span></div>
+        <div data-tile="1" data-state="idle"><button data-cartridge="1"><span data-badge data-severity="none">—</span></button></div>
+        <div data-tile="3" data-state="idle"><button data-cartridge="3"><span data-badge data-severity="link">OPEN ↗</span></button></div>
         <span data-falling="none"><strong data-falling-name></strong></span>
         <div data-tray="none">
           <strong data-tray-code></strong><small data-tray-name></small>
@@ -43,9 +43,9 @@ function root(): HTMLElement {
         <div role="status" aria-live="polite" aria-atomic="true">
           <p data-screen></p><span data-screen-sub></span>
         </div>
-        <section data-view-panel="idle"><button data-terminal-open></button><p data-say></p></section>
-        <section data-view-panel="signed-in" hidden><span data-account-name></span><span data-account-role></span><p data-say></p></section>
-        <section data-view-panel="signin" data-terminal hidden><p data-say></p></section>
+        <section data-view-panel="products"><span data-greeting>PICK A BAY</span><button data-terminal-open></button><button data-account-open hidden></button><p data-say></p></section>
+        <section data-view-panel="account" hidden><span data-account-pass></span><span data-account-name></span><span data-account-email></span><span data-account-role></span><p data-say></p></section>
+        <section data-view-panel="signin" data-terminal hidden><p data-sign-in-for></p><p data-say></p></section>
         <section data-view-panel="email" hidden><p data-say></p></section>
         <section data-view-panel="code" hidden>
           <span data-code-cell></span><span data-code-cell></span><span data-code-cell></span>
@@ -57,7 +57,6 @@ function root(): HTMLElement {
           .map((key) => `<button data-key="${key}">${key}</button>`)
           .join("")}</div>
         <button data-reader></button>
-        <div class="pawl-card"><span data-card-holder></span><span data-card-role></span></div>
       </section>
     </div>
     <dialog data-transfer="none"><strong data-transfer-name></strong><button data-transfer-cancel></button></dialog>`;
@@ -78,8 +77,9 @@ const model: MachineModel = {
     { code: "1", lit: false },
     { code: "3", lit: true },
   ],
-  screen: "INSERT PASS",
+  screen: "PICK A BAY",
   holder: null,
+  email: null,
   indicators: null,
   ticker: "WELCOME TO PAWL · PICK A BAY · SIGN IN FOR MORE",
 };
@@ -92,6 +92,7 @@ const ownerModel: MachineModel = {
   ],
   screen: "2 NEED ATTENTION",
   holder: "annisa",
+  email: "annisa@example.test",
   indicators: { notes: { count: 7, severity: "warn" } },
   ticker: "2 NEED ATTENTION · NOTE 7",
 };
@@ -121,29 +122,23 @@ describe("render", () => {
   it("lights only what policy permits", () => {
     const element = root();
     render(element, initialState("guest", CATALOG), model);
-    expect(attr(element, "[data-bay='3'] [data-backlight]", "data-lit")).toBe(
-      "true",
-    );
-    expect(attr(element, "[data-bay='1'] [data-backlight]", "data-lit")).toBe(
-      "false",
-    );
+    expect(attr(element, "[data-tile='3']", "data-lit")).toBe("true");
+    expect(attr(element, "[data-tile='1']", "data-lit")).toBe("false");
 
     render(element, initialState("owner", CATALOG), ownerModel);
-    expect(attr(element, "[data-bay='1'] [data-backlight]", "data-lit")).toBe(
-      "true",
-    );
-    expect(attr(element, "[data-bay='3'] [data-backlight]", "data-lit")).toBe(
-      "true",
-    );
+    expect(attr(element, "[data-tile='1']", "data-lit")).toBe("true");
+    expect(attr(element, "[data-tile='3']", "data-lit")).toBe("true");
   });
 
   it("writes the screen as text, never as colour alone", () => {
     const element = root();
     render(element, initialState("guest", CATALOG), model);
-    expect(main(element)).toBe("INSERT PASS");
+    expect(main(element)).toBe("PICK A BAY");
+    expect(sub(element)).toBe("OR SIGN IN ON SCREEN");
 
     render(element, initialState("owner", CATALOG), ownerModel);
     expect(main(element)).toBe("2 NEED ATTENTION");
+    expect(sub(element)).toBe("SELECT A BAY");
   });
 
   it("names a denial in words, with the bay and the reason", () => {
@@ -154,6 +149,40 @@ describe("render", () => {
       model,
     );
     expect(main(element)).toBe("1 DENIED, VISITOR PASS REQUIRED");
+    expect(sub(element)).toBe("SIGN IN TO UNLOCK");
+  });
+
+  it("tells a visitor at an owner bay that signing in again will not help", () => {
+    const element = root();
+    const owned = [{ ...CATALOG[0]!, access: "owner" as const }, CATALOG[1]!];
+    render(
+      element,
+      { ...initialState("visitor", owned), status: "denied", selection: "1" },
+      { ...ownerModel, access: "visitor" },
+    );
+    expect(main(element)).toBe("1 DENIED, OWNER PASS REQUIRED");
+    expect(sub(element)).toBe("FOR THE OWNER ONLY");
+  });
+
+  it("names the account screen on the status line", () => {
+    const element = root();
+    render(
+      element,
+      { ...initialState("owner", CATALOG), authStep: "account" },
+      ownerModel,
+    );
+    expect(main(element)).toBe("YOUR ACCOUNT");
+    expect(sub(element)).toBe("MANAGE OR SIGN OUT");
+  });
+
+  it("says signed in, not that a pass was accepted", () => {
+    const element = root();
+    render(
+      element,
+      { ...initialState("owner", CATALOG), status: "granted" },
+      ownerModel,
+    );
+    expect(main(element)).toBe("SIGNED IN");
   });
 
   it("labels each cartridge for the person standing at the machine, not for a fixed role", () => {
@@ -193,7 +222,7 @@ describe("render", () => {
       expect(main(element)).toBe(`EMAIL CODE ${digits.length}/6`);
     }
     render(element, initialState("guest", CATALOG), model);
-    expect(main(element)).toBe("INSERT PASS");
+    expect(main(element)).toBe("PICK A BAY");
   });
 
   it("changes the screen words when the keypad changes mode", () => {
@@ -251,11 +280,11 @@ describe("render", () => {
     expect(element.querySelector("[data-cabinet-state]")?.textContent).toBe(
       "OWNER MODE",
     );
-    expect(element.querySelector("[data-card-holder]")?.textContent).toBe(
+    expect(element.querySelector("[data-account-name]")?.textContent).toBe(
       "annisa",
     );
-    expect(element.querySelector("[data-card-role]")?.textContent).toBe(
-      "OWNER PASS",
+    expect(element.querySelector("[data-account-email]")?.textContent).toBe(
+      "annisa@example.test",
     );
 
     render(element, initialState("guest", CATALOG), model);
@@ -265,7 +294,7 @@ describe("render", () => {
     expect(element.querySelector("[data-cabinet-state]")?.textContent).toBe(
       "GUEST MODE",
     );
-    expect(element.querySelector("[data-card-holder]")?.textContent).toBe("");
+    expect(element.querySelector("[data-account-name]")?.textContent).toBe("");
   });
 
   it("moves the cartridge, the tray and the bridge with the state", () => {
@@ -312,6 +341,46 @@ describe("render", () => {
     const once = first.innerHTML;
     render(first, state, ownerModel);
     expect(first.innerHTML).toBe(once);
+  });
+});
+
+describe("the screen's top bar and the sign-in's reason", () => {
+  function text(element: HTMLElement, selector: string): string {
+    return element.querySelector(selector)?.textContent ?? "";
+  }
+
+  function hidden(element: HTMLElement, selector: string): boolean {
+    return element.querySelector(selector)!.hasAttribute("hidden");
+  }
+
+  it("asks a guest to pick a bay and offers the sign-in, not the account", () => {
+    const element = root();
+    render(element, initialState("owner", CATALOG), ownerModel);
+    render(element, initialState("guest", CATALOG), model);
+    expect(text(element, "[data-greeting]")).toBe("PICK A BAY");
+    expect(hidden(element, "[data-terminal-open]")).toBe(false);
+    expect(hidden(element, "[data-account-open]")).toBe(true);
+  });
+
+  it("greets a signed-in person by name and pass, and offers the account", () => {
+    const element = root();
+    render(element, initialState("owner", CATALOG), ownerModel);
+    expect(text(element, "[data-greeting]")).toBe("HI, ANNISA · OWNER");
+    expect(text(element, "[data-account-pass]")).toBe("OWNER PASS");
+    expect(hidden(element, "[data-terminal-open]")).toBe(true);
+    expect(hidden(element, "[data-account-open]")).toBe(false);
+  });
+
+  it("names the product a guest asked for on the sign-in, and nothing when they asked for none", () => {
+    const element = root();
+    const refused = reduce(initialState("guest", CATALOG), {
+      type: "select",
+      bay: "1",
+    });
+    render(element, reduce(refused, { type: "open-sign-in" }), model);
+    expect(text(element, "[data-sign-in-for]")).toBe("NOTE needs a pass");
+    render(element, signingIn(), model);
+    expect(text(element, "[data-sign-in-for]")).toBe("");
   });
 });
 
@@ -387,7 +456,7 @@ function shown(element: HTMLElement): string[] {
 
 function led(element: HTMLElement, bay: string): [string, string] {
   const node = element.querySelector<HTMLElement>(
-    `[data-bay='${bay}'] [data-led]`,
+    `[data-tile='${bay}'] [data-badge]`,
   )!;
   return [node.textContent ?? "", node.dataset.severity ?? ""];
 }
@@ -396,8 +465,13 @@ describe("the touchscreen shows one view at a time", () => {
   it("picks the view from the machine's state, and hides every other one", () => {
     const element = root();
     const steps: [MachineState, MachineModel, string][] = [
-      [initialState("guest", CATALOG), model, "idle"],
-      [initialState("owner", CATALOG), ownerModel, "signed-in"],
+      [initialState("guest", CATALOG), model, "products"],
+      [initialState("owner", CATALOG), ownerModel, "products"],
+      [
+        { ...initialState("owner", CATALOG), authStep: "account" },
+        ownerModel,
+        "account",
+      ],
       [
         { ...initialState("guest", CATALOG), authStep: "methods" },
         model,
@@ -463,12 +537,25 @@ describe("the touchscreen shows one view at a time", () => {
   });
 });
 
-describe("the label rails", () => {
-  it("never shows a guest a count, and tells a guest which bays need a pass", () => {
+describe("the tile badges", () => {
+  it("never shows a guest a count, and tells a guest to sign in for a locked bay", () => {
     const element = root();
     render(element, initialState("guest", CATALOG), model);
-    expect(led(element, "1")).toEqual(["PASS", "locked"]);
+    expect(led(element, "1")).toEqual(["SIGN IN", "locked"]);
     expect(led(element, "3")).toEqual(["OPEN ↗", "link"]);
+    expect(attr(element, "[data-tile='1']", "data-locked")).toBe("guest");
+    expect(attr(element, "[data-tile='3']", "data-locked")).toBe("");
+  });
+
+  it("tells a visitor which bays need the owner's pass", () => {
+    const element = root();
+    const owned = [{ ...CATALOG[0]!, access: "owner" as const }, CATALOG[1]!];
+    render(element, initialState("visitor", owned), {
+      ...ownerModel,
+      access: "visitor",
+    });
+    expect(led(element, "1")).toEqual(["OWNER", "locked"]);
+    expect(attr(element, "[data-tile='1']", "data-locked")).toBe("owner");
   });
 
   it("shows a signed-in person their count, with the severity the app reported", () => {
@@ -502,27 +589,41 @@ describe("the label rails", () => {
       ...ownerModel,
       indicators: { notes: "locked" },
     });
-    expect(led(element, "1")).toEqual(["PASS", "locked"]);
+    expect(led(element, "1")).toEqual(["LOCKED", "locked"]);
   });
 });
 
 describe("the chosen bay", () => {
-  it("marks only the bay the keypad picked, while it is picked or releasing", () => {
+  it("rings the picked tile, then shows it releasing, then lets it rest", () => {
     const element = root();
-    const bay = (code: string): string =>
-      element.querySelector<HTMLElement>(`[data-bay='${code}']`)!.dataset
-        .selected!;
+    const tile = (code: string): string =>
+      element.querySelector<HTMLElement>(`[data-tile='${code}']`)!.dataset
+        .state!;
     const picked = reduce(initialState("owner", CATALOG), {
       type: "preselect",
       bay: "1",
     });
     render(element, picked, ownerModel);
-    expect([bay("1"), bay("3")]).toEqual(["true", "false"]);
+    expect([tile("1"), tile("3")]).toEqual(["selected", "idle"]);
     const releasing = reduce(picked, { type: "select", bay: "1" });
     render(element, releasing, ownerModel);
-    expect(bay("1")).toBe("true");
+    expect(tile("1")).toBe("releasing");
+    expect(attr(element, "[data-machine]", "data-busy")).toBe("true");
     render(element, reduce(releasing, { type: "tray-ready" }), ownerModel);
-    expect(bay("1")).toBe("false");
+    expect(tile("1")).toBe("idle");
+    expect(attr(element, "[data-machine]", "data-busy")).toBe("false");
+  });
+
+  it("marks a refused tile denied until the refusal is put back", () => {
+    const element = root();
+    const refused = reduce(initialState("guest", CATALOG), {
+      type: "select",
+      bay: "1",
+    });
+    render(element, refused, model);
+    expect(
+      element.querySelector<HTMLElement>("[data-tile='1']")!.dataset.state,
+    ).toBe("denied");
   });
 });
 
@@ -563,8 +664,7 @@ describe("the cartridge's shape follows the catalog", () => {
 
 function signingIn(): MachineState {
   const guest = initialState("guest", CATALOG);
-  const reading = reduce(guest, { type: "pass-tap" });
-  return reduce(reading, { type: "reader-scanned" });
+  return reduce(guest, { type: "open-sign-in" });
 }
 
 function typing(digits: string): MachineState {
@@ -574,7 +674,7 @@ function typing(digits: string): MachineState {
   return reduce(sent, { type: "otp-digits", digits });
 }
 
-const AT_REST = "INSERT PASS";
+const AT_REST = "PICK A BAY";
 
 function keys(state: MachineState, screen = AT_REST, faulted = false) {
   return [...litKeys(state, screen, faulted)].sort();
@@ -637,6 +737,20 @@ describe("a key is lit only when it does something on this screen", () => {
       ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "CLR"].sort(),
     );
     expect(keys(typing("123456"))).toEqual(["CLR", "GO"]);
+  });
+
+  it("lights only CLR on the account screen, because CLR is the way back", () => {
+    expect(
+      keys({ ...initialState("owner", CATALOG), authStep: "account" }),
+    ).toEqual(["CLR"]);
+  });
+
+  it("shows the products by default and the account only when asked", () => {
+    expect(viewFor(initialState("guest", CATALOG))).toBe("products");
+    expect(viewFor(initialState("owner", CATALOG))).toBe("products");
+    expect(
+      viewFor({ ...initialState("owner", CATALOG), authStep: "account" }),
+    ).toBe("account");
   });
 
   it("goes dark while the pass is being checked", () => {

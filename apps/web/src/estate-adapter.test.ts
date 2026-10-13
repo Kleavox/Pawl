@@ -22,10 +22,10 @@ const READ = {
 };
 
 describe("machine model", () => {
-  it("reads INSERT PASS for a signed out visitor and lights only the public bay", () => {
+  it("asks a signed out visitor to pick a bay and lights only the public bay", () => {
     const model = toMachineModel({ authenticated: false }, null, CATALOG, KEYS);
     expect(model.access).toBe("guest");
-    expect(model.screen).toBe("INSERT PASS");
+    expect(model.screen).toBe("PICK A BAY");
     expect(
       model.items.filter((item) => item.lit).map((item) => item.code),
     ).toEqual(["3"]);
@@ -163,6 +163,10 @@ describe("what the machine needs to draw a person", () => {
       KEYS,
     );
     expect(unnamed.holder).toBe("rafi");
+    expect(unnamed.email).toBe("rafi@x.test");
+    expect(
+      toMachineModel({ authenticated: false }, null, CATALOG, KEYS).email,
+    ).toBeNull();
   });
 
   it("gives a guest no counts at all, because an estate belongs to a person", () => {

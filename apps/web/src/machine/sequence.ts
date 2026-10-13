@@ -2,8 +2,8 @@ import type { BayCode, MachineEvent, MachineHost, MachineState } from "./state";
 
 export type Dispatch = (event: MachineEvent) => MachineState;
 
-const MECHANICAL_MOVE_MS = 900;
 export const RELEASE_SEQUENCE_MS = 1400;
+export const DENIED_BLINK_MS = 540;
 const REDUCED_MOTION_MS = 40;
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
@@ -65,20 +65,21 @@ export function forgetRequest(): void {
   }
 }
 
-export async function runReaderScan(dispatch: Dispatch): Promise<void> {
-  const reading = dispatch({ type: "pass-tap" });
-  if (reading.status !== "reading") return;
-  await motionDelay(MECHANICAL_MOVE_MS);
-  dispatch({ type: "reader-scanned" });
-}
-
 export async function runDispense(
   machine: MachineHost,
   bay: BayCode,
 ): Promise<void> {
   if (machine.read().busy) return;
-  const releasing = machine.dispatch({ type: "select", bay });
-  if (releasing.status !== "dispensing") return;
+  const next = machine.dispatch({ type: "select", bay });
+  if (next.status === "denied" && next.authRequest === bay) {
+    await motionDelay(DENIED_BLINK_MS);
+    const now = machine.read();
+    if (now.status === "denied" && now.authRequest === bay) {
+      machine.dispatch({ type: "open-sign-in" });
+    }
+    return;
+  }
+  if (next.status !== "dispensing") return;
   await runRelease(machine);
 }
 

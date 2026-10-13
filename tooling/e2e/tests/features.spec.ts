@@ -461,11 +461,17 @@ test("the account origin is the same machine, seen close up", async () => {
     "href",
     /\/privacy\.html$/,
   );
-  const digits = page.locator(".close-up__keypad .pw-key.is-unlit");
+  const digits = page.locator(".keypad .pw-key.is-unlit");
   await expect(digits).toHaveCount(10);
-  await expect(
-    page.locator(".close-up__keypad button", { hasText: /^\d$/ }),
-  ).toHaveCount(0);
+  await expect(page.locator(".keypad button", { hasText: /^\d$/ })).toHaveCount(
+    0,
+  );
+  await expect(page.locator("[data-camera]")).toHaveAttribute(
+    "data-framing",
+    "screen",
+  );
+  await expect(page.locator("[data-part]")).toHaveCount(16);
+  await expect(page.locator(".pawl-card, [data-reader]")).toHaveCount(0);
 });
 
 test("pass: the screen keeps its size across every view it shows", async ({
@@ -473,7 +479,7 @@ test("pass: the screen keeps its size across every view it shows", async ({
 }) => {
   const size = (target: Page) =>
     target
-      .locator(".close-up__screen")
+      .locator(".display")
       .evaluate(
         (node: HTMLElement) => `${node.offsetWidth}x${node.offsetHeight}`,
       );
@@ -507,10 +513,18 @@ test("pass: under reduced motion the camera does not move", async ({
   await still.goto(`${PASS}/`);
   await expect(still.locator("[data-camera]")).toBeVisible();
   expect(
-    await still
-      .locator("[data-camera]")
-      .evaluate((node) => getComputedStyle(node).animationName),
-  ).toBe("none");
+    await still.locator("[data-camera]").evaluate((node) => ({
+      animation: getComputedStyle(node).animationName,
+      transition: getComputedStyle(node).transitionProperty,
+      running: node.getAnimations().length,
+      framing: (node as HTMLElement).dataset.framing,
+    })),
+  ).toEqual({
+    animation: "none",
+    transition: "none",
+    running: 0,
+    framing: "screen",
+  });
   await still.close();
 });
 
@@ -526,7 +540,7 @@ test("pass: a control reached by Tab is clear of the screen's fade", async ({
   await expect(back).toBeVisible();
   await back.focus();
   const gap = await back.evaluate((node) => {
-    const view = node.closest(".close-up__view")!.getBoundingClientRect();
+    const view = node.closest(".pass-view")!.getBoundingClientRect();
     return view.bottom - node.getBoundingClientRect().bottom;
   });
   expect(gap).toBeGreaterThanOrEqual(22);
@@ -563,7 +577,7 @@ test("the machine says a failed estate call out loud instead of an all-clear", a
     muted: false,
   });
 
-  const led = page.locator("[data-bay='2'] [data-led]");
+  const led = page.locator("[data-tile='2'] [data-badge]");
   await expect(led, "an unmeasured count is written --, never 0").toHaveText(
     "--",
   );
