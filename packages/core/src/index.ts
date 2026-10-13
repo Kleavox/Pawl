@@ -3,7 +3,14 @@ export { renderErrorPage, errorCodeCopy } from "./error-page.js";
 export type { ErrorPageOptions } from "./error-page.js";
 export { escapeHtml } from "./escape.js";
 export { MACHINE_PAGE_CSS, renderMachinePage } from "./machine-page.js";
-export type { MachineKey, MachinePageOptions } from "./machine-page.js";
+export { MACHINE_PARTS, renderMachine } from "./machine.js";
+export type {
+  MachineFraming,
+  MachineKey,
+  MachineKeypad,
+  MachineOptions,
+} from "./machine.js";
+export type { MachinePageOptions } from "./machine-page.js";
 export { errorMessage } from "./errors.js";
 
 export type DeployEnvironment = "development" | "preview" | "production";

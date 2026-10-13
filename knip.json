@@ -13,6 +13,9 @@
       ],
       "vite": false
     },
+    "packages/core": {
+      "ignore": ["scripts/machine-css.d.mts"]
+    },
     "packages/crypto": {
       "ignoreUnresolved": ["../pkg/crypto.js"]
     },

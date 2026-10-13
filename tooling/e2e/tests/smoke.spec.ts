@@ -54,7 +54,10 @@ test("no horizontal overflow at 320px or 360px", async ({ browser }) => {
       const past = await page.evaluate(() =>
         [...document.querySelectorAll<HTMLElement>("body *")]
           .filter((element) => {
-            if (element.closest(".pw-marquee__ticker")) return false;
+            if (element.closest(".marquee__ticker")) return false;
+            if (element.closest(".camera:not([data-framing='whole'])")) {
+              return false;
+            }
             const box = element.getBoundingClientRect();
             if (box.width === 0 || box.height === 0) return false;
             if (getComputedStyle(element).visibility === "hidden") return false;

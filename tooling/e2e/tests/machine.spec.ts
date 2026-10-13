@@ -18,13 +18,23 @@ async function lampColour(target: Page): Promise<string> {
     () =>
       getComputedStyle(
         document.querySelector<HTMLElement>(
-          "[data-cabinet-state] .pw-chip__lamp",
+          "[data-cabinet-state] .marquee__lamp",
         )!,
       ).backgroundColor,
   );
 }
 
-test("the cabinet holds exactly nine bays, three of them filled", async ({
+async function tilesLit(target: Page): Promise<(string | undefined)[]> {
+  return target.evaluate(() =>
+    ["2", "7"].map(
+      (bay) =>
+        document.querySelector<HTMLElement>(`[data-tile="${bay}"]`)!.dataset
+          .lit,
+    ),
+  );
+}
+
+test("the cabinet's screen draws exactly nine bays, two of them stocked", async ({
   page,
 }) => {
   const session = page.waitForResponse((response) =>
@@ -33,10 +43,15 @@ test("the cabinet holds exactly nine bays, three of them filled", async ({
   await page.goto("/");
   await session;
   await expect(page.locator("main")).not.toHaveClass(/pw-main/);
-  await expect(page.locator("[data-bay]")).toHaveCount(9);
+  await expect(page.locator("[data-tile]")).toHaveCount(9);
   await expect(page.locator("[data-cartridge]")).toHaveCount(2);
+  expect(
+    await page
+      .locator("[data-tile]")
+      .first()
+      .evaluate((node) => node.closest("[data-part='display']") !== null),
+  ).toBe(true);
 });
-
 test("each filled bay offers a button named for the person standing there", async ({
   page,
 }) => {
@@ -57,7 +72,7 @@ test("each filled bay offers a button named for the person standing there", asyn
 
 test("the seven empty bays are not controls", async ({ page }) => {
   await page.goto("/");
-  const empties = page.locator("[data-bay]:not(:has([data-cartridge]))");
+  const empties = page.locator("[data-tile]:not(:has([data-cartridge]))");
   await expect(empties).toHaveCount(7);
   await expect(empties.locator("button")).toHaveCount(0);
   await expect(
@@ -88,17 +103,26 @@ test("no horizontal overflow at 320px", async ({ page }) => {
   expect(width).toBe(320);
 });
 
-test("the three mobile shelves share one height", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  const heights = await page
-    .locator("[data-shelf]")
-    .evaluateAll((nodes) =>
-      nodes.map((node) => Math.round(node.getBoundingClientRect().height)),
-    );
-  expect(new Set(heights).size).toBe(1);
+test("the nine tiles share one size on a phone and on a laptop", async ({
+  page,
+}) => {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1366, height: 768 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    const sizes = await page
+      .locator("[data-tile]")
+      .evaluateAll((nodes) =>
+        nodes.map(
+          (node) =>
+            `${(node as HTMLElement).offsetWidth}x${(node as HTMLElement).offsetHeight}`,
+        ),
+      );
+    expect(new Set(sizes).size, sizes.join(" ")).toBe(1);
+  }
 });
-
 test("every key is reachable and large enough to hit", async ({ page }) => {
   for (const viewport of [
     { width: 390, height: 844 },
@@ -144,68 +168,75 @@ test("on a phone the machine is one tall column, top to bottom", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   const tops = await page.evaluate(() =>
-    [
-      ".marquee",
-      ".glass",
-      "[data-screen-zone]",
-      ".keypad",
-      ".reader",
-      "[data-tray]",
-      ".plate",
-    ].map((selector) =>
-      Math.round(document.querySelector(selector)!.getBoundingClientRect().top),
+    [".marquee", ".bezel", ".strip", "[data-part='tray']", ".plate"].map(
+      (selector) =>
+        Math.round(
+          document.querySelector(selector)!.getBoundingClientRect().top,
+        ),
     ),
   );
   expect(tops).toEqual([...tops].sort((a, b) => a - b));
-  await expect(page.locator("[data-dock]")).toHaveCount(0);
-  await expect(page.locator("[data-scrim]")).toHaveCount(0);
+  const deck = await page.evaluate(() => {
+    const lcd = document.querySelector(".lcd")!.getBoundingClientRect();
+    const keypad = document.querySelector(".keypad")!.getBoundingClientRect();
+    return { lcdRight: lcd.right, keypadLeft: keypad.left };
+  });
+  expect(deck.lcdRight).toBeLessThanOrEqual(deck.keypadLeft);
 });
-
-test("signing in on a phone brings the screen to the person", async ({
-  page,
+test("the machine fits the screen without scrolling on the laptops and phones it is made for", async ({
+  browser,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await page.locator("[data-terminal-open]").click({ force: true });
-  await expect(page.locator("[data-terminal]")).toBeVisible();
-  await expect
-    .poll(async () =>
-      page.evaluate(() => {
-        const box = document
-          .querySelector("[data-screen-zone]")!
-          .getBoundingClientRect();
-        return box.top < window.innerHeight && box.bottom > 0;
-      }),
-    )
-    .toBe(true);
+  for (const [width, height] of [
+    [1366, 768],
+    [1440, 900],
+    [1920, 1080],
+    [390, 844],
+    [412, 915],
+    [360, 740],
+  ] as const) {
+    const page = await browser.newPage({ viewport: { width, height } });
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+    for (const step of ["products", "signin"]) {
+      if (step === "signin") {
+        await page.locator("[data-terminal-open]").click();
+        await expect(page.locator("[data-terminal]")).toBeVisible();
+      }
+      const spill = await page.evaluate(() => ({
+        down: document.documentElement.scrollHeight - innerHeight,
+        across: document.documentElement.scrollWidth - innerWidth,
+      }));
+      expect(spill, `${step} at ${width}x${height}`).toEqual({
+        down: 0,
+        across: 0,
+      });
+    }
+    await page.close();
+  }
 });
-
-test("under reduced motion the screen jumps to the person instead of gliding", async ({
+test("under reduced motion the camera never moves and a receipt opens at once", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.addInitScript(() => {
-    const seen: unknown[] = [];
-    Object.assign(window, { scrolls: seen });
-    const original = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = function (options) {
-      seen.push(options);
-      return original.call(this, options);
-    };
-  });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await page.locator("[data-terminal-open]").click({ force: true });
-  await expect(page.locator("[data-terminal]")).toBeVisible();
-  const scrolls = await page.evaluate(
-    () => (window as unknown as { scrolls: ScrollIntoViewOptions[] }).scrolls,
-  );
-  expect(scrolls.length).toBeGreaterThan(0);
-  for (const options of scrolls) expect(options.behavior).not.toBe("smooth");
+  const camera = page.locator("[data-camera]");
+  expect(
+    await camera.evaluate((node) => ({
+      transition: getComputedStyle(node).transitionProperty,
+      running: node.getAnimations().length,
+    })),
+  ).toEqual({ transition: "none", running: 0 });
+  const started = Date.now();
+  await page.locator(".plate a[href$='/privacy.html']").click();
+  await expect(page).toHaveURL(/\/privacy(\.html)?$/);
+  expect(Date.now() - started).toBeLessThan(2000);
+  expect(
+    await page
+      .locator("[data-receipt]")
+      .evaluate((node) => getComputedStyle(node).animationName),
+  ).toBe("none");
 });
-
 test("the sign-in view lives on the machine's screen, not in a dialog", async ({
   page,
 }) => {
@@ -290,7 +321,7 @@ test("the keypad says which mode it is in, not only what colour", async ({
       .locator(`[data-keypad-mode='${mode}']`)
       .evaluate((node) => getComputedStyle(node, "::before").content);
 
-  await expect(page.locator(".keypad-mode")).toHaveText(/SELECT\s*CODE/i, {
+  await expect(page.locator(".keypad__mode")).toHaveText(/SELECT\s*CODE/i, {
     useInnerText: true,
   });
   expect(await marker("selector")).toBe('"▸"');
@@ -324,25 +355,23 @@ test("the renderer lights the bays a guest may take, and paints them", async ({
   page,
 }) => {
   await page.goto("/");
+  await expect(page.locator("[data-tile='2']")).toHaveAttribute(
+    "data-locked",
+    "guest",
+  );
   const bays = await page.evaluate(() =>
     ["2", "7"].map((bay) => {
-      const light = document.querySelector<HTMLElement>(
-        `[data-bay="${bay}"] [data-backlight]`,
-      )!;
-      const style = getComputedStyle(light);
+      const tile = document.querySelector<HTMLElement>(`[data-tile="${bay}"]`)!;
+      const art = getComputedStyle(tile.querySelector(".tile__art i")!);
       return {
-        bay,
-        lit: light.dataset.lit ?? null,
-        paint: [style.backgroundImage, style.borderColor, style.boxShadow].join(
-          " | ",
-        ),
+        lit: tile.dataset.lit ?? null,
+        paint: [art.backgroundImage, art.boxShadow].join(" | "),
       };
     }),
   );
   expect(bays.map((entry) => entry.lit)).toEqual(["false", "true"]);
   expect(bays[1]!.paint).not.toBe(bays[0]!.paint);
 });
-
 test("the cabinet lamp changes with the pass, and never carries the meaning alone", async ({
   page,
 }) => {
@@ -352,7 +381,7 @@ test("the cabinet lamp changes with the pass, and never carries the meaning alon
 
   const lamps = await page.evaluate(() => {
     const node = document.querySelector<HTMLElement>("[data-cabinet-state]")!;
-    const lamp = node.querySelector<HTMLElement>(".pw-chip__lamp")!;
+    const lamp = node.querySelector<HTMLElement>(".marquee__lamp")!;
     const read = (): string => getComputedStyle(lamp).backgroundColor;
     const guest = read();
     node.dataset.cabinetState = "owner";
@@ -372,7 +401,7 @@ test("the tray offers nothing to press until something is delivered", async ({
     "none",
   );
   await expect(page.locator("[data-tray-action]")).toBeHidden();
-  await expect(page.locator(".tray-label")).toBeVisible();
+  await expect(page.locator(".tray__label")).toBeVisible();
   const reachable = await page.evaluate(() => {
     const action = document.querySelector<HTMLElement>("[data-tray-action]")!;
     action.focus();
@@ -395,7 +424,7 @@ test("a delivered cartridge gives the tray a real control", async ({
       const tray = document.querySelector<HTMLElement>("[data-tray]")!;
       tray.dataset.tray = "7";
       tray.dataset.trayShape = "wide";
-      const result = document.querySelector<HTMLElement>(".tray-result")!;
+      const result = document.querySelector<HTMLElement>(".tray__result")!;
       await Promise.all(
         result.getAnimations().map((animation) => animation.finished),
       );
@@ -403,7 +432,7 @@ test("a delivered cartridge gives the tray a real control", async ({
     const action = page.locator("[data-tray-action]");
     await expect(action).toBeVisible();
     await expect(action).toHaveAccessibleName("TAKE DELIVERY");
-    await expect(page.locator(".tray-label")).toBeHidden();
+    await expect(page.locator(".tray__label")).toBeHidden();
     const box = await action.boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
     expect(box!.width).toBeGreaterThanOrEqual(44);
@@ -422,7 +451,7 @@ test("the tray keeps the two products apart by shape", async ({ page }) => {
       const tray = document.querySelector<HTMLElement>("[data-tray]")!;
       tray.dataset.tray = code;
       tray.dataset.trayShape = form;
-      const result = document.querySelector<HTMLElement>(".tray-result")!;
+      const result = document.querySelector<HTMLElement>(".tray__result")!;
       await Promise.all(
         result.getAnimations().map((animation) => animation.finished),
       );
@@ -508,50 +537,33 @@ test("nothing on the machine animates forever", async ({ page }) => {
     transfer.dataset.transfer = "2";
     transfer.dataset.transferShape = "tall";
     sweep();
-    machine.dataset.status = "reading";
-    sweep();
     machine.dataset.status = "denied";
+    document.querySelector<HTMLElement>("[data-tile='2']")!.dataset.state =
+      "denied";
+    sweep();
+    document.querySelector<HTMLElement>("[data-tile='2']")!.dataset.state =
+      "releasing";
+    machine.dataset.leaving = "printer";
     sweep();
     return offenders;
   });
   expect(forever).toEqual([]);
 });
 
-test("the pass card is off the machine until the reader is reading", async ({
+test("there is no pass card, card reader or card words on any page of the machine", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await openBooted(page);
-  const card = page.locator(".pawl-card");
-  await expect(card).toBeHidden();
-
-  const reading = await page.evaluate(() => {
-    const machine = document.querySelector<HTMLElement>("[data-machine]")!;
-    machine.dataset.status = "reading";
-    const style = getComputedStyle(
-      document.querySelector<HTMLElement>(".pawl-card")!,
+  for (const url of ["/", "/privacy.html", "/terms.html", "/no/such/bay"]) {
+    await page.goto(url);
+    await expect(
+      page.locator(".pawl-card, [data-reader], [data-card-holder]"),
+      url,
+    ).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.innerText), url).not.toMatch(
+      /INSERT PASS|EJECT PASS|PASS DOCK/i,
     );
-    return {
-      name: style.animationName,
-      duration: style.animationDuration,
-      count: style.animationIterationCount,
-      move: getComputedStyle(document.documentElement)
-        .getPropertyValue("--pw-t5")
-        .trim(),
-    };
-  });
-  await expect(card).toBeVisible();
-  expect(reading.name).toBe("pawl-card-insert");
-  expect(seconds(reading.duration)).toBe(seconds(reading.move));
-  expect(reading.count).toBe("1");
-
-  await page.evaluate(() => {
-    document.querySelector<HTMLElement>("[data-machine]")!.dataset.status =
-      "idle";
-  });
-  await expect(card).toBeHidden();
+  }
 });
-
 test("the bridge stays out of the way until a cartridge is taken", async ({
   page,
 }) => {
@@ -661,7 +673,7 @@ test("reduced motion shortens the bridge, it does not skip it", async ({
   expect(reduced.height).toBeGreaterThanOrEqual(44);
 });
 
-test("a full tray stays inside the cabinet it is bolted to", async ({
+test("a full tray stays inside the delivery bay it is bolted to", async ({
   page,
 }) => {
   for (const viewport of [
@@ -676,33 +688,34 @@ test("a full tray stays inside the cabinet it is bolted to", async ({
       const slot = document.querySelector<HTMLElement>("[data-tray]")!;
       slot.dataset.tray = "7";
       slot.dataset.trayShape = "wide";
-      const result = document.querySelector<HTMLElement>(".tray-result")!;
       await Promise.all(
-        result.getAnimations().map((animation) => animation.finished),
+        slot.getAnimations().map((animation) => animation.finished),
       );
-      const tray = document
-        .querySelector<HTMLElement>("[data-tray]")!
+      const bay = document
+        .querySelector<HTMLElement>("[data-part='tray']")!
+        .getBoundingClientRect();
+      const machine = document
+        .querySelector<HTMLElement>("[data-machine]")!
         .getBoundingClientRect();
       const action = document
         .querySelector<HTMLElement>("[data-tray-action]")!
         .getBoundingClientRect();
-      const cabinet = document
-        .querySelector<HTMLElement>(".cabinet")!
-        .getBoundingClientRect();
       return {
-        overhangRight: tray.right - cabinet.right,
-        overhangLeft: cabinet.left - tray.left,
-        actionRight: action.right - cabinet.right,
-        actionLeft: cabinet.left - action.left,
+        bayInMachine:
+          bay.left >= machine.left - 0.5 && bay.right <= machine.right + 0.5,
+        actionInBay:
+          action.left >= bay.left - 0.5 &&
+          action.right <= bay.right + 0.5 &&
+          action.top >= bay.top - 0.5 &&
+          action.bottom <= bay.bottom + 0.5,
       };
     });
-    expect(fit.overhangRight).toBeLessThanOrEqual(0);
-    expect(fit.overhangLeft).toBeLessThanOrEqual(0);
-    expect(fit.actionRight).toBeLessThanOrEqual(0);
-    expect(fit.actionLeft).toBeLessThanOrEqual(0);
+    expect(fit, `${viewport.width}x${viewport.height}`).toEqual({
+      bayInMachine: true,
+      actionInBay: true,
+    });
   }
 });
-
 test("every route the machine offers is reachable from here", async ({
   page,
 }) => {
@@ -731,19 +744,20 @@ test("every route the machine offers is reachable from here", async ({
   ]);
 });
 
-test("the returning pass card never widens the page", async ({ page }) => {
+test("a refusal never widens the page", async ({ page }) => {
   for (const width of [761, 800, 900, 1000, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await openBooted(page);
     const measured = await page.evaluate(() => {
       document.querySelector<HTMLElement>("[data-machine]")!.dataset.status =
-        "reading";
+        "denied";
+      document.querySelector<HTMLElement>("[data-tile='2']")!.dataset.state =
+        "denied";
       return document.documentElement.scrollWidth;
     });
     expect(measured).toBe(width);
   }
 });
-
 test("the whole site lives inside the machine: no page header, no page footer", async ({
   page,
 }) => {
@@ -755,23 +769,26 @@ test("the whole site lives inside the machine: no page header, no page footer", 
       "[data-ticker-text]",
       "[data-cabinet-state]",
       "[data-screen]",
-      ".plate a[href='/privacy.html']",
-      ".plate a[href='/terms.html']",
+      ".plate a[href$='/privacy.html']",
+      ".plate a[href$='/terms.html']",
       "[data-sound]",
     ].map((selector) => machine.contains(document.querySelector(selector)));
   });
   expect(inside).toEqual([true, true, true, true, true, true]);
 });
 
-test("each bay's rail tells a guest what it holds, never a count", async ({
+test("each tile tells a guest what it holds, never a count", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator("[data-bay='2'] [data-led]")).toHaveText("PASS");
-  await expect(page.locator("[data-bay='7'] [data-led]")).toHaveText("OPEN ↗");
-  await expect(page.locator("[data-bay='2'] .rail__code")).toHaveText("02");
+  await expect(page.locator("[data-tile='2'] [data-badge]")).toHaveText(
+    "SIGN IN",
+  );
+  await expect(page.locator("[data-tile='7'] [data-badge]")).toHaveText(
+    "OPEN ↗",
+  );
+  await expect(page.locator("[data-tile='2'] .tile__code")).toHaveText("02");
 });
-
 test("the sound switch starts off and remembers being turned on", async ({
   page,
 }) => {
@@ -819,7 +836,7 @@ const OWNER_SESSION = {
 };
 
 async function hardwareOn(page: Page, screen: string): Promise<string> {
-  if (screen === "signed-in") {
+  if (screen === "owner" || screen === "account") {
     await page.route("**/api/session", (route) =>
       route.fulfill({ json: OWNER_SESSION }),
     );
@@ -831,8 +848,12 @@ async function hardwareOn(page: Page, screen: string): Promise<string> {
     route.fulfill({ json: { ok: true } }),
   );
   await page.goto(GATEWAY);
-  if (screen === "signed-in") {
-    await expect(page.locator("[data-view-panel='signed-in']")).toBeVisible();
+  if (screen === "owner" || screen === "account") {
+    await expect(page.locator("[data-account-open]")).toBeVisible();
+  }
+  if (screen === "account") {
+    await page.locator("[data-account-open]").click();
+    await expect(page.locator("[data-view-panel='account']")).toBeVisible();
   }
   if (screen === "signin" || screen === "email" || screen === "code") {
     await page.locator("[data-terminal-open]").click();
@@ -851,21 +872,22 @@ async function hardwareOn(page: Page, screen: string): Promise<string> {
   return page.evaluate(() =>
     [
       "[data-machine]",
-      ".cabinet",
-      "[aria-label='Service panel']",
-      "[data-screen-zone]",
+      ".bezel",
+      ".display",
+      ".strip",
+      ".lcd",
       ".keypad",
-      "[data-tray]",
+      "[data-part='tray']",
     ]
       .map((selector) => {
-        const box = document.querySelector(selector)!.getBoundingClientRect();
-        return `${selector} ${box.width}x${box.height}@${box.top + scrollY}`;
+        const node = document.querySelector<HTMLElement>(selector)!;
+        return `${selector} ${node.offsetWidth}x${node.offsetHeight}@${node.offsetTop}`;
       })
       .join(" | "),
   );
 }
 
-const SCREENS = ["idle", "signin", "email", "code", "signed-in"];
+const SCREENS = ["products", "signin", "email", "code", "owner", "account"];
 
 test("the machine keeps its size whatever the screen shows", async ({
   browser,
@@ -895,26 +917,18 @@ async function fitOf(page: Page): Promise<{
     const view = document.querySelector<HTMLElement>(
       "[data-view-panel]:not([hidden])",
     )!;
-    const pushed = [
-      ...view.querySelectorAll<HTMLElement>(".view__actions, .view__back"),
-    ];
-    for (const node of pushed) node.style.marginTop = "0";
-    const shown = [...view.children].filter(
-      (node) => node.getClientRects().length > 0,
-    );
-    const last = shown[shown.length - 1]!.getBoundingClientRect();
-    const needed =
-      last.bottom -
-      view.getBoundingClientRect().top +
-      parseFloat(getComputedStyle(view).paddingBottom);
-    for (const node of pushed) node.style.marginTop = "";
-    const status = document.querySelector<HTMLElement>(".screen__status")!;
-    const hint = document.querySelector<HTMLElement>(".screen__hint")!;
+    const body = view.querySelector<HTMLElement>(".view__body")!;
+    const status = document.querySelector<HTMLElement>(".lcd__line")!;
+    const foot = view.querySelector<HTMLElement>(".view__foot")!;
+    const hint = foot.querySelector<HTMLElement>(".view__hint")!;
     return {
-      spare: Math.floor(view.clientHeight - needed),
+      spare: body.clientHeight - body.scrollHeight,
       status: status.scrollHeight - status.clientHeight,
-      hint: hint.scrollWidth - hint.clientWidth,
-      wide: view.scrollWidth - view.clientWidth,
+      hint: Math.max(
+        hint.scrollWidth - hint.clientWidth,
+        foot.scrollHeight - foot.clientHeight,
+      ),
+      wide: body.scrollWidth - body.clientWidth,
     };
   });
 }
@@ -990,19 +1004,29 @@ test("the keyboard's digits and Backspace work the screen even while a choice ha
   await expect(page.locator("[data-view-panel='email']")).toBeVisible();
 });
 
-test("a guest is told to insert a pass and cannot take NOTE", async ({
+test("a guest is refused NOTE, and the screen turns into the sign-in that opens it", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator("[data-screen]")).toHaveText("INSERT PASS");
+  await expect(page.locator("[data-screen]")).toHaveText("PICK A BAY");
   await page.locator("[data-cartridge='2']").click();
-  await expect(page.locator("[data-screen]")).toContainText("PASS REQUIRED");
+  await expect(page.locator("[data-screen]")).toContainText(
+    "VISITOR PASS REQUIRED",
+  );
+  await expect(page.locator("[data-tile='2']")).toHaveAttribute(
+    "data-state",
+    "denied",
+  );
+  await expect(page.locator("[data-terminal]")).toBeVisible();
+  await expect(page.locator("[data-sign-in-for]")).toHaveText(
+    "NOTE needs a pass",
+  );
+  await expect(page.locator("[data-screen]")).toHaveText("CHOOSE A METHOD");
   await expect(page.locator("[data-tray]")).toHaveAttribute(
     "data-tray",
     "none",
   );
 });
-
 test("a guest can take MANUAL without a pass", async ({ page }) => {
   await page.goto("/");
   await page.locator("[data-cartridge='7']").click();
@@ -1101,9 +1125,7 @@ test("a blocked sessionStorage says so instead of forgetting in silence", async 
   });
   await page.goto("/");
   await page.locator("[data-cartridge='2']").click();
-  await expect(page.locator("[data-screen]")).toContainText("PASS REQUIRED");
-
-  await page.locator("[data-terminal-open]").click();
+  await expect(page.locator("[data-terminal]")).toBeVisible();
   await page.locator("[data-terminal-provider='google']").click();
 
   const said = page.locator("[data-terminal-error]");
@@ -1196,14 +1218,7 @@ test.describe("with a real pass in the machine", () => {
       "GUEST MODE",
     );
     const guestLamp = await lampColour(guest);
-    const guestBays = await guest.evaluate(() =>
-      ["2", "7"].map(
-        (bay) =>
-          document.querySelector<HTMLElement>(
-            `[data-bay="${bay}"] [data-backlight]`,
-          )!.dataset.lit,
-      ),
-    );
+    const guestBays = await tilesLit(guest);
     await guestContext.close();
 
     await signedIn.goto(GATEWAY);
@@ -1222,14 +1237,7 @@ test.describe("with a real pass in the machine", () => {
       "an owner must not be told they need an owner pass",
     ).toHaveCount(1);
     const ownerLamp = await lampColour(signedIn);
-    const ownerBays = await signedIn.evaluate(() =>
-      ["2", "7"].map(
-        (bay) =>
-          document.querySelector<HTMLElement>(
-            `[data-bay="${bay}"] [data-backlight]`,
-          )!.dataset.lit,
-      ),
-    );
+    const ownerBays = await tilesLit(signedIn);
 
     expect(guestBays).toEqual(["false", "true"]);
     expect(ownerBays).toEqual(["true", "true"]);
@@ -1255,8 +1263,8 @@ test.describe("with a real pass in the machine", () => {
       "OWNER MODE",
     );
     await expect(signedIn.locator("[data-terminal-open]")).toBeHidden();
-    await expect(signedIn.locator("[data-logout]")).toBeVisible();
-    await expect(signedIn.locator("[data-reader]")).toBeHidden();
+    await expect(signedIn.locator("[data-account-open]")).toBeVisible();
+    await expect(signedIn.locator("[data-reader]")).toHaveCount(0);
     await expect(signedIn.locator("[data-terminal]")).toBeHidden();
     await expect(
       signedIn.locator("[data-terminal-provider='google']"),
@@ -1336,6 +1344,79 @@ test.describe("with a real pass in the machine", () => {
 
     await signedIn.unroute("**/api/session");
   });
+
+  test("ACCOUNT ▸ swaps the products for the account screen, and CLR brings them back", async () => {
+    await signedIn.goto(GATEWAY);
+    await expect(signedIn.locator("[data-greeting]")).toHaveText(
+      /^HI, PROBEMACHINE\d* · OWNER$/,
+    );
+    const opener = signedIn.locator("[data-account-open]");
+    await opener.click();
+    const account = signedIn.locator("[data-view-panel='account']");
+    await expect(account).toBeVisible();
+    await expect(signedIn.locator("[data-view-panel]:visible")).toHaveCount(1);
+    await expect(signedIn.locator("[data-screen]")).toHaveText("YOUR ACCOUNT");
+    await expect(signedIn.locator("[data-account-pass]")).toHaveText(
+      "OWNER PASS",
+    );
+    await expect(signedIn.locator("[data-account-email]")).toContainText("@");
+    for (const dark of ["1", "2", "7", "GO"]) {
+      await expect(signedIn.locator(`[data-key='${dark}']`)).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+    }
+    await signedIn.locator("[data-key='CLR']").click();
+    await expect(account).toBeHidden();
+    await expect(opener).toBeFocused();
+  });
+
+  test("Manage account dollies to the screen and paw. takes the screen over", async () => {
+    await signedIn.setViewportSize({ width: 1440, height: 900 });
+    await signedIn.goto(GATEWAY);
+    await signedIn.locator("[data-account-open]").click();
+    const manage = signedIn.locator("[data-account-manage]");
+    await manage.evaluate((link) => {
+      const anchor = link as HTMLAnchorElement;
+      anchor.href = anchor.href.replace("127.0.0.1", "localhost");
+    });
+    await manage.click();
+    await expect(signedIn.locator("[data-camera]")).toHaveAttribute(
+      "data-framing",
+      "screen",
+    );
+    await expect(signedIn.locator("[data-screen]")).toHaveText(
+      "OPENING ACCOUNT",
+    );
+    await expect(signedIn).toHaveURL(/:8787\/$/, { timeout: 5_000 });
+    await expect(signedIn.locator("[data-camera]")).toHaveAttribute(
+      "data-framing",
+      "screen",
+    );
+    await expect(signedIn.locator("[data-screen-sub]")).toHaveText(
+      /^PROBEMACHINE\d* · OWNER PASS$/,
+    );
+    await expect(
+      signedIn.getByRole("heading", { name: /^probemachine\d*$/ }),
+    ).toBeVisible();
+  });
+
+  test("signing out leaves a guest at the products, and the ticker says so", async () => {
+    await signedIn.goto(GATEWAY);
+    await signedIn.locator("[data-account-open]").click();
+    await signedIn.locator("[data-logout]").click();
+    await expect(signedIn.locator("[data-cabinet-state]")).toHaveText(
+      "GUEST MODE",
+      { timeout: 20_000 },
+    );
+    await expect(
+      signedIn.locator("[data-view-panel='products']"),
+    ).toBeVisible();
+    await expect(signedIn.locator("[data-ticker-text]")).toContainText(
+      "SIGNED OUT",
+    );
+    await expect(signedIn.locator("[data-screen]")).toHaveText("SIGNED OUT");
+  });
 });
 
 test("a broken session endpoint is a fault, not a calm guest", async ({
@@ -1356,7 +1437,9 @@ test("a broken session endpoint is a fault, not a calm guest", async ({
 });
 
 async function reachOtpMode(page: Page): Promise<void> {
-  await page.locator("[data-reader]").click();
+  if (!(await page.locator("[data-terminal]").isVisible())) {
+    await page.locator("[data-terminal-open]").click();
+  }
   await expect(page.locator("[data-terminal]")).toBeVisible();
   await page.locator("[data-terminal-email-choice]").click();
   await page
@@ -1531,8 +1614,11 @@ test.describe("codes typed on the machine keypad", () => {
       "VISITOR MODE",
     );
     await expect(page.locator("[data-account-name]")).toHaveText("namedprobe");
+    await expect(page.locator("[data-greeting]")).toHaveText(
+      "HI, NAMEDPROBE · VISITOR",
+    );
     await expect(
-      page.locator("[data-view-panel=\x27signed-in\x27]"),
+      page.locator("[data-view-panel=\x27products\x27]"),
       "Enter after a keypad sign-in presses GO, it does not follow a link out of the machine",
     ).toBeFocused();
     await fresh.close();
@@ -1625,7 +1711,7 @@ test.describe("codes typed on the machine keypad", () => {
 
     await page.goto(GATEWAY);
     await page.locator("[data-cartridge='2']").click();
-    await expect(page.locator("[data-screen]")).toContainText("PASS REQUIRED");
+    await expect(page.locator("[data-terminal]")).toBeVisible();
     await reachOtpMode(page);
     await typeCode(page, "123456");
 
@@ -1670,9 +1756,9 @@ test.describe("codes typed on the machine keypad", () => {
     }
 
     await page.keyboard.press("5");
-    await expect(page.locator("[data-screen]")).toHaveText("INSERT PASS");
+    await expect(page.locator("[data-screen]")).toHaveText("PICK A BAY");
 
-    await page.locator("[data-reader]").click();
+    await page.locator("[data-terminal-open]").click();
     await expect(page.locator("[data-terminal]")).toBeVisible();
     await expect(key("7")).toHaveAttribute("aria-disabled", "true");
     await expect(key("3")).toHaveAttribute("aria-disabled", "false");
@@ -1705,7 +1791,7 @@ test.describe("codes typed on the machine keypad", () => {
       await route.fulfill({ json: { ok: true } });
     });
     await page.goto(GATEWAY);
-    await page.locator("[data-reader]").click();
+    await page.locator("[data-terminal-open]").click();
     await expect(page.locator("[data-terminal]")).toBeVisible();
     await page.locator("[data-terminal-email-choice]").click();
     await page.locator("[data-terminal-email]").fill("twice@example.com");
@@ -1755,7 +1841,7 @@ test("a fault holds the screen until the next touch, then the estate line comes 
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(GATEWAY);
-  await expect(page.locator("[data-screen]")).toHaveText("INSERT PASS");
+  await expect(page.locator("[data-screen]")).toHaveText("PICK A BAY");
 
   await page.evaluate(() => {
     document.querySelector<HTMLElement>("[data-cartridge='7']")!.dataset.href =
@@ -1778,7 +1864,7 @@ test("a fault holds the screen until the next touch, then the estate line comes 
   await expect(
     page.locator("[data-screen]"),
     "a fault must not overwrite the estate line for the life of the page",
-  ).toHaveText("INSERT PASS");
+  ).toHaveText("PICK A BAY");
 });
 
 test("cancel still leaves the bridge after the transfer has resolved", async ({
@@ -1826,15 +1912,7 @@ test.describe("with a visitor pass in the machine", () => {
       "aria-label",
       "Select Notes, bay 2, ready",
     );
-    const bays = await visitor.evaluate(() =>
-      ["2", "7"].map(
-        (bay) =>
-          document.querySelector<HTMLElement>(
-            `[data-bay="${bay}"] [data-backlight]`,
-          )!.dataset.lit,
-      ),
-    );
-    expect(bays).toEqual(["true", "true"]);
+    expect(await tilesLit(visitor)).toEqual(["true", "true"]);
   });
 
   test("a visitor can still take the bay their pass opens", async () => {

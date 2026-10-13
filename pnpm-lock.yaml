@@ -296,9 +296,6 @@ importers:
         specifier: workspace:*
         version: link:../topology
     devDependencies:
-      '@pawl/core':
-        specifier: workspace:*
-        version: link:../core
       '@pawl/typescript':
         specifier: workspace:*
         version: link:../../tooling/typescript

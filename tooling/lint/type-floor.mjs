@@ -7,6 +7,12 @@ const APPS = ["web"];
 const ROOT_PX = 16;
 const FLOOR_REM = 0.68;
 const FLOOR_PX = FLOOR_REM * ROOT_PX;
+const MACHINE_UNIT_MIN_PX = Number(
+  /--u:\s*clamp\(\s*(\d*\.?\d+)px/.exec(
+    readFileSync(resolve(root, "packages/ui/src/machine.css"), "utf8"),
+  )[1],
+);
+const MACHINE_LENGTH = /calc\(\s*(\d*\.?\d+)\s*\*\s*var\(--u\)\s*\)/;
 const SKIP_DIRECTORIES = ["node_modules", "dist", ".turbo", ".wrangler"];
 const KEYWORDS = new Set([
   "inherit",
@@ -39,6 +45,15 @@ const TOKENS = new Map(
 );
 
 function resolveLength(raw) {
+  const largest = /^max\((.+)\)$/i.exec(raw);
+  if (largest !== null) {
+    const sizes = largest[1]
+      .split(/,(?![^(]*\))/)
+      .map((part) => resolveLength(part.trim()));
+    return sizes.includes(null) ? null : Math.max(...sizes);
+  }
+  const machine = new RegExp(`^${MACHINE_LENGTH.source}$`).exec(raw);
+  if (machine !== null) return Number(machine[1]) * MACHINE_UNIT_MIN_PX;
   const token = /^var\((--[a-z0-9-]+)\)$/i.exec(raw);
   const value = token === null ? raw : (TOKENS.get(token[1]) ?? raw);
   const clamped = /^clamp\(\s*([^,]+),/i.exec(value);
@@ -50,6 +65,8 @@ function resolveLength(raw) {
 }
 
 function sizeTokenOfShorthand(value) {
+  const machine = MACHINE_LENGTH.exec(value);
+  if (machine !== null) return machine[0];
   for (const part of value.split(/\s+/)) {
     const head = part.split("/")[0];
     if (/^\d*\.?\d+(rem|em|px)$/.test(head)) return head;

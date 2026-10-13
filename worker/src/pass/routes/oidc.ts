@@ -207,6 +207,7 @@ function consentPage(
     title: `Sign in to ${request.client.name} with Pawl`,
     status: "AN APP WANTS YOUR PASS",
     sub: "NOTHING SHARED YET",
+    where: "CONSENT",
     rootOrigin,
     siteName,
     caption: "CLR DENY · GO ALLOW",

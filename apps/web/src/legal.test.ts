@@ -16,14 +16,23 @@ const terms = page("terms.html");
 
 describe("both receipts", () => {
   it.each([
-    ["privacy.html", privacy],
-    ["terms.html", terms],
+    ["privacy.html", privacy, "{{MACHINE_PRIVACY}}"],
+    ["terms.html", terms, "{{MACHINE_TERMS}}"],
   ])(
-    "%s is a receipt hanging from the machine, not a page with a header and a footer",
-    (_, html) => {
-      expect(html).toContain("data-receipt");
-      expect(html).toContain("{{MARQUEE_RECEIPT}}");
-      expect(html).toContain("{{PLATE}}");
+    "%s is a receipt hanging from the machine's printer, not a page with a header and a footer",
+    (_, html, machine) => {
+      expect(html).toContain(machine);
+      expect(html).toMatch(
+        /<main class="receipt-feed" aria-labelledby="receipt-title">\s*<article class="receipt" data-receipt/,
+      );
+      expect(html).toMatch(
+        /<a [^>]*data-tear[^>]*href="\/"|<a [^>]*href="\/"[^>]*data-tear/,
+      );
+      expect(html).toMatch(
+        /<div class="receipt__head">[\s\S]*?<a class="receipt__tear-top" href="\/" data-tear>/,
+      );
+      expect(html).not.toContain("{{MARQUEE_RECEIPT}}");
+      expect(html).not.toContain("{{PLATE}}");
       expect(html).not.toMatch(/<header\b/);
       expect(html).not.toMatch(/<footer\b/);
       expect(html).toContain("{{EFFECTIVE}}");

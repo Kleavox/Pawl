@@ -19,6 +19,7 @@ export type MachineModel = {
   items: { code: BayCode; lit: boolean }[];
   screen: string;
   holder: string | null;
+  email: string | null;
   indicators: Record<string, Indicator> | null;
   ticker: string;
 };
@@ -55,7 +56,7 @@ function screenFor(
   counts: NavCounts | null,
   keys: readonly string[],
 ): string {
-  if (access === "guest") return "INSERT PASS";
+  if (access === "guest") return "PICK A BAY";
   if (overview === null || counts === null) return "ESTATE UNREADABLE";
   const full = estateFullyRead(counts.indicators, keys);
   if (overview.attention.length > 0) {
@@ -120,6 +121,7 @@ export function toMachineModel(
       access === "guest"
         ? null
         : displayHandle(session.identity?.username, session.identity?.email),
+    email: access === "guest" ? null : (session.identity?.email ?? null),
     indicators,
     ticker: tickerFor(access, catalog, screen, indicators, siteName),
   };

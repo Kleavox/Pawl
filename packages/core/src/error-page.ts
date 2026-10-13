@@ -64,7 +64,11 @@ export function renderErrorPage(options: ErrorPageOptions): string {
   const service = options.service ?? "Pawl";
   const title = options.title ?? fallback.title;
   const message = options.message ?? fallback.message;
-  const home = options.homeHref ?? "/";
+  const given = options.homeHref ?? "/";
+  const home =
+    given.startsWith("/") && !given.startsWith("//")
+      ? `${given.split("#")[0]}#cam=screen`
+      : given;
   const code = options.code;
   const broken = code !== undefined && Number(code) >= 500;
   const status =
@@ -76,15 +80,23 @@ export function renderErrorPage(options: ErrorPageOptions): string {
           ? `FAULT ${code}`
           : "FAULT";
   const led = code
-    ? `<div class="led" data-code="${escapeHtml(code)}">${escapeHtml(code)}</div>`
+    ? `<div class="page-led" data-code="${escapeHtml(code)}">${escapeHtml(code)}</div>`
     : "";
   return renderMachinePage({
     title: `${title} · ${service}`,
     status,
+    where:
+      code === "404"
+        ? "EMPTY BAY"
+        : broken
+          ? "OUT OF ORDER"
+          : code
+            ? `FAULT ${code}`
+            : "FAULT",
     sub: code ? `CODE ${code}` : undefined,
     body: `<p class="eyebrow eyebrow--danger">${escapeHtml(service)}</p>${led}<h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><div class="actions"><a class="button button--primary" href="${escapeHtml(home)}">${escapeHtml(options.homeLabel ?? "Back to the machine")}</a></div>`,
     keys: { go: { kind: "link", href: home } },
-    caption: "GO · BACK TO THE MACHINE",
+    caption: "GO · TO THE MACHINE",
     sign: broken ? "OUT OF ORDER" : undefined,
     siteName: service,
   });

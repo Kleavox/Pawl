@@ -7,7 +7,7 @@ import type { MachineModel } from "../estate-adapter";
 const OTP_LENGTH = 6;
 
 export type ScreenView =
-  "idle" | "signed-in" | "signin" | "email" | "code" | "working";
+  "products" | "signin" | "email" | "code" | "working" | "account";
 
 function entryOf(catalog: Catalog, bay: BayCode) {
   return catalog.find((entry) => entry.code === bay);
@@ -27,7 +27,7 @@ const CABINET_WORD: Record<AccessRole, string> = {
   owner: "OWNER MODE",
 };
 
-const CARD_ROLE: Record<AccessRole, string> = {
+const PASS_KIND: Record<AccessRole, string> = {
   guest: "",
   visitor: "VISITOR PASS",
   owner: "OWNER PASS",
@@ -48,7 +48,8 @@ export function viewFor(state: MachineState): ScreenView {
   if (state.authStep === "oauth" || state.authStep === "issuing") {
     return "working";
   }
-  return state.access === "guest" ? "idle" : "signed-in";
+  if (state.authStep === "account") return "account";
+  return "products";
 }
 
 function passWord(catalog: Catalog, bay: BayCode): string {
@@ -99,16 +100,16 @@ function screenCopy(state: MachineState, model: MachineModel): ScreenCopy {
   if (state.authStep === "issuing") {
     return { main: "CHECKING YOUR PASS", sub: "ONE MOMENT" };
   }
-  if (state.status === "reading") {
-    return { main: "READING PASS", sub: "HOLD THE CARD STILL" };
+  if (state.authStep === "account") {
+    return { main: "YOUR ACCOUNT", sub: "MANAGE OR SIGN OUT" };
   }
   if (state.status === "denied") {
-    if (state.selection === null) {
-      return { main: "DENIED", sub: "A PASS IS REQUIRED" };
-    }
+    const sub =
+      state.access === "guest" ? "SIGN IN TO UNLOCK" : "FOR THE OWNER ONLY";
+    if (state.selection === null) return { main: "DENIED", sub };
     return {
       main: `${state.selection} DENIED, ${denialReason(state.catalog, state.selection)}`,
-      sub: "INSERT PASS TO UNLOCK",
+      sub,
     };
   }
   if (state.status === "dispensing" && state.selection !== null) {
@@ -130,25 +131,29 @@ function screenCopy(state: MachineState, model: MachineModel): ScreenCopy {
     };
   }
   if (state.status === "granted") {
-    return { main: "PASS ACCEPTED", sub: "SELECT A BAY" };
+    return { main: "SIGNED IN", sub: "SELECT A BAY" };
+  }
+  if (model.screen.includes("UNREADABLE")) {
+    return { main: model.screen, sub: "PRESS GO TO RETRY" };
   }
   return {
     main: model.screen,
-    sub: model.screen.includes("UNREADABLE")
-      ? "PRESS GO TO RETRY"
-      : "SELECT A BAY",
+    sub: state.access === "guest" ? "OR SIGN IN ON SCREEN" : "SELECT A BAY",
   };
 }
 
-type Led = { text: string; severity: string };
+type Badge = { text: string; severity: string };
 
-function ledFor(
+function badgeFor(
   state: MachineState,
   bay: Catalog[number],
   indicators: Record<string, Indicator> | null,
-): Led {
+): Badge {
   if (!permits(state.access, bay.code, state.catalog)) {
-    return { text: "PASS", severity: "locked" };
+    return {
+      text: state.access === "guest" ? "SIGN IN" : "OWNER",
+      severity: "locked",
+    };
   }
   if (!bay.estate) return { text: "OPEN ↗", severity: "link" };
   if (indicators === null) return { text: "—", severity: "none" };
@@ -156,12 +161,18 @@ function ledFor(
   if (indicator === undefined || indicator === "unknown") {
     return { text: "--", severity: "unknown" };
   }
-  if (indicator === "locked") return { text: "PASS", severity: "locked" };
+  if (indicator === "locked") return { text: "LOCKED", severity: "locked" };
   return {
     text: String(indicator.count),
     severity: indicator.severity ?? "ok",
   };
 }
+
+const TILE_STATE: Partial<Record<MachineState["status"], string>> = {
+  selected: "selected",
+  dispensing: "releasing",
+  denied: "denied",
+};
 
 function write(root: ParentNode, selector: string, value: string): void {
   const node = root.querySelector(selector);
@@ -184,6 +195,7 @@ export function litKeys(
   const view = viewFor(state);
   if (view === "working") return new Set();
   if (view === "signin") return new Set(["1", "2", "3", "CLR"]);
+  if (view === "account") return new Set(["CLR"]);
   if (view === "email") return new Set(["CLR", "GO"]);
   if (view === "code") {
     return new Set(
@@ -242,6 +254,11 @@ export function render(
     machine.dataset.input =
       state.authStep === "otp-machine" ? "otp" : "selector";
     machine.dataset.view = view;
+    machine.dataset.busy = String(
+      state.status === "dispensing" ||
+        state.authStep === "issuing" ||
+        state.screenTransfer !== null,
+    );
   }
   paintViews(root, view);
   paintKeys(root, litKeys(state, model.screen, faulted));
@@ -257,33 +274,29 @@ export function render(
   write(root, "[data-ticker-text]", model.ticker);
 
   const lit = new Map(model.items.map((item) => [item.code, item.lit]));
-  const chosen =
-    state.status === "selected" || state.status === "dispensing"
-      ? state.selection
-      : null;
-  for (const slot of root.querySelectorAll<HTMLElement>("[data-bay]")) {
-    slot.dataset.selected = String(slot.dataset.bay === chosen);
-  }
+  const marked = TILE_STATE[state.status];
   for (const bay of state.catalog) {
-    const backlight = root.querySelector<HTMLElement>(
-      `[data-bay="${bay.code}"] [data-backlight]`,
-    );
-    if (backlight !== null) {
-      backlight.dataset.lit = String(lit.get(bay.code) === true);
-    }
-    root
-      .querySelector(`[data-cartridge="${bay.code}"]`)
+    const tile = root.querySelector<HTMLElement>(`[data-tile="${bay.code}"]`);
+    if (tile === null) continue;
+    tile.dataset.state =
+      marked !== undefined && state.selection === bay.code ? marked : "idle";
+    tile.dataset.lit = String(lit.get(bay.code) === true);
+    tile.dataset.locked = permits(state.access, bay.code, state.catalog)
+      ? ""
+      : state.access === "guest"
+        ? "guest"
+        : "owner";
+    tile
+      .querySelector("[data-cartridge]")
       ?.setAttribute(
         "aria-label",
         cartridgeName(state.catalog, bay.code, state.access),
       );
-    const node = root.querySelector<HTMLElement>(
-      `[data-bay="${bay.code}"] [data-led]`,
-    );
+    const node = tile.querySelector<HTMLElement>("[data-badge]");
     if (node !== null) {
-      const led = ledFor(state, bay, model.indicators);
-      if (node.textContent !== led.text) node.textContent = led.text;
-      node.dataset.severity = led.severity;
+      const badge = badgeFor(state, bay, model.indicators);
+      if (node.textContent !== badge.text) node.textContent = badge.text;
+      node.dataset.severity = badge.severity;
     }
   }
 
@@ -291,10 +304,35 @@ export function render(
   write(root, "[data-screen]", copy.main);
   write(root, "[data-screen-sub]", copy.sub);
 
+  const guest = state.access === "guest";
+  write(
+    root,
+    "[data-greeting]",
+    guest
+      ? "PICK A BAY"
+      : `HI, ${(model.holder ?? "").toUpperCase()} · ${state.access.toUpperCase()}`,
+  );
+  for (const opener of root.querySelectorAll<HTMLElement>(
+    "[data-terminal-open]",
+  )) {
+    opener.hidden = !guest;
+  }
+  for (const opener of root.querySelectorAll<HTMLElement>(
+    "[data-account-open]",
+  )) {
+    opener.hidden = guest;
+  }
+  write(root, "[data-account-pass]", PASS_KIND[state.access]);
   write(root, "[data-account-name]", model.holder ?? "");
+  write(root, "[data-account-email]", model.email ?? "");
   write(root, "[data-account-role]", ROLE_LINE[state.access]);
-  write(root, "[data-card-holder]", model.holder ?? "");
-  write(root, "[data-card-role]", CARD_ROLE[state.access]);
+  write(
+    root,
+    "[data-sign-in-for]",
+    state.authRequest === null
+      ? ""
+      : `${productOf(state.catalog, state.authRequest)} needs a pass`,
+  );
   paintCode(root, state.authDigits);
   write(
     root,
