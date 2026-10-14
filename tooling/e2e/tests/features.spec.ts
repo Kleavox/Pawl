@@ -7,9 +7,13 @@ import { localWorkerOrigin } from "@pawl/topology";
 import {
   clearRateLimits,
   freshAccount,
+  goKey,
+  openSection,
   passQuery,
   passSql,
   PROBE_PASSWORD,
+  submitPassword,
+  view,
 } from "./pass-account";
 
 const PASS = localWorkerOrigin("pass", "localhost");
@@ -29,12 +33,11 @@ const passDir = path.join(
 );
 
 async function attempt(): Promise<string | null> {
-  await page.goto(`${PASS}/`);
-  await page.locator('input[name="email"]').fill(admin.email);
-  await page.locator('input[name="password"]').fill(PROBE_PASSWORD);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  const landed = page.getByRole("heading", { name: admin.user });
-  const failed = page.locator(".status-error");
+  await submitPassword(page, PASS, admin.email, PROBE_PASSWORD);
+  const landed = view(page, "account").getByRole("heading", {
+    name: admin.user,
+  });
+  const failed = view(page, "password").locator("[data-say]:not(:empty)");
   await expect(landed.or(failed)).toBeVisible({ timeout: 20000 });
   if (await landed.isVisible()) return null;
   return (await failed.textContent()) ?? "sign-in failed with no message";
@@ -68,17 +71,18 @@ test.beforeAll(async ({ browser }) => {
   }
 
   await page.goto(`${PASS}/`);
-  await page.getByRole("button", { name: "Create an account" }).click();
-  await page.locator('input[name="username"]').fill(admin.user);
-  await page.locator('input[name="email"]').fill(admin.email);
-  await page.locator('input[name="password"]').fill(PROBE_PASSWORD);
-  await page.locator('input[name="confirm-password"]').fill(PROBE_PASSWORD);
-  await page
-    .getByRole("button", { name: "Create account", exact: true })
+  await view(page, "methods")
+    .getByRole("button", { name: "Create one" })
     .click();
-  await expect(page.getByText("Check your email")).toBeVisible({
-    timeout: 20000,
-  });
+  const who = view(page, "register");
+  await who.locator('input[name="username"]').fill(admin.user);
+  await who.locator('input[name="email"]').fill(admin.email);
+  await goKey(page).click();
+  const key = view(page, "register-key");
+  await key.locator('input[name="password"]').fill(PROBE_PASSWORD);
+  await key.locator('input[name="confirm-password"]').fill(PROBE_PASSWORD);
+  await goKey(page).click();
+  await expect(view(page, "sent")).toBeVisible({ timeout: 20000 });
   passSql(
     `UPDATE users SET email_verified_at = datetime('now'), role = 'ADMIN' WHERE email = '${admin.email}'`,
   );
@@ -159,29 +163,37 @@ test("every placeholder is readable against what sits behind it", async () => {
 
 test("pass: the account page lists devices and can revoke one", async () => {
   await page.goto(`${PASS}/`);
-  await expect(page.getByRole("heading", { name: admin.user })).toBeVisible();
-  await page.getByRole("tab", { name: "Devices" }).click();
-  await expect(page.getByText("Devices", { exact: true })).toBeVisible();
+  await expect(
+    view(page, "account").getByRole("heading", { name: admin.user }),
+  ).toBeVisible();
+  await openSection(page, "Devices");
+  const devices = view(page, "devices");
+  await expect(devices.getByRole("heading", { name: "Devices" })).toBeVisible();
 
-  const revokable = page.getByRole("button", { name: /^Revoke / });
-  const before = await revokable.count();
-  if (before > 0) {
+  const revokable = devices.getByRole("button", { name: /^Revoke / });
+  await expect(devices.locator("[data-device-row]").first()).toBeVisible({
+    timeout: 20000,
+  });
+  if ((await revokable.count()) > 0) {
+    const label = (await revokable.first().getAttribute("aria-label"))!;
+    const which = label.slice(label.indexOf(":"));
     await revokable.first().click();
-    await expect(page.getByText("Device signed out.")).toBeVisible({
+    await expect(devices.getByText("Device signed out.")).toBeVisible({
       timeout: 20000,
     });
-    await expect(revokable).toHaveCount(before - 1);
+    await expect(devices.locator(`button[aria-label$="${which}"]`)).toHaveCount(
+      0,
+    );
   }
 });
 
 test("pass: every session control says which device it acts on", async () => {
   await page.goto(`${PASS}/`);
-  await page.getByRole("tab", { name: "Devices" }).click();
-  await expect(page.locator(".row-device").first()).toBeVisible({
-    timeout: 20000,
-  });
-  const names = await page
-    .locator(".row-device button")
+  await openSection(page, "Devices");
+  const rows = view(page, "devices").locator("[data-device-row]");
+  await expect(rows.first()).toBeVisible({ timeout: 20000 });
+  const names = await rows
+    .locator("button")
     .evaluateAll((nodes) =>
       nodes.map(
         (node) => node.getAttribute("aria-label") || node.textContent || "",
@@ -193,22 +205,23 @@ test("pass: every session control says which device it acts on", async () => {
 
 test("pass: the username can be changed and changed back", async () => {
   await page.goto(`${PASS}/`);
-  await page.getByRole("button", { name: "Edit username" }).click();
-  await page.locator('input[name="username"]').fill(`${admin.user}x`);
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Username updated.")).toBeVisible({
-    timeout: 20000,
-  });
-  await expect(
-    page.getByRole("heading", { name: `${admin.user}x` }),
-  ).toBeVisible();
-
-  await page.getByRole("button", { name: "Edit username" }).click();
-  await page.locator('input[name="username"]').fill(admin.user);
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByRole("heading", { name: admin.user })).toBeVisible({
-    timeout: 20000,
-  });
+  await openSection(page, "Profile");
+  const profile = view(page, "profile");
+  const rename = async (name: string) => {
+    await profile.getByRole("button", { name: "Edit username" }).click();
+    await view(page, "profile-name")
+      .locator('input[name="username"]')
+      .fill(name);
+    await view(page, "profile-name")
+      .getByRole("button", { name: "Save", exact: true })
+      .click();
+    await expect(profile.getByText("Username updated.")).toBeVisible({
+      timeout: 20000,
+    });
+    await expect(profile.getByText(name, { exact: true })).toBeVisible();
+  };
+  await rename(`${admin.user}x`);
+  await rename(admin.user);
 });
 
 function base64Url(bytes: Uint8Array): string {
@@ -267,15 +280,14 @@ test("pass: an emailed verification token activates the account", async () => {
   const token = await mintToken(account.email, "EMAIL");
 
   await worker.goto(`${PASS}/verify?token=${encodeURIComponent(token)}`);
-  await expect(worker.getByText(/verified/i)).toBeVisible({ timeout: 20000 });
+  await expect(
+    view(worker, "verify").getByRole("heading", { name: "Email verified" }),
+  ).toBeVisible({ timeout: 20000 });
 
-  await worker.goto(`${PASS}/`);
-  await worker.locator('input[name="email"]').fill(account.email);
-  await worker.locator('input[name="password"]').fill(PROBE_PASSWORD);
-  await worker.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(worker.getByRole("heading", { name: account.user })).toBeVisible(
-    { timeout: 20000 },
-  );
+  await submitPassword(worker, PASS, account.email, PROBE_PASSWORD);
+  await expect(
+    view(worker, "account").getByRole("heading", { name: account.user }),
+  ).toBeVisible({ timeout: 20000 });
   await fresh.close();
 });
 
@@ -288,22 +300,19 @@ test("pass: a password reset token sets a new password", async () => {
   const nextPassword = "probe-password-2";
 
   await worker.goto(`${PASS}/reset?token=${encodeURIComponent(token)}`);
-  const field = worker.locator('input[name="password"]');
+  const field = view(worker, "reset").locator('input[name="password"]');
   await expect(field).toBeVisible({ timeout: 20000 });
   await field.fill(nextPassword);
-  await worker.getByRole("button", { name: "Update password" }).click();
+  await goKey(worker).click();
   await expect(
     worker.getByRole("link", { name: "Return to sign in" }),
   ).toBeVisible({ timeout: 20000 });
 
   clearRateLimits();
-  await worker.goto(`${PASS}/`);
-  await worker.locator('input[name="email"]').fill(account.email);
-  await worker.locator('input[name="password"]').fill(nextPassword);
-  await worker.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(worker.getByRole("heading", { name: account.user })).toBeVisible(
-    { timeout: 20000 },
-  );
+  await submitPassword(worker, PASS, account.email, nextPassword);
+  await expect(
+    view(worker, "account").getByRole("heading", { name: account.user }),
+  ).toBeVisible({ timeout: 20000 });
   await fresh.close();
 });
 
@@ -414,39 +423,34 @@ test("pass: an account can delete itself", async () => {
     passQuery(`SELECT id FROM users WHERE email = '${account.email}'`)[0]?.id,
   );
   clearRateLimits();
-  await worker.goto(`${PASS}/`);
-  await worker.locator('input[name="email"]').fill(account.email);
-  await worker.locator('input[name="password"]').fill(PROBE_PASSWORD);
-  await worker.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(worker.getByRole("heading", { name: account.user })).toBeVisible(
-    { timeout: 20000 },
-  );
+  await submitPassword(worker, PASS, account.email, PROBE_PASSWORD);
+  await expect(
+    view(worker, "account").getByRole("heading", { name: account.user }),
+  ).toBeVisible({ timeout: 20000 });
 
-  await worker.getByRole("tab", { name: "Security" }).click();
-  await worker.getByRole("button", { name: "Delete this account" }).click();
-  const confirm = worker.locator('input[type="email"]').last();
+  await openSection(worker, "Security");
+  await view(worker, "security")
+    .getByRole("button", { name: "Delete this account" })
+    .click();
+  const confirm = view(worker, "delete").locator(
+    'input[name="confirm-delete-email"]',
+  );
   await expect(confirm).toBeVisible({ timeout: 20000 });
   await confirm.fill(account.email);
-  await worker
-    .getByRole("button", { name: /delete|confirm/i })
-    .last()
+  await view(worker, "delete")
+    .getByRole("button", { name: "Delete forever" })
     .click();
-  await expect(
-    worker.getByRole("button", { name: "Sign in", exact: true }),
-  ).toBeVisible({ timeout: 20000 });
+  await expect(view(worker, "methods")).toBeVisible({ timeout: 20000 });
   const purged = (await (
     await worker.request.get("http://127.0.0.1:8790/fixture/purged")
   ).json()) as string[];
   expect(purged).toContain(accountId);
 
   clearRateLimits();
-  await worker.goto(`${PASS}/`);
-  await worker.locator('input[name="email"]').fill(account.email);
-  await worker.locator('input[name="password"]').fill(PROBE_PASSWORD);
-  await worker.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(worker.locator(".status-error")).toBeVisible({
-    timeout: 20000,
-  });
+  await submitPassword(worker, PASS, account.email, PROBE_PASSWORD);
+  await expect(
+    view(worker, "password").locator("[data-say]:not(:empty)"),
+  ).toBeVisible({ timeout: 20000 });
   await fresh.close();
 });
 
@@ -461,11 +465,18 @@ test("the account origin is the same machine, seen close up", async () => {
     "href",
     /\/privacy\.html$/,
   );
-  const digits = page.locator(".keypad .pw-key.is-unlit");
-  await expect(digits).toHaveCount(10);
-  await expect(page.locator(".keypad button", { hasText: /^\d$/ })).toHaveCount(
-    0,
-  );
+  for (const lit of ["1", "2", "3", "4"]) {
+    await expect(page.locator(`[data-key='${lit}']`)).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+  }
+  for (const dark of ["0", "5", "6", "7", "8", "9"]) {
+    await expect(page.locator(`[data-key='${dark}']`)).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+  }
   await expect(page.locator("[data-camera]")).toHaveAttribute(
     "data-framing",
     "screen",
@@ -488,9 +499,11 @@ test("pass: the screen keeps its size across every view it shows", async ({
   await own.emulateMedia({ reducedMotion: "reduce" });
   await own.setViewportSize({ width: 1440, height: 900 });
   await own.goto(`${PASS}/`);
-  for (const tab of ["Profile", "Devices", "Apps", "Security"]) {
-    await own.getByRole("tab", { name: tab }).click();
-    seen.set(tab, await size(own));
+  for (const section of ["Profile", "Devices", "Apps", "Security"] as const) {
+    await openSection(own, section);
+    seen.set(section, await size(own));
+    await own.locator("[data-key='CLR']").click();
+    await expect(view(own, "account")).toBeVisible();
   }
   await own.close();
   const guest = await browser.newPage({
@@ -500,7 +513,9 @@ test("pass: the screen keeps its size across every view it shows", async ({
   await guest.goto(`${PASS}/`);
   seen.set("sign in", await size(guest));
   await guest.goto(`${PASS}/?mode=register`);
-  await expect(guest.locator('input[name="username"]')).toBeVisible();
+  await expect(
+    view(guest, "register").locator('input[name="username"]'),
+  ).toBeVisible();
   seen.set("register", await size(guest));
   await guest.close();
   expect(new Set(seen.values()).size, [...seen].join(" | ")).toBe(1);
@@ -536,12 +551,14 @@ test("pass: a control reached by Tab is clear of the screen's fade", async ({
     reducedMotion: "reduce",
   });
   await guest.goto(`${PASS}/?mode=register`);
-  const back = guest.getByRole("button", { name: "Back to sign in" });
+  const back = view(guest, "register").getByRole("button", {
+    name: "‹ Other ways to sign in",
+  });
   await expect(back).toBeVisible();
   await back.focus();
   const gap = await back.evaluate((node) => {
-    const view = node.closest(".pass-view")!.getBoundingClientRect();
-    return view.bottom - node.getBoundingClientRect().bottom;
+    const panel = node.closest("[data-view-panel]")!.getBoundingClientRect();
+    return panel.bottom - node.getBoundingClientRect().bottom;
   });
   expect(gap).toBeGreaterThanOrEqual(22);
   await guest.close();
@@ -597,16 +614,15 @@ test("the machine says a failed estate call out loud instead of an all-clear", a
 
 test("pass: signing out actually signs you out", async () => {
   await page.goto(`${PASS}/`);
-  await expect(page.getByRole("heading", { name: admin.user })).toBeVisible();
-  await page.getByRole("tab", { name: "Devices" }).click();
-  await page
-    .getByRole("button", { name: "Sign out of this device" })
-    .first()
-    .click();
   await expect(
-    page.getByRole("button", { name: "Sign in", exact: true }),
-  ).toBeVisible({ timeout: 20000 });
-  await expect(page.locator(".status-error")).toHaveCount(0);
+    view(page, "account").getByRole("heading", { name: admin.user }),
+  ).toBeVisible();
+  await openSection(page, "Devices");
+  await view(page, "devices")
+    .getByRole("button", { name: "Sign out of this device" })
+    .click();
+  await expect(view(page, "methods")).toBeVisible({ timeout: 20000 });
+  await expect(page.locator("[data-say]:not(:empty)")).toHaveCount(0);
 });
 
 test("no console errors, page errors, or failed API calls were seen", () => {

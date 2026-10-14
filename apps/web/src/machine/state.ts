@@ -12,34 +12,20 @@ export type MachineState = {
   selection: BayCode | null;
   tray: BayCode | null;
   busy: boolean;
-  authStep:
-    | "closed"
-    | "methods"
-    | "email"
-    | "otp-machine"
-    | "oauth"
-    | "issuing"
-    | "account";
+  authStep: "closed" | "leaving" | "account";
   authRequest: BayCode | null;
   screenTransfer: BayCode | null;
-  authDigits: string;
-  authAttemptsLeft: number | null;
   catalog: Catalog;
 };
 
 export type MachineEvent =
   | { type: "select"; bay: BayCode }
   | { type: "preselect"; bay: BayCode }
-  | { type: "open-sign-in" }
+  | { type: "sign-in" }
+  | { type: "stay" }
   | { type: "open-account" }
-  | { type: "email-chosen" }
-  | { type: "otp-sent" }
-  | { type: "oauth-started" }
-  | { type: "verifying" }
   | { type: "pass-issued"; access: AccessRole }
   | { type: "pass-removed" }
-  | { type: "otp-digits"; digits: string }
-  | { type: "otp-rejected"; attemptsLeft: number }
   | { type: "tray-ready" }
   | { type: "activate-tray" }
   | { type: "cancel" }
@@ -79,8 +65,6 @@ export function initialState(
     authStep: "closed",
     authRequest: null,
     screenTransfer: null,
-    authDigits: "",
-    authAttemptsLeft: null,
     catalog,
   };
 }
@@ -112,37 +96,21 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
       return { ...state, selection: event.bay, status: "selected" };
     }
 
-    case "open-sign-in": {
+    case "sign-in": {
       if (state.busy || state.access !== "guest") return state;
       if (state.authStep !== "closed") return state;
-      return { ...state, status: "idle", authStep: "methods", busy: true };
+      return { ...state, status: "idle", authStep: "leaving", busy: true };
+    }
+
+    case "stay": {
+      if (state.authStep !== "leaving") return state;
+      return { ...state, authStep: "closed", busy: false };
     }
 
     case "open-account": {
       if (state.busy || state.access === "guest") return state;
       if (state.authStep !== "closed") return state;
       return { ...state, authStep: "account" };
-    }
-
-    case "email-chosen": {
-      if (state.authStep !== "methods") return state;
-      return { ...state, authStep: "email" };
-    }
-
-    case "otp-sent": {
-      if (state.authStep !== "email") return state;
-      return { ...state, authStep: "otp-machine", busy: true };
-    }
-
-    case "oauth-started": {
-      if (state.authStep !== "methods") return state;
-      return { ...state, authStep: "oauth", busy: true };
-    }
-
-    case "verifying": {
-      if (state.authStep !== "otp-machine" && state.authStep !== "oauth")
-        return state;
-      return { ...state, authStep: "issuing", busy: true };
     }
 
     case "pass-issued": {
@@ -159,8 +127,6 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
           authRequest: null,
           busy: true,
           authStep: "closed",
-          authDigits: "",
-          authAttemptsLeft: null,
         };
       }
       return {
@@ -170,26 +136,11 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         authRequest: null,
         busy: false,
         authStep: "closed",
-        authDigits: "",
-        authAttemptsLeft: null,
       };
     }
 
     case "pass-removed": {
       return initialState("guest", state.catalog);
-    }
-
-    case "otp-digits": {
-      return { ...state, authDigits: event.digits };
-    }
-
-    case "otp-rejected": {
-      if (state.authStep !== "otp-machine") return state;
-      return {
-        ...state,
-        authDigits: "",
-        authAttemptsLeft: event.attemptsLeft,
-      };
     }
 
     case "tray-ready": {
@@ -208,7 +159,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
     }
 
     case "cancel": {
-      if (state.status === "dispensing" || state.authStep === "issuing")
+      if (state.status === "dispensing" || state.authStep === "leaving")
         return state;
       const putBack = state.status === "selected" || state.status === "denied";
       return {
@@ -218,32 +169,12 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         authRequest: state.status === "denied" ? null : state.authRequest,
         screenTransfer: null,
         authStep: "closed",
-        authDigits: "",
-        authAttemptsLeft: null,
         busy: false,
       };
     }
 
     case "back": {
-      if (state.authStep === "otp-machine") {
-        return {
-          ...state,
-          authStep: "email",
-          authDigits: "",
-          authAttemptsLeft: null,
-        };
-      }
-      if (state.authStep === "email") return { ...state, authStep: "methods" };
       if (state.authStep === "account") return { ...state, authStep: "closed" };
-      if (state.authStep === "methods") {
-        return {
-          ...state,
-          authStep: "closed",
-          authDigits: "",
-          authAttemptsLeft: null,
-          busy: false,
-        };
-      }
       return state;
     }
 
@@ -256,8 +187,6 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         busy: false,
         authStep: "closed",
         screenTransfer: null,
-        authDigits: "",
-        authAttemptsLeft: null,
       };
     }
   }

@@ -3,7 +3,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { localWorkerOrigin } from "@pawl/topology";
 
 const repoRoot = path.resolve(
@@ -74,6 +74,24 @@ export function clearRateLimits(): void {
   }
 }
 
+export function view(target: Page, name: string): Locator {
+  return target.locator(`[data-view-panel='${name}']`);
+}
+
+export function goKey(target: Page): Locator {
+  return target.locator("button[form='screen-form']");
+}
+
+export async function openSection(
+  target: Page,
+  name: "Profile" | "Devices" | "Apps" | "Security",
+): Promise<void> {
+  await view(target, "account")
+    .getByRole("button", { name, exact: true })
+    .click();
+  await expect(view(target, name.toLowerCase())).toBeVisible();
+}
+
 export async function freshAccount(
   target: Page,
   label: string,
@@ -86,17 +104,18 @@ export async function freshAccount(
     email: `${label}-${stamp}@example.com`,
   };
   await target.goto(`${PASS}/`);
-  await target.getByRole("button", { name: "Create an account" }).click();
-  await target.locator('input[name="username"]').fill(account.user);
-  await target.locator('input[name="email"]').fill(account.email);
-  await target.locator('input[name="password"]').fill(PROBE_PASSWORD);
-  await target.locator('input[name="confirm-password"]').fill(PROBE_PASSWORD);
-  await target
-    .getByRole("button", { name: "Create account", exact: true })
+  await view(target, "methods")
+    .getByRole("button", { name: "Create one" })
     .click();
-  await expect(target.getByText("Check your email")).toBeVisible({
-    timeout: 20000,
-  });
+  const who = view(target, "register");
+  await who.locator('input[name="username"]').fill(account.user);
+  await who.locator('input[name="email"]').fill(account.email);
+  await goKey(target).click();
+  const key = view(target, "register-key");
+  await key.locator('input[name="password"]').fill(PROBE_PASSWORD);
+  await key.locator('input[name="confirm-password"]').fill(PROBE_PASSWORD);
+  await goKey(target).click();
+  await expect(view(target, "sent")).toBeVisible({ timeout: 20000 });
   passSql(
     `UPDATE users SET email_verified_at = datetime('now'), role = '${role}' ` +
       `WHERE email = '${account.email}'`,
@@ -104,18 +123,30 @@ export async function freshAccount(
   return account;
 }
 
+export async function submitPassword(
+  target: Page,
+  origin: string,
+  email: string,
+  password: string,
+): Promise<void> {
+  await target.goto(`${origin}/`);
+  await view(target, "methods").locator("[data-method='password']").click();
+  const form = view(target, "password");
+  await form.locator('input[name="email"]').fill(email);
+  await form.locator('input[name="password"]').fill(password);
+  await goKey(target).click();
+}
+
 export async function signIn(
   target: Page,
   account: PassAccount,
+  origin: string = PASS,
 ): Promise<void> {
   clearRateLimits();
-  await target.goto(`${PASS}/`);
-  await target.locator('input[name="email"]').fill(account.email);
-  await target.locator('input[name="password"]').fill(PROBE_PASSWORD);
-  await target.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(target.getByRole("heading", { name: account.user })).toBeVisible(
-    { timeout: 20000 },
-  );
+  await submitPassword(target, origin, account.email, PROBE_PASSWORD);
+  await expect(
+    view(target, "account").getByRole("heading", { name: account.user }),
+  ).toBeVisible({ timeout: 20000 });
 }
 
 export async function signedInAs(

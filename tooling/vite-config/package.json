@@ -4,15 +4,20 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./prerender": "./prerender.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1"
+    "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1",
+    "test": "vitest run"
   },
   "files": [
-    "index.ts"
+    "index.ts",
+    "prerender.ts",
+    "favicon.svg"
   ],
   "dependencies": {
+    "@tailwindcss/vite": "catalog:",
     "@vitejs/plugin-react": "catalog:"
   },
   "peerDependencies": {
@@ -22,6 +27,7 @@
     "@pawl/typescript": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

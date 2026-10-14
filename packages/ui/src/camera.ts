@@ -1,4 +1,6 @@
-export type Framing = "whole" | "screen" | "printer";
+import type { Framing } from "./machine/parts";
+
+export type { Framing };
 
 type Hinted = Exclude<Framing, "whole">;
 
@@ -107,10 +109,12 @@ export async function settle(
   if (from === to || (options.reduced ?? reducedMotion())) {
     delete camera.dataset.moving;
     camera.dataset.framing = to;
+    delete document.documentElement.dataset.camHint;
     return;
   }
   delete camera.dataset.moving;
   camera.dataset.framing = from;
+  delete document.documentElement.dataset.camHint;
   void camera.offsetWidth;
   const moving = options.moving ?? "out";
   camera.dataset.moving = moving;

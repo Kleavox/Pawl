@@ -9,11 +9,6 @@ export interface SessionResponse {
   expiresAt?: string;
 }
 
-export interface FormState {
-  status: "idle" | "loading" | "error" | "success";
-  message?: string;
-}
-
 export interface OAuthProviders {
   google: boolean;
   github: boolean;

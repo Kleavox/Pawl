@@ -177,9 +177,10 @@ test("the receipt's paper feeds from the slot without the slot ever changing siz
 }) => {
   await page.goto(`${GATEWAY}/privacy.html`);
   const before = await boxOf(page, ".printer__slot");
-  const paper = await boxOf(page, ".receipt-feed");
+  const feed = await boxOf(page, "[data-receipt-frame]");
   await page.waitForTimeout(900);
   const after = await boxOf(page, ".printer__slot");
+  const paper = await boxOf(page, "[data-receipt]");
   expectSameBox(after, before, "slot after the feed");
   const unit = await page.evaluate(() => {
     const root = getComputedStyle(document.documentElement);
@@ -198,7 +199,7 @@ test("the receipt's paper feeds from the slot without the slot ever changing siz
   );
   expect(Math.abs(paper.left - before.left - 6 * unit)).toBeLessThanOrEqual(1);
   expect(
-    Math.abs(paper.top - (before.top + before.height / 2)),
+    Math.abs(feed.top - (before.top + before.height / 2)),
   ).toBeLessThanOrEqual(1);
 });
 
@@ -257,11 +258,11 @@ test("a page restored from the back/forward cache pulls back instead of sitting 
 
   await page.goto(`${GATEWAY}/privacy.html`);
   await page.evaluate(() => {
-    document.querySelector<HTMLElement>("[data-receipt]")!.dataset.torn =
+    document.querySelector<HTMLElement>("[data-receipt-frame]")!.dataset.torn =
       "fall";
   });
   await restore();
-  await expect(page.locator("[data-receipt]")).not.toHaveAttribute(
+  await expect(page.locator("[data-receipt-frame]")).not.toHaveAttribute(
     "data-torn",
     /./,
   );
@@ -435,4 +436,76 @@ test("at the smallest scale every word stays readable and every key and tile sta
     }
   }
   await page.close();
+});
+
+test("a hinted arrival's first frame is the hinted framing and the pull-back never zooms in again", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const seen: number[] = [];
+    (window as unknown as { scales: number[] }).scales = seen;
+    const tick = () => {
+      const camera = document.querySelector("[data-camera]");
+      if (camera !== null) {
+        seen.push(
+          parseFloat(getComputedStyle(camera).getPropertyValue("--cam-s")),
+        );
+      }
+      if (document.readyState !== "complete" || seen.length < 90) {
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
+  });
+  await page.goto(`${GATEWAY}/#cam=printer`);
+  await page.waitForTimeout(1500);
+  const scales = await page.evaluate(
+    () => (window as unknown as { scales: number[] }).scales,
+  );
+  expect(scales[0]).toBeGreaterThan(1.5);
+  for (let index = 1; index < scales.length; index += 1) {
+    expect(scales[index]!, `frame ${index}`).toBeLessThanOrEqual(
+      scales[index - 1]! + 0.001,
+    );
+  }
+  expect(scales.at(-1)).toBe(1);
+});
+
+test("Back from paw. to the cabinet lands on the whole machine", async ({
+  page,
+}) => {
+  await page.goto(`${GATEWAY}/`);
+  await page.waitForLoadState("networkidle");
+  await page.locator("[data-sign-in]").click();
+  await expect(page).toHaveURL(/:8787\//, { timeout: 10_000 });
+  await page.goBack();
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new PageTransitionEvent("pageshow", { persisted: true }),
+    ),
+  );
+  await expect(page.locator("[data-camera]")).toHaveAttribute(
+    "data-framing",
+    "whole",
+  );
+});
+
+test("only the paper scrolls on a receipt; the room stays where it is", async ({
+  page,
+}) => {
+  await page.goto(`${GATEWAY}/privacy.html`);
+  await page.waitForTimeout(700);
+  const top = () =>
+    page.locator(".room").evaluate((node) => node.getBoundingClientRect().top);
+  const room = await top();
+  await page
+    .locator("[data-receipt-frame]")
+    .evaluate((node) => (node.scrollTop = 800));
+  expect(
+    await page
+      .locator("[data-receipt-frame]")
+      .evaluate((node) => node.scrollTop),
+  ).toBeGreaterThan(0);
+  expect(await top()).toBe(room);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });

@@ -4,10 +4,13 @@ import { safeReturnTo } from "./return-to";
 export const turnstileSiteKey =
   (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined) ||
   (import.meta.env.DEV ? "1x00000000000000000000AA" : undefined);
-export const returnTo = safeReturnTo(
-  new URLSearchParams(window.location.search).get("returnTo"),
-  window.location,
-);
+export const returnTo =
+  typeof window === "undefined"
+    ? null
+    : safeReturnTo(
+        new URLSearchParams(window.location.search).get("returnTo"),
+        window.location,
+      );
 
 export async function api<T = { ok: boolean }>(
   path: string,

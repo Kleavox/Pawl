@@ -200,6 +200,13 @@ describe("leave", () => {
 });
 
 describe("settle", () => {
+  it("takes the framing over from the page's hint", async () => {
+    document.documentElement.dataset.camHint = "printer";
+    const cam = camera();
+    await settle(cam, "printer", "whole", { reduced: true });
+    expect(document.documentElement.dataset.camHint).toBeUndefined();
+  });
+
   it("starts in the arriving framing and pulls back to where the page lives", async () => {
     vi.useFakeTimers();
     const cam = camera();

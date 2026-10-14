@@ -147,36 +147,39 @@ describe("the release sequence", () => {
     expect(m.read().busy).toBe(false);
   });
 
-  it("never lands a locked bay in the tray; a guest is shown the sign-in after the refusal blinks", async () => {
+  it("never lands a locked bay in the tray; a guest's bay goes to sign-in after the refusal blinks", async () => {
     reduceMotion(true);
     const m = machine("guest");
-    await runDispense(m, "1");
-    expect(m.seen).toEqual(["select", "open-sign-in"]);
+    const denied = vi.fn();
+    await runDispense(m, "1", denied);
+    expect(m.seen).toEqual(["select"]);
+    expect(denied).toHaveBeenCalledWith("1");
     expect(m.read().tray).toBeNull();
-    expect(m.read().authStep).toBe("methods");
     expect(m.read().authRequest).toBe("1");
   });
 
-  it("lets the refusal blink before the sign-in replaces the products", async () => {
+  it("lets the refusal blink before the sign-in is asked for", async () => {
     reduceMotion(false);
     vi.useFakeTimers();
     const m = machine("guest");
-    const done = runDispense(m, "1");
+    const denied = vi.fn();
+    const done = runDispense(m, "1", denied);
     await vi.advanceTimersByTimeAsync(DENIED_BLINK_MS - 1);
     expect(m.read().status).toBe("denied");
-    expect(m.read().authStep).toBe("closed");
+    expect(denied).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     await done;
-    expect(m.read().authStep).toBe("methods");
+    expect(denied).toHaveBeenCalledOnce();
   });
 
-  it("does not open the sign-in when the refusal was put back while it blinked", async () => {
+  it("does not ask for the sign-in when the refusal was put back while it blinked", async () => {
     reduceMotion(true);
     const m = machine("guest");
-    const done = runDispense(m, "1");
+    const denied = vi.fn();
+    const done = runDispense(m, "1", denied);
     m.dispatch({ type: "cancel" });
     await done;
-    expect(m.read().authStep).toBe("closed");
+    expect(denied).not.toHaveBeenCalled();
     expect(m.seen).toEqual(["select", "cancel"]);
   });
 
@@ -194,10 +197,11 @@ describe("the release sequence", () => {
         return (state = reduce(state, event));
       },
     };
-    await runDispense(host, "1");
+    const denied = vi.fn();
+    await runDispense(host, "1", denied);
     expect(seen).toEqual(["select"]);
     expect(state.status).toBe("denied");
-    expect(state.authStep).toBe("closed");
+    expect(denied).not.toHaveBeenCalled();
   });
 
   it("shortens under reduced motion without dropping a state change", async () => {

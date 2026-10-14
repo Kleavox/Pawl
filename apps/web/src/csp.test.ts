@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CAMERA_HINT_HASH } from "@pawl/core";
+import { CAMERA_HINT_HASH } from "@pawl/ui/camera-hint";
 
 import { headersFile } from "./csp";
 

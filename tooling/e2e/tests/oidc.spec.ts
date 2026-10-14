@@ -1,18 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { freshAccount, PROBE_PASSWORD, type PassAccount } from "./pass-account";
+import {
+  freshAccount,
+  openSection,
+  signIn,
+  type PassAccount,
+} from "./pass-account";
 
 const PROVIDER = "http://127.0.0.1:8787";
 const RELYING_PARTY = "http://localhost:8790";
 
 async function signInAtProvider(page: Page, account: PassAccount) {
-  await page.goto(`${PROVIDER}/`);
-  await page.locator('input[name="email"]').fill(account.email);
-  await page.locator('input[name="password"]').fill(PROBE_PASSWORD);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: account.user })).toBeVisible({
-    timeout: 20_000,
-  });
+  await signIn(page, account, PROVIDER);
 }
 
 async function partSizes(page: Page): Promise<Record<string, string>> {
@@ -113,7 +112,7 @@ test("a person connects a third-party app, finds it in their account, and discon
   ).toHaveText("undefined");
 
   await page.goto(`${PROVIDER}/`);
-  await page.getByRole("tab", { name: "Apps" }).click();
+  await openSection(page, "Apps");
   const disconnect = page.getByRole("button", { name: "Disconnect Docs" });
   await expect(disconnect).toBeVisible({ timeout: 20_000 });
   await disconnect.click();

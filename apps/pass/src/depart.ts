@@ -1,10 +1,4 @@
-import {
-  ROOT_ORIGIN,
-  leave,
-  settle,
-  shouldAnimateClick,
-  withCamHint,
-} from "@pawl/ui";
+import { ROOT_ORIGIN, withCamHint } from "@pawl/ui";
 
 const SCAN_OFF_MS = 150;
 const STILL_HERE_MS = 3000;
@@ -48,33 +42,4 @@ export function departTo(url: string): void {
   }
   view.classList.add("is-scanning-off");
   setTimeout(() => window.location.assign(href), SCAN_OFF_MS);
-}
-
-export function mountDepartures(root: ParentNode): void {
-  const camera = root.querySelector<HTMLElement>("[data-camera]");
-  const machine = root.querySelector<HTMLElement>("[data-machine]");
-  for (const link of root.querySelectorAll<HTMLAnchorElement>(
-    "[data-to-machine]",
-  )) {
-    link.addEventListener("click", (event) => {
-      if (!shouldAnimateClick(event)) return;
-      event.preventDefault();
-      departTo(link.href);
-    });
-  }
-  for (const link of root.querySelectorAll<HTMLAnchorElement>(
-    ".plate__links a",
-  )) {
-    link.addEventListener("click", (event) => {
-      if (camera === null || !shouldAnimateClick(event)) return;
-      event.preventDefault();
-      if (machine !== null) machine.dataset.leaving = "printer";
-      void leave(camera, "printer", withCamHint(link.href, "printer"), {
-        stay: () => {
-          delete machine?.dataset.leaving;
-          void settle(camera, "printer", "screen");
-        },
-      });
-    });
-  }
 }

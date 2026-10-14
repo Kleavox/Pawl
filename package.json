@@ -40,7 +40,6 @@
     "prettier": "^3.9.6",
     "turbo": "^2.10.6",
     "typescript": "catalog:",
-    "vitest": "catalog:",
     "wrangler": "catalog:"
   }
 }

@@ -19,6 +19,7 @@
     "@pawl/protocol": "workspace:*",
     "@pawl/registry": "workspace:*",
     "@pawl/topology": "workspace:*",
+    "@pawl/ui": "workspace:*",
     "@pawl/web-app": "workspace:*",
     "hono": "catalog:",
     "zod": "catalog:"

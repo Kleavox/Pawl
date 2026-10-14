@@ -1,4 +1,4 @@
-import { MACHINE_PARTS } from "@pawl/core";
+import { MACHINE_PARTS } from "@pawl/ui/pages";
 import { SESSION_COOKIE } from "@pawl/auth";
 import { decodeBase64Url } from "@pawl/crypto";
 import { Hono } from "hono";
@@ -424,15 +424,22 @@ describe("consent", () => {
     expect(body).toContain("NOTHING SHARED YET");
     expect(body.match(/>Allow</g)).toHaveLength(1);
     expect(body.match(/>Deny</g)).toHaveLength(1);
-    expect(body).toMatch(
-      /<button class="[^"]*key--go[^"]*" type="submit" form="consent" name="decision" value="allow" aria-describedby="keys-caption">GO<\/button>/,
-    );
-    expect(body).toMatch(
-      /<button class="[^"]*key--fn[^"]*" type="submit" form="consent" name="decision" value="deny" aria-describedby="keys-caption">CLR<\/button>/,
-    );
+    for (const [label, key, value] of [
+      ["GO", "key--go", "allow"],
+      ["CLR", "key--fn", "deny"],
+    ] as const) {
+      const button =
+        new RegExp(`<button[^>]*>${label}</button>`).exec(body)?.[0] ?? "";
+      expect(button, label).toContain(key);
+      expect(button, label).toContain('type="submit"');
+      expect(button, label).toContain('form="consent"');
+      expect(button, label).toContain('name="decision"');
+      expect(button, label).toContain(`value="${value}"`);
+      expect(button, label).toContain('aria-describedby="keys-caption"');
+    }
     expect(body).toContain("AN APP WANTS YOUR PASS");
-    expect(body).toContain('<div class="page-bar"><span>CONSENT</span>');
-    expect(body).toContain('data-camera data-framing="screen"');
+    expect(body).toMatch(/data-page-bar[^>]*><span[^>]*>CONSENT</);
+    expect(body).toMatch(/<div[^>]*data-camera[^>]*data-framing="screen"/);
     for (const part of MACHINE_PARTS) {
       expect(
         body.match(new RegExp(`data-part="${part}"`, "g")),

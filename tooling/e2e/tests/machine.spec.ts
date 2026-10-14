@@ -1,8 +1,15 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
 import { localWorkerOrigin } from "@pawl/topology";
-import { clearRateLimits, signedInAs } from "./pass-account";
+import { signedInAs, view } from "./pass-account";
 
 const GATEWAY = localWorkerOrigin("gateway", "localhost");
+const PASS = localWorkerOrigin("pass", "localhost");
 
 function seconds(value: string): number {
   return Number.parseFloat(value);
@@ -197,11 +204,7 @@ test("the machine fits the screen without scrolling on the laptops and phones it
     const page = await browser.newPage({ viewport: { width, height } });
     await page.goto("/");
     await page.waitForLoadState("networkidle");
-    for (const step of ["products", "signin"]) {
-      if (step === "signin") {
-        await page.locator("[data-terminal-open]").click();
-        await expect(page.locator("[data-terminal]")).toBeVisible();
-      }
+    for (const step of ["products"]) {
       const spill = await page.evaluate(() => ({
         down: document.documentElement.scrollHeight - innerHeight,
         across: document.documentElement.scrollWidth - innerWidth,
@@ -237,66 +240,6 @@ test("under reduced motion the camera never moves and a receipt opens at once", 
       .evaluate((node) => getComputedStyle(node).animationName),
   ).toBe("none");
 });
-test("the sign-in view lives on the machine's screen, not in a dialog", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
-  const terminal = page.locator("[data-terminal]");
-  await expect(terminal).toBeHidden();
-  await page.locator("[data-terminal-open]").click();
-  await expect(terminal).toBeVisible();
-  expect(
-    await terminal.evaluate((node) => ({
-      dialog: node.closest("dialog") !== null,
-      onScreen: node.closest(".screen") !== null,
-    })),
-  ).toEqual({ dialog: false, onScreen: true });
-  await expect(page.locator("[data-view-panel]:visible")).toHaveCount(1);
-  await expect(page.locator("[data-terminal-provider='google']")).toBeFocused();
-});
-
-test("closing the sign-in view returns focus to the control that opened it", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
-  await page.locator("[data-terminal-open]").click();
-  await page.locator("[data-terminal-close]").click();
-  await expect(page.locator("[data-terminal]")).toBeHidden();
-  await expect(page.locator("[data-terminal-open]")).toBeFocused();
-});
-
-test("escape leaves the sign-in view and gives the screen back", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await page.locator("[data-terminal-open]").click();
-  await expect(page.locator("[data-terminal]")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.locator("[data-terminal]")).toBeHidden();
-  await expect(page.locator("[data-terminal-open]")).toBeFocused();
-});
-
-test("closing the terminal hands the machine back", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await openBooted(page);
-  await page.locator("[data-terminal-open]").click();
-  await expect(page.locator("[data-screen]")).toContainText("CHOOSE A METHOD");
-  await page.locator("[data-terminal-close]").click();
-  await expect(page.locator("[data-terminal]")).toBeHidden();
-  await expect(page.locator("[data-screen]")).not.toContainText(
-    "THE TERMINAL IS OPEN",
-  );
-
-  await page.locator("[data-cartridge='7']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
-
-  await page.locator("[data-terminal-open]").click();
-  await expect(page.locator("[data-terminal]")).toBeVisible();
-});
-
 test("pressing a bay twice still leaves the product in the tray", async ({
   page,
 }) => {
@@ -326,13 +269,6 @@ test("the keypad says which mode it is in, not only what colour", async ({
   });
   expect(await marker("selector")).toBe('"▸"');
   expect(await marker("otp")).toBe("none");
-
-  await page.evaluate(() => {
-    document.querySelector<HTMLElement>("[data-machine]")!.dataset.input =
-      "otp";
-  });
-  expect(await marker("otp")).toBe('"▸"');
-  expect(await marker("selector")).toBe("none");
 });
 
 test("the screen words sit inside a polite status region", async ({ page }) => {
@@ -855,20 +791,6 @@ async function hardwareOn(page: Page, screen: string): Promise<string> {
     await page.locator("[data-account-open]").click();
     await expect(page.locator("[data-view-panel='account']")).toBeVisible();
   }
-  if (screen === "signin" || screen === "email" || screen === "code") {
-    await page.locator("[data-terminal-open]").click();
-    await expect(page.locator("[data-terminal]")).toBeVisible();
-  }
-  if (screen === "email" || screen === "code") {
-    await page.locator("[data-terminal-email-choice]").click();
-  }
-  if (screen === "code") {
-    await page
-      .locator("[data-terminal-email]")
-      .fill("someone.with.a.long.name@example-domain.test");
-    await page.locator("[data-terminal-send]").click();
-    await expect(page.locator("[data-view-panel='code']")).toBeVisible();
-  }
   return page.evaluate(() =>
     [
       "[data-machine]",
@@ -887,7 +809,7 @@ async function hardwareOn(page: Page, screen: string): Promise<string> {
   );
 }
 
-const SCREENS = ["products", "signin", "email", "code", "owner", "account"];
+const SCREENS = ["products", "owner", "account"];
 
 test("the machine keeps its size whatever the screen shows", async ({
   browser,
@@ -944,16 +866,17 @@ const WIDE_TYPE = `:root {
   --pw-mono: "Courier New", "DejaVu Sans Mono", monospace;
 }`;
 
-test("every view fits the fixed screen it is shown on, message and wide type included", async ({
-  browser,
-}) => {
-  test.setTimeout(180_000);
+async function fitsEverywhere(
+  browser: Browser,
+  views: readonly string[],
+  open: (page: Page, name: string) => Promise<unknown>,
+): Promise<void> {
   for (const width of [1440, 1000, 390, 320]) {
-    for (const screen of SCREENS) {
+    for (const screen of views) {
       const page = await browser.newPage({
         viewport: { width, height: 900 },
       });
-      await hardwareOn(page, screen);
+      await open(page, screen);
       const states: [string, () => Promise<void>][] = [
         ["bare", async () => {}],
         [
@@ -991,54 +914,184 @@ test("every view fits the fixed screen it is shown on, message and wide type inc
         await apply();
         const fit = await fitOf(page);
         const where = `${screen} ${state} at ${width}px`;
-        expect(fit.spare, where).toBeGreaterThanOrEqual(0);
-        expect(fit.status, `${where}: status`).toBeLessThanOrEqual(0);
-        expect(fit.hint, `${where}: hint`).toBeLessThanOrEqual(0);
-        expect(fit.wide, `${where}: sideways`).toBeLessThanOrEqual(0);
+        expect.soft(fit.spare, where).toBeGreaterThanOrEqual(0);
+        expect.soft(fit.status, `${where}: status`).toBeLessThanOrEqual(0);
+        expect.soft(fit.hint, `${where}: hint`).toBeLessThanOrEqual(0);
+        expect.soft(fit.wide, `${where}: sideways`).toBeLessThanOrEqual(0);
       }
       await page.close();
     }
   }
-});
+}
 
-test("the keyboard's digits and Backspace work the screen even while a choice has focus", async ({
-  page,
+test("every view fits the fixed screen it is shown on, message and wide type included", async ({
+  browser,
 }) => {
-  await page.goto(GATEWAY);
-  await page.locator("[data-terminal-open]").click();
-  await expect(page.locator("[data-terminal-provider='google']")).toBeFocused();
-  await page.keyboard.press("Backspace");
-  await expect(page.locator("[data-terminal]")).toBeHidden();
-
-  await page.locator("[data-terminal-open]").click();
-  await expect(page.locator("[data-terminal-provider='google']")).toBeFocused();
-  await page.keyboard.press("3");
-  await expect(page.locator("[data-view-panel='email']")).toBeVisible();
+  test.setTimeout(180_000);
+  await fitsEverywhere(browser, SCREENS, hardwareOn);
 });
 
-test("a guest is refused NOTE, and the screen turns into the sign-in that opens it", async ({
-  page,
+const LONG_HOLDER = {
+  id: "probe",
+  email: "probe.with.a.long.address@example.com",
+  username: "maximilian_ananda_01",
+  role: "ADMIN",
+};
+
+const LONG_DEVICES = Array.from({ length: 3 }, (_, index) => ({
+  id: `d${index}`,
+  userAgent:
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 Safari/605.1.15",
+  ip: "2001:db8:85a3:0000:0000:8a2e:0370:7334",
+  createdAt: "2026-10-01T10:00:00.000Z",
+  current: index === 0,
+}));
+
+const LONG_APPS = Array.from({ length: 3 }, (_, index) => ({
+  clientId: `app${index}`,
+  name: `A third-party app with a long name ${index}`,
+  homepage: null,
+  sector: "apps.a-much-longer-company-domain.example",
+  scopes: ["openid", "email", "profile"],
+  createdAt: "2026-10-01T10:00:00.000Z",
+}));
+
+const PASS_VIEWS = [
+  "methods",
+  "email",
+  "code",
+  "password",
+  "forgot",
+  "register",
+  "register-key",
+  "welcome",
+  "welcome-key",
+  "account",
+  "profile",
+  "profile-name",
+  "profile-key",
+  "devices",
+  "apps",
+  "security",
+  "delete",
+] as const;
+
+const SIGNED_OUT = new Set([
+  "methods",
+  "email",
+  "code",
+  "password",
+  "forgot",
+  "register",
+  "register-key",
+]);
+
+async function passOn(page: Page, name: string): Promise<void> {
+  const welcoming = name === "welcome" || name === "welcome-key";
+  const user = {
+    ...LONG_HOLDER,
+    username: welcoming ? null : LONG_HOLDER.username,
+  };
+  if (!SIGNED_OUT.has(name)) {
+    await page.route(`${PASS}/api/session`, (route) =>
+      route.fulfill({ json: { authenticated: true, user } }),
+    );
+    await page.route(`${PASS}/api/account`, (route) =>
+      route.fulfill({ json: { user, providers: ["google"] } }),
+    );
+    await page.route(`${PASS}/api/sessions`, (route) =>
+      route.fulfill({ json: { sessions: LONG_DEVICES } }),
+    );
+    await page.route(`${PASS}/api/account/grants`, (route) =>
+      route.fulfill({ json: { grants: LONG_APPS } }),
+    );
+  }
+  await page.route(`${PASS}/api/auth/otp/start`, (route) =>
+    route.fulfill({ json: { ok: true } }),
+  );
+  await page.goto(`${PASS}/`);
+  const go = () => page.locator("button[form='screen-form']").click();
+  const on = (panel: string) => expect(view(page, panel)).toBeVisible();
+  if (SIGNED_OUT.has(name)) await on("methods");
+  if (name === "email" || name === "code") {
+    await view(page, "methods").locator("[data-method='email']").click();
+  }
+  if (name === "code") {
+    await view(page, "email")
+      .locator("#code-email")
+      .fill("someone.with.a.long.name@example-domain.test");
+    await view(page, "email")
+      .getByRole("button", { name: "Send code" })
+      .click();
+  }
+  if (name === "password" || name === "forgot") {
+    await view(page, "methods").locator("[data-method='password']").click();
+  }
+  if (name === "forgot") {
+    await view(page, "password")
+      .getByRole("button", { name: "Forgot password?" })
+      .click();
+  }
+  if (name === "register" || name === "register-key") {
+    await view(page, "methods")
+      .getByRole("button", { name: "Create one" })
+      .click();
+  }
+  if (name === "register-key") {
+    await view(page, "register")
+      .locator('input[name="username"]')
+      .fill("maximilian_ananda_01");
+    await view(page, "register")
+      .locator('input[name="email"]')
+      .fill("someone.with.a.long.name@example-domain.test");
+    await go();
+  }
+  if (name === "welcome-key") {
+    await on("welcome");
+    await view(page, "welcome")
+      .locator('input[name="username"]')
+      .fill("maximilian_ananda_01");
+    await go();
+  }
+  const sections: Record<string, string> = {
+    profile: "1",
+    "profile-name": "1",
+    "profile-key": "1",
+    devices: "2",
+    apps: "3",
+    security: "4",
+    delete: "4",
+  };
+  const digit = sections[name];
+  if (digit !== undefined) {
+    await on("account");
+    await page.keyboard.press(digit);
+  }
+  if (name === "profile-name") {
+    await view(page, "profile")
+      .getByRole("button", { name: "Edit username" })
+      .click();
+  }
+  if (name === "profile-key") {
+    await view(page, "profile")
+      .getByRole("button", { name: "Set a password" })
+      .click();
+  }
+  if (name === "delete") {
+    await view(page, "security")
+      .getByRole("button", { name: "Delete this account" })
+      .click();
+  }
+  await on(name);
+}
+
+test("every view of paw. fits the fixed screen it is shown on, message and wide type included", async ({
+  browser,
 }) => {
-  await page.goto("/");
-  await expect(page.locator("[data-screen]")).toHaveText("PICK A BAY");
-  await page.locator("[data-cartridge='2']").click();
-  await expect(page.locator("[data-screen]")).toContainText(
-    "VISITOR PASS REQUIRED",
-  );
-  await expect(page.locator("[data-tile='2']")).toHaveAttribute(
-    "data-state",
-    "denied",
-  );
-  await expect(page.locator("[data-terminal]")).toBeVisible();
-  await expect(page.locator("[data-sign-in-for]")).toHaveText(
-    "NOTE needs a pass",
-  );
-  await expect(page.locator("[data-screen]")).toHaveText("CHOOSE A METHOD");
-  await expect(page.locator("[data-tray]")).toHaveAttribute(
-    "data-tray",
-    "none",
-  );
+  test.setTimeout(900_000);
+  await fitsEverywhere(browser, PASS_VIEWS, passOn);
 });
+
 test("a guest can take MANUAL without a pass", async ({ page }) => {
   await page.goto("/");
   await page.locator("[data-cartridge='7']").click();
@@ -1137,16 +1190,11 @@ test("a blocked sessionStorage says so instead of forgetting in silence", async 
   });
   await page.goto("/");
   await page.locator("[data-cartridge='2']").click();
-  await expect(page.locator("[data-terminal]")).toBeVisible();
-  await page.locator("[data-terminal-provider='google']").click();
 
-  const said = page.locator("[data-terminal-error]");
-  await expect(said).toBeVisible();
+  const said = page.locator("[data-view-panel]:not([hidden]) [data-say]");
   await expect(said).toContainText(/pick the bay again/i);
   expect(
-    await said.evaluate(
-      (node) => node.closest("[data-view-panel='signin']") !== null,
-    ),
+    await said.evaluate((node) => node.closest(".screen") !== null),
     "the warning is said on the machine's own screen",
   ).toBe(true);
 });
@@ -1269,18 +1317,14 @@ test.describe("with a real pass in the machine", () => {
     await expect(signedIn.locator("[data-screen]")).toContainText("NOTE");
   });
 
-  test("the pass terminal cannot walk a signed-in owner back into the sign-in chooser", async () => {
+  test("a signed-in owner is offered the account, never SIGN IN", async () => {
     await signedIn.goto(GATEWAY);
     await expect(signedIn.locator("[data-cabinet-state]")).toHaveText(
       "OWNER MODE",
     );
-    await expect(signedIn.locator("[data-terminal-open]")).toBeHidden();
+    await expect(signedIn.locator("[data-sign-in]")).toBeHidden();
     await expect(signedIn.locator("[data-account-open]")).toBeVisible();
     await expect(signedIn.locator("[data-reader]")).toHaveCount(0);
-    await expect(signedIn.locator("[data-terminal]")).toBeHidden();
-    await expect(
-      signedIn.locator("[data-terminal-provider='google']"),
-    ).toBeHidden();
     await expect(signedIn.locator("[data-cabinet-state]")).toHaveText(
       "OWNER MODE",
     );
@@ -1446,406 +1490,6 @@ test("a broken session endpoint is a fault, not a calm guest", async ({
     page.locator("[data-ticker-text]"),
     "an unreadable session must not run the ticker of a calm guest",
   ).toContainText("UNREADABLE");
-});
-
-async function reachOtpMode(page: Page): Promise<void> {
-  if (!(await page.locator("[data-terminal]").isVisible())) {
-    await page.locator("[data-terminal-open]").click();
-  }
-  await expect(page.locator("[data-terminal]")).toBeVisible();
-  await page.locator("[data-terminal-email-choice]").click();
-  await page
-    .locator("[data-terminal-email]")
-    .fill(`otpprobe-${Date.now().toString().slice(-6)}@example.com`);
-  await page.locator("[data-terminal-send]").click();
-  await expect(page.locator("[data-view-panel='email']")).toBeHidden();
-  await expect(page.locator("[data-machine]")).toHaveAttribute(
-    "data-input",
-    "otp",
-  );
-}
-
-async function typeCode(page: Page, code: string): Promise<void> {
-  for (const digit of code) await page.locator(`[data-key='${digit}']`).click();
-}
-
-test.describe("codes typed on the machine keypad", () => {
-  test.describe.configure({ mode: "serial" });
-
-  test.beforeEach(() => {
-    clearRateLimits();
-  });
-
-  test("a rejected code says so, and a new code can be typed at once", async ({
-    page,
-  }) => {
-    await page.goto(GATEWAY);
-    await reachOtpMode(page);
-
-    await typeCode(page, "12345");
-    await expect(page.locator("[data-screen]")).toHaveText("EMAIL CODE 5/6");
-
-    await page.locator("[data-key='6']").click();
-    await expect(page.locator("[data-screen]")).toHaveText("CODE REJECTED");
-    await expect(page.locator("[data-screen-sub]")).toContainText("TRIES LEFT");
-
-    await page.locator("[data-key='7']").click();
-    await expect(page.locator("[data-screen]")).toHaveText("EMAIL CODE 1/6");
-  });
-
-  test("signing in while the estate is down says so, it does not stop at PASS ACCEPTED", async ({
-    page,
-  }) => {
-    let accepted = false;
-    await page.route("**/api/auth/otp/verify", (route) => {
-      accepted = true;
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          authenticated: true,
-          user: {
-            id: "probe",
-            email: "probe@example.com",
-            username: "probe",
-            role: "USER",
-          },
-          needsSetup: false,
-        }),
-      });
-    });
-    await page.route("**/api/session", (route) =>
-      accepted
-        ? route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              authenticated: true,
-              identity: {
-                id: "probe",
-                email: "probe@example.com",
-                username: "probe",
-                role: "USER",
-              },
-            }),
-          })
-        : route.continue(),
-    );
-    await page.route("**/api/estate", (route) =>
-      route.fulfill({ status: 500, body: "{}" }),
-    );
-
-    await page.goto(GATEWAY);
-    await reachOtpMode(page);
-    await typeCode(page, "123456");
-
-    await expect(page.locator("[data-cabinet-state]")).toHaveText(
-      "VISITOR MODE",
-    );
-    await expect(page.locator("[data-screen]")).toHaveText("ESTATE UNREADABLE");
-  });
-
-  test("a dropped packet during verify keeps the code, it does not end the sign-in", async ({
-    page,
-  }) => {
-    await page.goto(GATEWAY);
-    await reachOtpMode(page);
-    await page.route("**/api/auth/otp/verify", (route) => route.abort());
-    await typeCode(page, "123456");
-
-    const error = page.locator("[data-code-error]");
-    await expect(error).toBeVisible();
-    await expect(error).toContainText(/could not tell/i);
-    await expect(
-      error,
-      "the machine cannot know the code survived, so it must not promise it",
-    ).not.toContainText(/still good/i);
-    await expect(page.locator("[data-machine]")).toHaveAttribute(
-      "data-input",
-      "otp",
-    );
-
-    await expect(page.locator("[data-screen]")).toHaveText("EMAIL CODE 6/6");
-
-    let verifies = 0;
-    await page.unroute("**/api/auth/otp/verify");
-    await page.route("**/api/auth/otp/verify", async (route) => {
-      verifies += 1;
-      await route.continue();
-    });
-    await page.locator("[data-key='GO']").click();
-    await expect(page.locator("[data-screen]")).toHaveText("CODE REJECTED");
-    expect(verifies).toBe(1);
-  });
-
-  test("the machine greets a code sign-in by name, not as a generic account", async ({
-    browser,
-  }) => {
-    const fresh = await browser.newContext();
-    const page = await fresh.newPage();
-    let accepted = false;
-    await page.route("**/api/auth/otp/verify", (route) => {
-      accepted = true;
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          authenticated: true,
-          user: {
-            id: "probe",
-            email: "namedprobe@example.com",
-            username: "namedprobe",
-            role: "USER",
-          },
-          needsSetup: false,
-        }),
-      });
-    });
-    await page.route("**/api/session", (route) =>
-      accepted
-        ? route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              authenticated: true,
-              identity: {
-                id: "probe",
-                email: "namedprobe@example.com",
-                username: "namedprobe",
-                role: "USER",
-              },
-            }),
-          })
-        : route.continue(),
-    );
-    await page.goto(GATEWAY);
-    await reachOtpMode(page);
-    await typeCode(page, "123456");
-
-    await expect(page.locator("[data-cabinet-state]")).toHaveText(
-      "VISITOR MODE",
-    );
-    await expect(page.locator("[data-account-name]")).toHaveText("namedprobe");
-    await expect(page.locator("[data-greeting]")).toHaveText(
-      "HI, NAMEDPROBE · VISITOR",
-    );
-    await expect(
-      page.locator("[data-view-panel=\x27products\x27]"),
-      "Enter after a keypad sign-in presses GO, it does not follow a link out of the machine",
-    ).toBeFocused();
-    await fresh.close();
-  });
-
-  test("a code sign-in with no username lands on the Pass welcome step", async ({
-    browser,
-  }) => {
-    const fresh = await browser.newContext();
-    const page = await fresh.newPage();
-    await page.route("**/api/auth/otp/verify", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          authenticated: true,
-          user: {
-            id: "probe",
-            email: "setupprobe@example.com",
-            username: null,
-            role: "USER",
-          },
-          needsSetup: true,
-        }),
-      }),
-    );
-    await page.goto(GATEWAY);
-    await reachOtpMode(page);
-    await typeCode(page, "123456");
-
-    await expect(page).toHaveURL(/\/welcome\?returnTo=/, { timeout: 20_000 });
-    await fresh.close();
-  });
-
-  test("a lost answer to a checked code is settled against the session", async ({
-    page,
-  }) => {
-    await page.goto(GATEWAY);
-    await reachOtpMode(page);
-    await page.route("**/api/auth/otp/verify", (route) => route.abort());
-    await page.route("**/api/session", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          authenticated: true,
-          identity: {
-            id: "probe",
-            email: "lostanswer@example.com",
-            username: "lostanswer",
-            role: "USER",
-          },
-        }),
-      }),
-    );
-    await typeCode(page, "123456");
-
-    await expect(page.locator("[data-cabinet-state]")).toHaveText(
-      "VISITOR MODE",
-    );
-    await expect(page.locator("[data-terminal]")).toBeHidden();
-    await page.unroute("**/api/session");
-    await page.unroute("**/api/auth/otp/verify");
-  });
-
-  test("a new account keeps the bay it asked for on the way to welcome", async ({
-    browser,
-  }) => {
-    const fresh = await browser.newContext();
-    const page = await fresh.newPage();
-    await page.route("**/api/auth/otp/verify", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          authenticated: true,
-          user: {
-            id: "probe",
-            email: "keptbay@example.com",
-            username: null,
-            role: "USER",
-          },
-          needsSetup: true,
-        }),
-      }),
-    );
-    await page.route("**/welcome*", (route) =>
-      route.fulfill({ status: 204, body: "" }),
-    );
-
-    await page.goto(GATEWAY);
-    await page.locator("[data-cartridge='2']").click();
-    await expect(page.locator("[data-terminal]")).toBeVisible();
-    await reachOtpMode(page);
-    await typeCode(page, "123456");
-
-    await expect
-      .poll(() =>
-        page.evaluate(() => sessionStorage.getItem("pawl:machine-request")),
-      )
-      .toBe("2");
-    await fresh.close();
-  });
-
-  test("Use another email steps back to the email, and the next code starts empty", async ({
-    page,
-  }) => {
-    await page.goto(GATEWAY);
-    await reachOtpMode(page);
-    const email = await page.locator("[data-terminal-email]").inputValue();
-
-    await typeCode(page, "123");
-    await page.getByRole("button", { name: "Use another email" }).click();
-    await expect(page.locator("[data-view-panel='email']")).toBeVisible();
-    await expect(page.locator("[data-terminal-email]")).toHaveValue(email);
-    await expect(page.locator("[data-terminal-email]")).toBeFocused();
-
-    await page.locator("[data-terminal-send]").click();
-    await expect(page.locator("[data-machine]")).toHaveAttribute(
-      "data-input",
-      "otp",
-    );
-    await page.locator("[data-key='4']").click();
-    await expect(page.locator("[data-screen]")).toHaveText("EMAIL CODE 1/6");
-  });
-
-  test("a key is lit only when it does something on the screen it serves", async ({
-    page,
-  }) => {
-    await page.goto(GATEWAY);
-    const key = (label: string) => page.locator(`[data-key='${label}']`);
-    await expect(key("7")).toHaveAttribute("aria-disabled", "false");
-    for (const dark of ["5", "0", "CLR", "GO"]) {
-      await expect(key(dark)).toHaveAttribute("aria-disabled", "true");
-    }
-
-    await page.keyboard.press("5");
-    await expect(page.locator("[data-screen]")).toHaveText("PICK A BAY");
-
-    await page.locator("[data-terminal-open]").click();
-    await expect(page.locator("[data-terminal]")).toBeVisible();
-    await expect(key("7")).toHaveAttribute("aria-disabled", "true");
-    await expect(key("3")).toHaveAttribute("aria-disabled", "false");
-    await expect(key("GO")).toHaveAttribute("aria-disabled", "true");
-
-    await key("3").click();
-    await expect(page.locator("[data-view-panel='email']")).toBeVisible();
-    await expect(page.locator("[data-terminal-email]")).toBeFocused();
-    await expect(key("3")).toHaveAttribute("aria-disabled", "true");
-    await expect(key("GO")).toHaveAttribute("aria-disabled", "false");
-
-    await page
-      .locator("[data-terminal-email]")
-      .fill(`goprobe-${Date.now().toString().slice(-6)}@example.com`);
-    await key("GO").click();
-    await expect(page.locator("[data-machine]")).toHaveAttribute(
-      "data-input",
-      "otp",
-    );
-    await expect(key("0")).toHaveAttribute("aria-disabled", "false");
-  });
-
-  test("GO pressed twice sends one email, and leaving mid-send says nothing false", async ({
-    page,
-  }) => {
-    let starts = 0;
-    await page.route("**/api/auth/otp/start", async (route) => {
-      starts += 1;
-      await new Promise((settled) => setTimeout(settled, 1200));
-      await route.fulfill({ json: { ok: true } });
-    });
-    await page.goto(GATEWAY);
-    await page.locator("[data-terminal-open]").click();
-    await expect(page.locator("[data-terminal]")).toBeVisible();
-    await page.locator("[data-terminal-email-choice]").click();
-    await page.locator("[data-terminal-email]").fill("twice@example.com");
-    await page.locator("[data-terminal-send]").click();
-    await page.locator("[data-terminal-send]").click();
-    await page.locator("[data-key='CLR']").click();
-    await expect(page.locator("[data-terminal]")).toBeVisible();
-    await page.waitForTimeout(1600);
-    expect(starts).toBe(1);
-    await expect(page.locator("[data-terminal]")).toBeVisible();
-    await expect(page.locator("[data-terminal-error]")).toHaveText("");
-  });
-
-  test("a second code cannot race the first one being checked", async ({
-    page,
-  }) => {
-    await page.goto(GATEWAY);
-    await reachOtpMode(page);
-
-    let verifies = 0;
-    await page.route("**/api/auth/otp/verify", async (route) => {
-      verifies += 1;
-      await new Promise((settled) => setTimeout(settled, 1500));
-      await route.fulfill({
-        status: 401,
-        contentType: "application/json",
-        body: JSON.stringify({
-          code: "invalid_code",
-          message: "That code is incorrect.",
-          attemptsLeft: 4,
-        }),
-      });
-    });
-
-    await typeCode(page, "123456");
-    await page.locator("[data-key='CLR']").click();
-    await page.locator("[data-key='9']").click();
-    await expect(page.locator("[data-screen]")).toHaveText("CODE REJECTED", {
-      timeout: 10_000,
-    });
-    expect(verifies).toBe(1);
-  });
 });
 
 test("a fault holds the screen until the next touch, then the estate line comes back", async ({

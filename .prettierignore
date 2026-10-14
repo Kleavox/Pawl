@@ -12,4 +12,5 @@ packages/compression/pkg/
 packages/crypto/pkg/
 packages/oidc/pkg/
 packages/registry/pkg/
-packages/core/src/machine-css.ts
+packages/ui/src/page-css.ts
+tooling/e2e/fixture/geometry.json
