@@ -9,35 +9,9 @@
       content="{{SITE_NAME}} is a vending machine for apps: pick a bay, take what your pass opens, and sign in once for all of them."
     />
     <title>{{SITE_NAME}} · the machine</title>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/cabinet-entry.tsx"></script>
   </head>
   <body>
-    {{MACHINE}}
-
-    <dialog
-      class="screen-transfer"
-      data-transfer="none"
-      aria-label="Opening the selected application"
-    >
-      <span class="screen-transfer__grid" aria-hidden="true"></span>
-      <div class="screen-transfer__cartridge">
-        <span class="screen-transfer__sticker" aria-hidden="true"></span>
-        <div class="screen-transfer__copy">
-          <span>Route established</span>
-          <strong data-transfer-name>{{SITE_NAME_UPPER}}</strong>
-          <small>Opening it now, PAWL-GW-01</small>
-        </div>
-        <span class="screen-transfer__rail" aria-hidden="true"
-          ><i></i><i></i><i></i
-        ></span>
-      </div>
-      <button
-        class="screen-transfer__cancel pw-button"
-        type="button"
-        data-transfer-cancel
-      >
-        Cancel
-      </button>
-    </dialog>
+    <div id="root" data-page="cabinet"><!--app--></div>
   </body>
 </html>

@@ -3,16 +3,11 @@ import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const APPS = ["web"];
+const THEME = resolve(root, "packages/ui/src/theme.css");
+const ROOTS = ["apps/web", "apps/pass", "packages/ui/src"];
 const ROOT_PX = 16;
 const FLOOR_REM = 0.68;
 const FLOOR_PX = FLOOR_REM * ROOT_PX;
-const MACHINE_UNIT_MIN_PX = Number(
-  /--u:\s*clamp\(\s*(\d*\.?\d+)px/.exec(
-    readFileSync(resolve(root, "packages/ui/src/machine.css"), "utf8"),
-  )[1],
-);
-const MACHINE_LENGTH = /calc\(\s*(\d*\.?\d+)\s*\*\s*var\(--u\)\s*\)/;
 const SKIP_DIRECTORIES = ["node_modules", "dist", ".turbo", ".wrangler"];
 const KEYWORDS = new Set([
   "inherit",
@@ -22,6 +17,16 @@ const KEYWORDS = new Set([
   "unset",
 ]);
 
+const theme = readFileSync(THEME, "utf8");
+const MACHINE_UNIT_MIN_PX = Number(
+  /--u:\s*clamp\(\s*(\d*\.?\d+)px/.exec(theme)[1],
+);
+const TOKENS = new Map(
+  [...theme.matchAll(/(--(?:pw-fs|text)-[a-z0-9-]+)\s*:\s*([^;]+);/g)].map(
+    (match) => [match[1], match[2].trim()],
+  ),
+);
+
 function collect(directory, found = []) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = resolve(directory, entry.name);
@@ -30,32 +35,30 @@ function collect(directory, found = []) {
       collect(path, found);
       continue;
     }
-    if (/\.(css|html)$/.test(entry.name)) found.push(path);
+    if (/\.test\./.test(entry.name) || entry.name === "page-css.ts") continue;
+    if (/\.(css|html|tsx?)$/.test(entry.name)) found.push(path);
   }
   return found;
 }
 
-const TOKENS = new Map(
-  [
-    ...readFileSync(
-      resolve(root, "packages/ui/src/styles.css"),
-      "utf8",
-    ).matchAll(/(--pw-fs-[a-z0-9-]+)\s*:\s*([^;]+);/g),
-  ].map((match) => [match[1], match[2].trim()]),
-);
-
 function resolveLength(raw) {
-  const largest = /^max\((.+)\)$/i.exec(raw);
+  const value = raw.trim();
+  const largest = /^max\((.+)\)$/i.exec(value);
   if (largest !== null) {
     const sizes = largest[1]
       .split(/,(?![^(]*\))/)
-      .map((part) => resolveLength(part.trim()));
+      .map((part) => resolveLength(part));
     return sizes.includes(null) ? null : Math.max(...sizes);
   }
-  const machine = new RegExp(`^${MACHINE_LENGTH.source}$`).exec(raw);
+  const spacing = /^--spacing\(\s*(\d*\.?\d+)\s*\)$/.exec(value);
+  if (spacing !== null) return Number(spacing[1]) * MACHINE_UNIT_MIN_PX;
+  const machine = /^calc\(\s*(\d*\.?\d+)\s*\*\s*var\(--u\)\s*\)$/.exec(value);
   if (machine !== null) return Number(machine[1]) * MACHINE_UNIT_MIN_PX;
-  const token = /^var\((--[a-z0-9-]+)\)$/i.exec(raw);
-  const value = token === null ? raw : (TOKENS.get(token[1]) ?? raw);
+  const token = /^var\((--[a-z0-9-]+)\)$/i.exec(value);
+  if (token !== null) {
+    const named = TOKENS.get(token[1]);
+    return named === undefined ? null : resolveLength(named);
+  }
   const clamped = /^clamp\(\s*([^,]+),/i.exec(value);
   const literal = clamped === null ? value : clamped[1].trim();
   const match = /^(\d*\.?\d+)(rem|em|px)$/.exec(literal);
@@ -64,39 +67,65 @@ function resolveLength(raw) {
   return match[2] === "px" ? size : size * ROOT_PX;
 }
 
-function sizeTokenOfShorthand(value) {
-  const machine = MACHINE_LENGTH.exec(value);
-  if (machine !== null) return machine[0];
+function sizeOfShorthand(value) {
   for (const part of value.split(/\s+/)) {
     const head = part.split("/")[0];
-    if (/^\d*\.?\d+(rem|em|px)$/.test(head)) return head;
+    if (/^--spacing\(|^calc\(|^\d*\.?\d+(rem|em|px)$/.test(head)) return head;
   }
   return null;
 }
 
-function declarations(source) {
+function lineOf(source, index) {
+  return source.slice(0, index).split("\n").length;
+}
+
+function sizes(source, isCss) {
   const found = [];
-  for (const match of source.matchAll(
-    /(?<![-\w])(font-size|font)\s*:\s*([^;}"']+)/gi,
-  )) {
+  const declaration = isCss
+    ? /(?<![-\w])(font-size|font)\s*:\s*([^;}"']+)/gi
+    : /\[(font-size|font):([^\]\s"'`]+)\]/g;
+  for (const match of source.matchAll(declaration)) {
+    const value = match[2].replaceAll("_", " ").trim().replace(/\s+/g, " ");
     found.push({
       property: match[1].toLowerCase(),
-      value: match[2].trim().replace(/\s+/g, " "),
-      line: source.slice(0, match.index).split("\n").length,
+      value,
+      line: lineOf(source, match.index),
+    });
+  }
+  if (isCss) return found;
+  for (const match of source.matchAll(/(?<![\w-])text-\[([^\]\s"'`]+)\]/g)) {
+    const value = match[1].replace(/^length:/, "").replaceAll("_", " ");
+    if (/^(color:|#|rgb|hsl|var\(--pw-(?!fs-))/.test(value)) continue;
+    found.push({
+      property: "font-size",
+      value,
+      line: lineOf(source, match.index),
+    });
+  }
+  for (const match of source.matchAll(
+    /(?<![\w-])text-([a-z0-9-]+)(?![\w[-])/g,
+  )) {
+    const token = `--text-${match[1]}`;
+    if (!TOKENS.has(token)) continue;
+    found.push({
+      property: "font-size",
+      value: `var(${token})`,
+      line: lineOf(source, match.index),
     });
   }
   return found;
 }
 
 const offences = [];
-for (const app of APPS) {
-  for (const file of collect(resolve(root, "apps", app))) {
+for (const name of ROOTS) {
+  for (const file of collect(resolve(root, name))) {
     const where = relative(root, file).split("\\").join("/");
     const source = readFileSync(file, "utf8");
-    for (const { property, value, line } of declarations(source)) {
-      const token =
-        property === "font-size" ? value : sizeTokenOfShorthand(value);
-
+    for (const { property, value, line } of sizes(
+      source,
+      /\.(css|html)$/.test(file),
+    )) {
+      const token = property === "font-size" ? value : sizeOfShorthand(value);
       if (property === "font" && token === null) {
         if (KEYWORDS.has(value.toLowerCase())) continue;
         offences.push({
@@ -108,7 +137,6 @@ for (const app of APPS) {
         continue;
       }
       if (KEYWORDS.has(token.toLowerCase())) continue;
-
       const px = resolveLength(token);
       if (px === null) {
         offences.push({ where, line, value, why: "not statically resolvable" });
@@ -136,9 +164,9 @@ if (offences.length > 0) {
     );
   }
   console.error(
-    `\nTHEME.md sets the label role at ${FLOOR_REM}rem and defines nothing\n` +
-      `smaller. A size this guard cannot resolve is reported rather than\n` +
-      `passed, so indirection cannot hide a value under the floor.\n`,
+    `\nThe label role sits at ${FLOOR_REM}rem and nothing is smaller. A size\n` +
+      `this guard cannot resolve is reported rather than passed, so\n` +
+      `indirection cannot hide a value under the floor.\n`,
   );
   process.exit(1);
 }

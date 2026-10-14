@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin, type UserConfig } from "vite";
+import {
+  defineConfig,
+  type Plugin,
+  type PluginOption,
+  type UserConfig,
+} from "vite";
 
 const faviconPath = fileURLToPath(new URL("./favicon.svg", import.meta.url));
 
@@ -24,10 +30,14 @@ export function sharedFavicon(): Plugin {
   };
 }
 
+export function reactPlugins(): PluginOption[] {
+  return [react(), tailwindcss(), sharedFavicon()];
+}
+
 export function reactApp(config: UserConfig = {}) {
   const { plugins = [], ...rest } = config;
   return defineConfig({
-    plugins: [react(), sharedFavicon(), ...plugins],
+    plugins: [...reactPlugins(), ...plugins],
     ...rest,
   });
 }

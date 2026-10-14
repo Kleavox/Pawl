@@ -15,8 +15,8 @@ manifest; see [Registering apps](#registering-apps).
 | Path                                               | Contents                                                                                                                              |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `worker`                                           | The Worker: `src/pass` (the identity provider), `src/gateway` (the front door), `src/dispatch.ts` (which half answers), D1 migrations |
-| `apps/web`                                         | Static Vite + TypeScript vending-machine home (the cabinet)                                                                           |
-| `apps/pass`                                        | React account and authentication application                                                                                          |
+| `apps/web`                                         | React + Vite + Tailwind cabinet and receipts, prerendered and hydrated                                                                |
+| `apps/pass`                                        | React sign-in and account application on `paw.`, its shell prerendered                                                                |
 | `packages/protocol`                                | Runtime-validated messages shared across application seams                                                                            |
 | `packages/topology`                                | Canonical hosts, origins, and local ports                                                                                             |
 | `packages/auth`, `config`, `core`, `testing`, `ui` | Shared TypeScript capabilities                                                                                                        |
@@ -52,7 +52,8 @@ the gateway binds each one as `APP_<KEY>`, reaches it on `<key>.internal`, and
 the cabinet, the header and the footer are built from the same list. A service
 binding resolves by Worker name, so an app can live in any repository.
 
-- TypeScript 7 native compiler, React, Vite, Hono, and Cloudflare Workers
+- TypeScript 7 native compiler, React, Vite, Tailwind CSS v4, Hono, and
+  Cloudflare Workers
 - D1 for relational state and KV for sessions
 - Rust compiled to WebAssembly for cryptography
 - pnpm workspaces and Turborepo for orchestration
@@ -197,43 +198,51 @@ No production credential is required to build or test this repository.
 
 ## The machine
 
-Every page Pawl serves is one steel-and-cobalt vending machine, drawn by
-`renderMachine` in `@pawl/core` and styled by `@pawl/ui/machine.css`; there is
-no page header and no page footer anywhere, and there is no pass card.
+Every page Pawl serves is one steel-and-cobalt vending machine, drawn by the
+`Machine` React component in `@pawl/ui` and styled with Tailwind classes over
+`@pawl/ui/theme.css`, the only stylesheet; the Worker's own pages (404, 500,
+consent) are the same components rendered to static markup with the compiled
+CSS inlined. There is no page header and no page footer anywhere, and there is
+no pass card.
 
-| Part               | What it carries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Marquee (crown)    | The site's wordmark, a dot-matrix ticker (what needs a look, a welcome, or `SIGNED OUT`), and the pass chip (`GUEST MODE`, `VISITOR MODE`, `OWNER MODE`)                                                                                                                                                                                                                                                                                                                                                          |
-| Display            | A digital screen in a screwed bezel showing one screen at a time: the nine bays as tiles (bay code, cartridge art, name and a badge: the estate count, `--` when it could not be read and never `0`, `SIGN IN` or `OWNER` when the pass does not open it, `OPEN ↗` for a link-only app), the three sign-in steps (1 Google, 2 GitHub, 3 email; your email; the code), working, and the account. Each screen has a top bar (`SIGN IN ▸` / `ACCOUNT ▸`, the step) and a hint foot; screens change under a scan line |
-| Speaker and sensor | A perforated grille and a proximity lens                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Status LCD         | Two lines that say what the machine is doing; it is the page's live status region                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Placard            | A printed sticker: 1 pick a bay, 2 sign in, 3 take it                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Keypad             | Picks bays, chooses a way to sign in (1–3) and types email codes; `GO` continues, `CLR` goes back one step. Two lamps say SELECT or CODE; every digit carries its braille cell. A key is lit only when it does something                                                                                                                                                                                                                                                                                          |
-| Lenses             | READY, BUSY, DENIED                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Printer            | Prints the receipts: `/privacy.html` and `/terms.html` feed out of its slot; Tear off (at the slot or at the end of the paper) tears them off and they fall away                                                                                                                                                                                                                                                                                                                                                  |
-| Delivery bay       | A released cartridge drops behind the flap; taking it opens the app                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Serial plate       | `PAWL-GW-01`, Privacy, Terms, ©, and the keypad sound switch (off until switched on)                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Part               | What it carries                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Marquee (crown)    | The site's wordmark, a dot-matrix ticker (what needs a look, a welcome, or `SIGNED OUT`), and the pass chip (`GUEST MODE`, `VISITOR MODE`, `OWNER MODE`)                                                                                                                                                                                                                                                                                                |
+| Display            | A digital screen in a screwed bezel showing one screen at a time: the nine bays as tiles (bay code, cartridge art, name and a badge: the estate count, `--` when it could not be read and never `0`, `SIGN IN` or `OWNER` when the pass does not open it, `OPEN ↗` for a link-only app), working, and the account. Each screen has a top bar (`SIGN IN ▸`, which dollies into `paw.`, or `ACCOUNT ▸`) and a hint foot; screens change under a scan line |
+| Speaker and sensor | A perforated grille and a proximity lens                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Status LCD         | Two lines that say what the machine is doing; it is the page's live status region                                                                                                                                                                                                                                                                                                                                                                       |
+| Placard            | A printed sticker: 1 pick a bay, 2 sign in, 3 take it                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Keypad             | On the cabinet it picks bays; on `paw.` it chooses a way to sign in, types the six-digit email code and opens the account's sections. `GO` continues, `CLR` goes back one step. Two lamps say SELECT or CODE; every digit carries its braille cell. A key is lit only when it does something                                                                                                                                                            |
+| Lenses             | READY, BUSY, DENIED                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Printer            | Prints the receipts: `/privacy.html` and `/terms.html` feed out of its slot; Tear off (at the slot or at the end of the paper) tears them off and they fall away                                                                                                                                                                                                                                                                                        |
+| Delivery bay       | A released cartridge drops behind the flap; taking it opens the app                                                                                                                                                                                                                                                                                                                                                                                     |
+| Serial plate       | `PAWL-GW-01`, Privacy, Terms, ©, and the keypad sound switch (off until switched on)                                                                                                                                                                                                                                                                                                                                                                    |
 
 The machine is sized in one unit, `--u`, taken from the viewport, so it fits a
 laptop or a phone without scrolling and scales as one object; what the screen
 says never resizes it. A guest who presses a locked tile sees it refused, then
-the sign-in, and that bay is released once they are in.
+the camera dollies into `paw.`'s sign-in, and that bay is released once they
+are back.
 
 Pages differ only in the camera's framing: `<root>` frames the whole machine,
 a receipt frames the printer, and `paw.<root>`, the OpenID Connect consent
 screen and the 404 and 500 pages frame the screen and the control strip.
 Moving between them moves only the camera: the leaving page frames the next
 page's framing, then goes, and the next page starts there (`#cam=screen` or
-`#cam=printer` carries it, read by a one-line inline script as the camera is
-parsed, so the first frame is already the hinted one). `paw.` carries
-sign-in and the account (Profile, Devices, Apps, Security) inside the display,
-where a long view scrolls; on consent the keypad's `CLR` and `GO` deny and
-allow.
+`#cam=printer` carries it, read by a one-line inline script that runs before
+the camera is parsed and marks the page, so the first frame is already the
+hinted one). `paw.` carries sign-in (a code by email, a password, Google or
+GitHub; registering in two steps) and the account (1 Profile, 2 Devices, 3
+Apps, 4 Security) inside the display, one short step at a time and lists three
+to a page, so nothing scrolls on a laptop or a phone; on consent the keypad's
+`CLR` and `GO` deny and allow.
 
 The design tokens are the `--pw-*` custom properties in
-`packages/ui/src/styles.css`: one accent (cobalt, for action and selection only)
-and four status colours. `pnpm lint:palette` rejects any other colour and
-`pnpm lint:type` any text below 0.68rem, reading machine units at the smallest
+`packages/ui/src/theme.css`, offered to Tailwind as `pw-*` colours, fonts and
+radii, with `--spacing` set to the machine unit and one breakpoint, `desk`
+(900px): one accent (cobalt, for action and selection only) and four status
+colours. `pnpm lint:palette` rejects any other colour and `pnpm lint:type` any
+text below 0.68rem, reading Tailwind sizes and machine units at the smallest
 scale. Under reduced motion every sequence still happens, in 40 ms, the camera
 does not move and pages change at once.
 

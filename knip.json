@@ -2,19 +2,29 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": ["wasm-pack"],
   "workspaces": {
+    "packages/ui": {
+      "ignore": ["scripts/page-css.d.mts"]
+    },
+    "apps/pass": {
+      "entry": [
+        "index.html",
+        "src/entry.tsx",
+        "src/prerender.tsx",
+        "vite.config.ts"
+      ],
+      "vite": false
+    },
     "apps/web": {
       "entry": [
         "index.html",
         "privacy.html",
         "terms.html",
-        "src/legal.ts",
-        "src/main.ts",
+        "src/cabinet-entry.tsx",
+        "src/receipt-entry.tsx",
+        "src/prerender.tsx",
         "vite.config.ts"
       ],
       "vite": false
-    },
-    "packages/core": {
-      "ignore": ["scripts/machine-css.d.mts"]
     },
     "packages/crypto": {
       "ignoreUnresolved": ["../pkg/crypto.js"]

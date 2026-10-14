@@ -5,23 +5,36 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./styles.css": "./src/styles.css",
-    "./machine.css": "./src/machine.css"
+    "./theme.css": "./src/theme.css",
+    "./camera-hint": "./src/machine/camera-hint.ts",
+    "./pages": "./src/pages/index.ts"
   },
   "files": [
     "src"
   ],
   "scripts": {
+    "css:pages": "node scripts/page-css.mjs",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit --checkers 1 && tsc -p tsconfig.test.json --noEmit --checkers 1"
   },
   "dependencies": {
-    "@pawl/topology": "workspace:*"
+    "@pawl/topology": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@pawl/typescript": "workspace:*",
+    "@tailwindcss/cli": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
     "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "jsdom": "catalog:",
+    "tailwindcss": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

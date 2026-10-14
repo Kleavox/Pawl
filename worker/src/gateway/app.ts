@@ -1,4 +1,5 @@
-import { renderErrorPage, type DeployEnvironment } from "@pawl/core";
+import type { DeployEnvironment } from "@pawl/core";
+import { renderErrorPage } from "@pawl/ui/pages";
 import {
   EMPTY_MANIFEST,
   registryFor,

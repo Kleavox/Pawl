@@ -5,7 +5,3 @@ export function guestTicker(siteName: string): string {
 export function emptyTicker(siteName: string): string {
   return `NO APPS YET · ${siteName.toUpperCase()} IS READY`;
 }
-
-export function openingTicker(siteName: string, bays: number): string {
-  return bays === 0 ? emptyTicker(siteName) : guestTicker(siteName);
-}

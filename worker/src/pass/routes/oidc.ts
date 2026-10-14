@@ -1,5 +1,5 @@
 import type { Identity } from "@pawl/core";
-import { escapeHtml, renderMachinePage } from "@pawl/core";
+import { renderConsentPage } from "@pawl/ui/pages";
 import { EMPTY_MANIFEST, registryFor } from "@pawl/registry";
 import { localWorkerOrigin } from "@pawl/topology";
 import type { Context } from "hono";
@@ -198,34 +198,14 @@ function consentPage(
   rootOrigin: string,
   siteName: string,
 ): string {
-  const name = escapeHtml(request.client.name);
-  const scopes = request.scopes
-    .map((scope) => `<li>${escapeHtml(SCOPE_WORDS[scope] ?? scope)}</li>`)
-    .join("");
-  const who = escapeHtml(identity.username ?? identity.email);
-  return renderMachinePage({
-    title: `Sign in to ${request.client.name} with Pawl`,
-    status: "AN APP WANTS YOUR PASS",
-    sub: "NOTHING SHARED YET",
-    where: "CONSENT",
+  return renderConsentPage({
+    clientName: request.client.name,
+    sector: request.client.sector,
+    holder: identity.username ?? identity.email,
+    scopes: request.scopes.map((scope) => SCOPE_WORDS[scope] ?? scope),
+    query: request.query,
     rootOrigin,
     siteName,
-    caption: "CLR DENY · GO ALLOW",
-    keys: {
-      clr: { kind: "submit", form: "consent", name: "decision", value: "deny" },
-      go: { kind: "submit", form: "consent", name: "decision", value: "allow" },
-    },
-    body: `<p class="eyebrow">Consent</p>
-<h1>Sign in to ${name} with Pawl</h1>
-<p>${name} is registered to <strong>${escapeHtml(request.client.sector)}</strong>. You are signed in as <strong>${who}</strong>.</p>
-<p>If you allow it, ${name} receives:</p>
-<ul class="scopes">${scopes}</ul>
-<p>It is asked once. You can disconnect it any time under Account &rarr; Apps.</p>
-<form id="consent" class="actions" method="post" action="/oauth/consent">
-<input type="hidden" name="request" value="${escapeHtml(request.query)}">
-<button class="button" type="submit" name="decision" value="deny">Deny</button>
-<button class="button button--primary" type="submit" name="decision" value="allow">Allow</button>
-</form>`,
   });
 }
 

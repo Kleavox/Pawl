@@ -1,0 +1,724 @@
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@source "../../../apps/web/src";
+@source "../../../apps/pass/src";
+@source "./";
+
+@theme inline {
+  --color-*: initial;
+  --color-pw-room: var(--pw-room);
+  --color-pw-room-spot: var(--pw-room-spot);
+  --color-pw-floor: var(--pw-floor);
+  --color-pw-steel-hi: var(--pw-steel-hi);
+  --color-pw-steel: var(--pw-steel);
+  --color-pw-steel-mid: var(--pw-steel-mid);
+  --color-pw-steel-lo: var(--pw-steel-lo);
+  --color-pw-trim: var(--pw-trim);
+  --color-pw-graphite: var(--pw-graphite);
+  --color-pw-graphite-lo: var(--pw-graphite-lo);
+  --color-pw-glass: var(--pw-glass);
+  --color-pw-glass-hi: var(--pw-glass-hi);
+  --color-pw-shelf: var(--pw-shelf);
+  --color-pw-screen: var(--pw-screen);
+  --color-pw-screen-hi: var(--pw-screen-hi);
+  --color-pw-screen-line: var(--pw-screen-line);
+  --color-pw-screen-field: var(--pw-screen-field);
+  --color-pw-screen-edge: var(--pw-screen-edge);
+  --color-pw-ink: var(--pw-ink);
+  --color-pw-ink-dim: var(--pw-ink-dim);
+  --color-pw-ice: var(--pw-ice);
+  --color-pw-etch: var(--pw-etch);
+  --color-pw-etch-dim: var(--pw-etch-dim);
+  --color-pw-cobalt: var(--pw-cobalt);
+  --color-pw-cobalt-hi: var(--pw-cobalt-hi);
+  --color-pw-cobalt-lo: var(--pw-cobalt-lo);
+  --color-pw-ok: var(--pw-ok);
+  --color-pw-warn: var(--pw-warn);
+  --color-pw-danger: var(--pw-danger);
+  --color-pw-off: var(--pw-off);
+  --color-pw-key: var(--pw-key);
+  --color-pw-label: var(--pw-label);
+  --color-pw-label-lo: var(--pw-label-lo);
+  --color-pw-paper: var(--pw-paper);
+  --color-pw-paper-ink: var(--pw-paper-ink);
+  --color-pw-paper-dim: var(--pw-paper-dim);
+  --color-pw-paper-rule: var(--pw-paper-rule);
+  --color-pw-black: var(--pw-black);
+  --color-pw-white: var(--pw-white);
+  --color-pw-cobalt-glow: var(--pw-cobalt-glow);
+  --color-pw-cobalt-wash: var(--pw-cobalt-wash);
+  --color-pw-shade: var(--pw-shade);
+  --color-pw-highlight: var(--pw-highlight);
+  --font-*: initial;
+  --font-pw-display: var(--pw-display);
+  --font-pw-ui: var(--pw-ui);
+  --font-pw-mono: var(--pw-mono);
+  --font-pw-serif: var(--pw-serif);
+  --default-font-family: var(--pw-ui);
+  --default-mono-font-family: var(--pw-mono);
+  --text-*: initial;
+  --text-14: calc(14 * var(--u));
+  --text-15: calc(15 * var(--u));
+  --text-16: calc(16 * var(--u));
+  --text-17: calc(17 * var(--u));
+  --text-19: calc(19 * var(--u));
+  --text-20: calc(20 * var(--u));
+  --text-22: calc(22 * var(--u));
+  --text-26: calc(26 * var(--u));
+  --text-32: calc(32 * var(--u));
+  --text-rem-micro: var(--pw-fs-micro);
+  --text-rem-label: var(--pw-fs-label);
+  --text-rem-small: var(--pw-fs-small);
+  --text-rem-body: var(--pw-fs-body);
+  --text-rem-h3: var(--pw-fs-h3);
+  --text-rem-h2: var(--pw-fs-h2);
+  --text-rem-mark: var(--pw-fs-mark);
+  --breakpoint-*: initial;
+  --breakpoint-desk: 900px;
+  --spacing: var(--u);
+  --spacing-pw-1: var(--pw-s1);
+  --spacing-pw-2: var(--pw-s2);
+  --spacing-pw-3: var(--pw-s3);
+  --spacing-pw-4: var(--pw-s4);
+  --spacing-pw-5: var(--pw-s5);
+  --spacing-pw-6: var(--pw-s6);
+  --spacing-pw-7: var(--pw-s7);
+  --spacing-pw-8: var(--pw-s8);
+  --radius-pw-key: var(--pw-r-key);
+  --radius-pw-panel: var(--pw-r-panel);
+  --radius-pw-body: var(--pw-r-body);
+  --ease-pw-mech: var(--pw-ease-mech);
+  --ease-pw-drop: var(--pw-ease-drop);
+  --ease-dolly: cubic-bezier(0.45, 0.05, 0.2, 1);
+  --ease-pull: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+
+    --pw-room: #0a0f17;
+    --pw-room-spot: #17233a;
+    --pw-floor: #0d131d;
+    --pw-steel-hi: #e3e8ee;
+    --pw-steel: #c9d0d8;
+    --pw-steel-mid: #a9b2bd;
+    --pw-steel-lo: #8e98a4;
+    --pw-trim: #5c6672;
+    --pw-graphite: #3c4552;
+    --pw-graphite-lo: #1b2330;
+    --pw-glass: #070c15;
+    --pw-glass-hi: #0c1424;
+    --pw-shelf: #263243;
+    --pw-screen: #06101f;
+    --pw-screen-hi: #0a1730;
+    --pw-screen-line: #1f2d45;
+    --pw-screen-field: #071328;
+    --pw-screen-edge: #2c3d5c;
+    --pw-ink: #e9eef4;
+    --pw-ink-dim: #8fa0b4;
+    --pw-ice: #9cc2ff;
+    --pw-etch: #1a2230;
+    --pw-etch-dim: #3c4a5e;
+    --pw-cobalt: #2f6bff;
+    --pw-cobalt-hi: #5b8cff;
+    --pw-cobalt-lo: #1f4fd1;
+    --pw-ok: #3ddc97;
+    --pw-warn: #ffb020;
+    --pw-danger: #ff4d5e;
+    --pw-off: #5b6a7e;
+    --pw-key: #e4e8ee;
+    --pw-label: #f2f5f9;
+    --pw-label-lo: #d9e0e8;
+    --pw-paper: #f4f1ea;
+    --pw-paper-ink: #1b1f26;
+    --pw-paper-dim: #5d6470;
+    --pw-paper-rule: #8a8f99;
+    --pw-black: #000000;
+    --pw-white: #ffffff;
+
+    --pw-cobalt-glow: rgb(47 107 255 / 35%);
+    --pw-cobalt-wash: rgb(47 107 255 / 14%);
+    --pw-shade: rgb(0 0 0 / 55%);
+    --pw-highlight: rgb(255 255 255 / 45%);
+
+    --pw-display:
+      "Bahnschrift", "DIN Alternate", "DIN Condensed", "Barlow Semi Condensed",
+      "Roboto Condensed", "Arial Narrow", sans-serif;
+    --pw-ui:
+      "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", -apple-system,
+      "Inter", system-ui, sans-serif;
+    --pw-mono:
+      "Cascadia Mono", "SF Mono", "JetBrains Mono", "Roboto Mono", Consolas,
+      monospace;
+    --pw-serif: "Charter", "Iowan Old Style", "Georgia", serif;
+
+    --pw-fs-micro: 0.6875rem;
+    --pw-fs-label: 0.75rem;
+    --pw-fs-small: 0.875rem;
+    --pw-fs-body: 1rem;
+    --pw-fs-h3: 1.25rem;
+    --pw-fs-h2: 1.625rem;
+    --pw-fs-mark: 2.25rem;
+
+    --pw-s1: 4px;
+    --pw-s2: 8px;
+    --pw-s3: 12px;
+    --pw-s4: 16px;
+    --pw-s5: 24px;
+    --pw-s6: 32px;
+    --pw-s7: 48px;
+    --pw-s8: 64px;
+
+    --pw-r-key: 6px;
+    --pw-r-panel: 10px;
+    --pw-r-body: 18px;
+
+    --pw-ease-mech: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --pw-ease-drop: cubic-bezier(0.55, 0, 1, 0.45);
+    --pw-t-tap: 90ms;
+    --pw-t-key: 120ms;
+    --pw-t-view: 220ms;
+    --pw-t5: 900ms;
+    --pw-t6: 1400ms;
+    --pw-t-camera: 700ms;
+    --pw-t-print: 1600ms;
+
+    --pw-brushed:
+      repeating-linear-gradient(
+        90deg,
+        rgb(255 255 255 / 4%) 0 1px,
+        transparent 1px 3px
+      ),
+      linear-gradient(
+        160deg,
+        var(--pw-steel-hi) 0%,
+        var(--pw-steel) 38%,
+        var(--pw-steel-mid) 72%,
+        var(--pw-steel-lo) 100%
+      );
+    --pw-lcd: radial-gradient(
+      120% 70% at 50% 0%,
+      var(--pw-screen-hi) 0%,
+      var(--pw-screen) 70%
+    );
+    --pw-glass-face:
+      linear-gradient(
+        112deg,
+        rgb(255 255 255 / 7%) 0 14%,
+        transparent 14% 30%,
+        rgb(255 255 255 / 3%) 30% 33%,
+        transparent 33%
+      ),
+      radial-gradient(70% 40% at 50% 0%, rgb(47 107 255 / 6%), transparent 70%),
+      linear-gradient(180deg, var(--pw-glass-hi), var(--pw-glass));
+
+    --mw: 1000;
+    --mh: 748;
+    --margin: 24px;
+    --u: clamp(
+      0.8px,
+      min(
+        calc((100dvw - 2 * var(--margin)) / var(--mw)),
+        calc((100svh - 2 * var(--margin)) / var(--mh))
+      ),
+      1px
+    );
+    --screen-x: 11;
+    --screen-y: 81;
+    --screen-w: 978;
+    --screen-h: 544;
+    --slot-cx: 869;
+    --slot-cy: 583;
+    --slot-w: 150;
+    --printer-s: min(
+      3,
+      tan(
+        atan2(
+          calc(100dvw - 2 * var(--margin) - 24px),
+          calc(var(--slot-w) * var(--u))
+        )
+      )
+    );
+    --screen-s: max(
+      1,
+      min(
+        tan(
+          atan2(
+            calc(100dvw - 2 * var(--margin)),
+            calc(var(--screen-w) * var(--u))
+          )
+        ),
+        tan(
+          atan2(
+            calc(100svh - 2 * var(--margin)),
+            calc(var(--screen-h) * var(--u))
+          )
+        )
+      )
+    );
+  }
+
+  @media (max-width: 899px) {
+    :root {
+      --mw: 370;
+      --mh: 896;
+      --margin: 10px;
+      --screen-x: 9;
+      --screen-y: 63;
+      --screen-w: 352;
+      --screen-h: 678;
+      --slot-cx: 83;
+      --slot-cy: 701;
+      --slot-w: 110;
+      --printer-s: min(
+        3.6,
+        tan(
+          atan2(
+            calc(100dvw - 2 * var(--margin) - 24px),
+            calc(var(--slot-w) * var(--u))
+          )
+        )
+      );
+    }
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    color: var(--pw-ink);
+    background:
+      radial-gradient(
+        90% 55% at 50% 0%,
+        var(--pw-room-spot) 0%,
+        transparent 70%
+      ),
+      linear-gradient(180deg, var(--pw-room) 0%, var(--pw-floor) 100%);
+    font-family: var(--pw-ui);
+    font-size: var(--pw-fs-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  a {
+    color: inherit;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: default;
+  }
+  ::selection {
+    background: var(--pw-cobalt);
+    color: var(--pw-white);
+  }
+  :focus-visible {
+    outline: 2px solid var(--pw-cobalt);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--pw-room);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 40ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 40ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  @media print {
+    body {
+      background: var(--pw-white);
+    }
+  }
+}
+
+@property --u {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1px;
+}
+
+@property --cam-s {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --cam-x {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --cam-y {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes pw-scan {
+  to {
+    background-position: -1200% 0;
+  }
+}
+
+@keyframes machine-ticker {
+  0%,
+  12% {
+    transform: translate(0, -50%);
+  }
+  88% {
+    transform: translate(var(--pw-ticker-travel, 0), -50%);
+  }
+  100% {
+    transform: translate(0, -50%);
+  }
+}
+
+@keyframes printer-blink {
+  0%,
+  50% {
+    background: var(--pw-ok);
+    box-shadow: 0 0 calc(6 * var(--u)) var(--pw-ok);
+  }
+  25%,
+  75%,
+  100% {
+    background: var(--pw-off);
+    box-shadow: none;
+  }
+}
+
+@keyframes loader-dot {
+  0%,
+  11.11%,
+  22.22%,
+  33.33%,
+  44.44%,
+  55.56%,
+  66.67%,
+  77.78%,
+  88.89%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  4.44%,
+  15.56%,
+  26.67%,
+  37.78%,
+  48.89%,
+  60.0%,
+  71.11%,
+  82.22%,
+  93.33% {
+    opacity: 1;
+    transform: translateY(calc(-4 * var(--u)));
+  }
+}
+
+@keyframes tile-denied {
+  0%,
+  33%,
+  66% {
+    box-shadow:
+      inset 0 0 0 calc(2 * var(--u)) var(--pw-danger),
+      0 0 calc(18 * var(--u)) rgb(255 77 94 / 45%);
+  }
+  16%,
+  50%,
+  83%,
+  100% {
+    box-shadow: inset 0 0 0 calc(1 * var(--u)) var(--pw-screen-edge);
+  }
+}
+
+@keyframes art-release {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(calc(-3 * var(--u)));
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(calc(60 * var(--u)));
+  }
+}
+
+@keyframes wipe-in {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes wipe-out {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(100% 0 0 0);
+  }
+}
+
+@keyframes wipe-line {
+  from {
+    top: 0;
+  }
+  to {
+    top: 100%;
+  }
+}
+
+@keyframes cartridge-drop {
+  0%,
+  45% {
+    opacity: 0;
+    transform: translate(-50%, calc(-90 * var(--u))) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, calc(-90 * var(--u))) rotate(1deg);
+  }
+  86% {
+    opacity: 1;
+    transform: translate(-48%, calc(-4 * var(--u))) rotate(4deg);
+  }
+  93% {
+    opacity: 1;
+    transform: translate(-49%, calc(-8 * var(--u))) rotate(-2deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-49%, 0) rotate(0deg);
+  }
+}
+
+@keyframes cartridge-tumble {
+  0%,
+  45% {
+    opacity: 0;
+    transform: translate(-50%, calc(-90 * var(--u))) rotate(-1deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-52%, calc(-86 * var(--u))) rotate(-6deg);
+  }
+  66% {
+    opacity: 1;
+    transform: translate(-45%, calc(-58 * var(--u))) rotate(9deg);
+  }
+  84% {
+    opacity: 1;
+    transform: translate(-52%, calc(-14 * var(--u))) rotate(-7deg);
+  }
+  94% {
+    opacity: 1;
+    transform: translate(-48%, calc(-4 * var(--u))) rotate(3deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-48%, 0) rotate(0deg);
+  }
+}
+
+@keyframes flap-thunk {
+  0%,
+  84% {
+    transform: none;
+  }
+  91% {
+    transform: perspective(calc(420 * var(--u))) rotateX(-24deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes tray-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(calc(14 * var(--u)));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cartridge-to-screen {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 30%) scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes transfer-grid {
+  from {
+    opacity: 0;
+    transform: perspective(600px) rotateX(58deg) translateY(-40px);
+  }
+  to {
+    opacity: 0.6;
+    transform: perspective(600px) rotateX(58deg) translateY(0);
+  }
+}
+
+@keyframes transfer-rail {
+  to {
+    background: var(--pw-cobalt);
+  }
+}
+
+@keyframes receipt-feed {
+  from {
+    transform: translateY(-70svh);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes printer-blink-once {
+  0% {
+    background: var(--pw-ok);
+    box-shadow: 0 0 calc(6 * var(--u)) var(--pw-ok);
+  }
+  50%,
+  100% {
+    background: var(--pw-off);
+    box-shadow: none;
+  }
+}
+
+@keyframes pass-wipe-in {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes pass-scan-off {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(100% 0 0 0);
+  }
+}
+
+@keyframes receipt-rip {
+  0% {
+    transform: translateY(calc(6 * var(--u)));
+  }
+  100% {
+    transform: translateY(calc(6 * var(--u))) rotate(2deg);
+  }
+}
+
+@keyframes receipt-fall {
+  0% {
+    transform: translateY(calc(6 * var(--u))) rotate(2deg);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110svh) rotate(8deg);
+    opacity: 0;
+  }
+}
+
+@utility camera-whole {
+  --cam-s: 1;
+  --cam-x: calc(50dvw - var(--mw) * var(--u) / 2);
+  --cam-y: max(var(--margin), calc(50svh - var(--mh) * var(--u) / 2));
+}
+
+@utility camera-screen {
+  --cam-s: var(--screen-s);
+  --cam-x: max(
+    calc(var(--margin) - var(--screen-x) * var(--u) * var(--cam-s)),
+    calc(
+      50dvw - (var(--screen-x) + var(--screen-w) / 2) * var(--u) * var(--cam-s)
+    )
+  );
+  --cam-y: max(
+    calc(var(--margin) - var(--screen-y) * var(--u) * var(--cam-s)),
+    calc(
+      50svh - (var(--screen-y) + var(--screen-h) / 2) * var(--u) * var(--cam-s)
+    )
+  );
+}
+
+@utility camera-printer {
+  --cam-s: var(--printer-s);
+  --cam-x: calc(50dvw - var(--slot-cx) * var(--u) * var(--cam-s));
+  --cam-y: calc(26svh - var(--slot-cy) * var(--u) * var(--cam-s));
+}
+
+@utility room-printer {
+  height: 100svh;
+}
+
+@utility room-screen {
+  height: max(
+    100svh,
+    calc(var(--screen-h) * var(--u) * var(--screen-s) + 2 * var(--margin))
+  );
+}
+
+@utility keycap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-width: calc(1 * var(--u));
+  border-style: solid;
+  border-radius: calc(7 * var(--u));
+  font-family: var(--pw-mono);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform var(--pw-t-key) var(--pw-ease-mech),
+    box-shadow var(--pw-t-key) var(--pw-ease-mech);
+}

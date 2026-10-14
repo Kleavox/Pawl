@@ -1,4 +1,4 @@
-import { MACHINE_PARTS } from "@pawl/core";
+import { MACHINE_PARTS } from "@pawl/ui/pages";
 import { readFileSync } from "node:fs";
 
 import { publicHost } from "@pawl/topology";
@@ -60,7 +60,7 @@ describe("Gateway public namespace", () => {
     const body = await response.text();
     expect(body).toContain(">FIXTURE</p>");
     expect(body).not.toContain(">PAWL</p>");
-    expect(body).toContain('data-camera data-framing="screen"');
+    expect(body).toMatch(/<div[^>]*data-camera[^>]*data-framing="screen"/);
     for (const part of MACHINE_PARTS) {
       expect(
         body.match(new RegExp(`data-part="${part}"`, "g")),

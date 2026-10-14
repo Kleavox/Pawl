@@ -1,4 +1,4 @@
-import { CAMERA_HINT_HASH } from "@pawl/core";
+import { CAMERA_HINT_HASH } from "@pawl/ui/camera-hint";
 
 const LOOPBACK = ["127.0.0.1", "localhost"];
 

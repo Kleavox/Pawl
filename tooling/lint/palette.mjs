@@ -3,14 +3,18 @@ import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const SRC_BUDGET = { pass: 0, web: 0 };
+const SRC_BUDGET = {
+  "apps/pass/src": 0,
+  "apps/web/src": 0,
+  "packages/ui/src": 0,
+};
 const HTML_BUDGET = { pass: 5, web: 0 };
 const EXTENSIONS = [".css", ".ts", ".tsx", ".js", ".jsx", ".html", ".mjs"];
 
 const tokens = new Set(
   [
     ...readFileSync(
-      resolve(root, "packages/ui/src/styles.css"),
+      resolve(root, "packages/ui/src/theme.css"),
       "utf8",
     ).matchAll(/--(?:pw|dt)-[a-z0-9-]+:\s*(#[0-9a-fA-F]{3,8})\s*;/g),
   ].map((match) => expand(match[1])),
@@ -41,8 +45,8 @@ function scanForHex(filePath) {
   return found;
 }
 
-function offPaletteSrc(app) {
-  const base = resolve(root, "apps", app, "src");
+function offPaletteSrc(directory) {
+  const base = resolve(root, directory);
   const found = [];
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -55,6 +59,7 @@ function offPaletteSrc(app) {
       if (!EXTENSIONS.some((extension) => entry.name.endsWith(extension))) {
         continue;
       }
+      if (entry.name === "page-css.ts") continue;
       found.push(...scanForHex(path));
     }
   };
@@ -75,12 +80,12 @@ function offPaletteHtml(app) {
 }
 
 let failed = false;
-for (const [app, budget] of Object.entries(SRC_BUDGET)) {
-  const offences = offPaletteSrc(app);
+for (const [directory, budget] of Object.entries(SRC_BUDGET)) {
+  const offences = offPaletteSrc(directory);
   if (offences.length > budget) {
     failed = true;
     console.error(
-      `${app}/src: ${offences.length} off-palette colours, budget ${budget}`,
+      `${directory}: ${offences.length} off-palette colours, budget ${budget}`,
     );
     for (const offence of offences) console.error(`  ${offence}`);
   }

@@ -1,5 +1,6 @@
 export const TEAR_JERK_MS = 90;
-export const TEAR_FALL_MS = 150;
+export const TEAR_RIP_MS = 120;
+export const TEAR_FALL_MS = 380;
 const SCROLL_BACK_MS = 340;
 
 function wait(ms: number): Promise<void> {
@@ -7,13 +8,15 @@ function wait(ms: number): Promise<void> {
 }
 
 export async function tearOff(
-  paper: HTMLElement,
+  frame: HTMLElement,
   options: { reduced: boolean },
 ): Promise<void> {
   if (options.reduced) return;
-  paper.dataset.torn = "jerk";
+  frame.dataset.torn = "jerk";
   await wait(TEAR_JERK_MS);
-  paper.dataset.torn = "fall";
+  frame.dataset.torn = "rip";
+  await wait(TEAR_RIP_MS);
+  frame.dataset.torn = "fall";
   await wait(TEAR_FALL_MS);
 }
 
@@ -22,20 +25,20 @@ function easeInOut(t: number): number {
 }
 
 export function scrollBack(
-  win: Window,
+  frame: HTMLElement,
   options: { reduced: boolean },
 ): Promise<void> {
-  const from = win.scrollY;
+  const from = frame.scrollTop;
   if (from <= 0) return Promise.resolve();
   if (options.reduced) {
-    win.scrollTo(0, 0);
+    frame.scrollTop = 0;
     return Promise.resolve();
   }
   const start = performance.now();
   return new Promise((done) => {
     const step = (): void => {
       const t = Math.min(1, (performance.now() - start) / SCROLL_BACK_MS);
-      win.scrollTo(0, Math.round(from * (1 - easeInOut(t))));
+      frame.scrollTop = Math.round(from * (1 - easeInOut(t)));
       if (t < 1) requestAnimationFrame(step);
       else done();
     };

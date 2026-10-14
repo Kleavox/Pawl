@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { localWorkerOrigin } from "@pawl/topology";
 
+import { goKey, openSection, submitPassword, view } from "./pass-account";
+
 const GATEWAY = localWorkerOrigin("gateway", "localhost");
 const PASS = localWorkerOrigin("pass", "localhost");
 const NOTES = "http://localhost:8790";
@@ -27,7 +29,7 @@ function markEmailVerified(address: string): void {
 test("web home loads through the gateway", async ({ page }) => {
   await page.goto(`${GATEWAY}/`);
   await expect(page.locator(".marquee__brand")).toHaveText("FIXTURE");
-  await expect(page.locator("[data-terminal-open]")).toBeVisible();
+  await expect(page.locator("[data-sign-in]")).toBeVisible();
 });
 
 test("no horizontal overflow at 320px or 360px", async ({ browser }) => {
@@ -73,27 +75,28 @@ test("no horizontal overflow at 320px or 360px", async ({ browser }) => {
 
 test("auth journey: register, sign in, account page", async ({ page }) => {
   await page.goto(`${PASS}/`);
-  await page.getByRole("button", { name: "Create an account" }).click();
-
-  await page.locator('input[name="username"]').fill("e2e_user");
-  await page.locator('input[name="email"]').fill(email);
-  await page.locator('input[name="password"]').fill(password);
-  await page.locator('input[name="confirm-password"]').fill(password);
-  await page
-    .getByRole("button", { name: "Create account", exact: true })
+  await view(page, "methods")
+    .getByRole("button", { name: "Create one" })
     .click();
-  await expect(page.getByText("Check your email")).toBeVisible();
+  const who = view(page, "register");
+  await who.locator('input[name="username"]').fill("e2e_user");
+  await who.locator('input[name="email"]').fill(email);
+  await goKey(page).click();
+  const key = view(page, "register-key");
+  await key.locator('input[name="password"]').fill(password);
+  await key.locator('input[name="confirm-password"]').fill(password);
+  await goKey(page).click();
+  await expect(view(page, "sent")).toBeVisible();
 
   markEmailVerified(email);
 
-  await page.goto(`${PASS}/`);
-  await page.locator('input[name="email"]').fill(email);
-  await page.locator('input[name="password"]').fill(password);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-
-  await expect(page.getByRole("heading", { name: "e2e_user" })).toBeVisible();
-  await expect(page.getByText("Sign-in methods")).toBeVisible();
+  await submitPassword(page, PASS, email, password);
   await expect(
-    page.locator(".providers span", { hasText: "Password" }),
+    view(page, "account").getByRole("heading", { name: "e2e_user" }),
+  ).toBeVisible();
+  await openSection(page, "Profile");
+  await expect(view(page, "profile").getByText("Sign-in")).toBeVisible();
+  await expect(
+    view(page, "profile").locator("dd span", { hasText: "Password" }),
   ).toBeVisible();
 });
