@@ -17,29 +17,30 @@ import {
   View,
   withCamHint,
 } from "@pawl/ui";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
 
 import { contactAddress } from "../legal-facts";
-import { FEED_MS, scrollBack, tearOff } from "../receipt";
+import { sagFor, scrollBack, tearOff } from "../receipt";
 import { useSound } from "../sound";
 import { Privacy } from "./Privacy";
+import { Slack } from "./Slack";
 import { Terms } from "./Terms";
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 const TITLES = { privacy: "Privacy policy", terms: "Terms of service" };
 
+const SIZES =
+  "[--k:calc(var(--u)*var(--printer-s))] [--paper:calc((var(--slot-w)_-_12)_*_var(--k))] [--g:clamp(0px,calc((100dvw_-_var(--paper))_/_2),80px)] [--sag-max:calc((100svh_-_var(--slot-line))_*_0.38)]";
+
 const FEED =
-  "receipt-feed fixed z-2 inset-y-0 data-feeding:[clip-path:inset(var(--slot-line)_0_0_0)] left-[calc(50dvw_-_var(--paper)_/_2_-_var(--g))] w-[calc(var(--paper)_+_2_*_var(--g))] [--k:calc(var(--u)*var(--printer-s))] [--paper:calc((var(--slot-w)_-_12)_*_var(--k))] [--g:clamp(0px,calc((100dvw_-_var(--paper))_/_2),80px)] print:static print:w-auto print:data-feeding:[clip-path:none]";
+  "receipt-feed fixed z-2 top-(--slot-line) bottom-0 left-[calc(50dvw_-_var(--paper)_/_2_-_var(--g))] w-[calc(var(--paper)_+_2_*_var(--g))] print:static print:w-auto print:[transform:none]!";
+
+const SLACK =
+  "fixed z-3 top-(--slot-line) left-[calc(50dvw_-_var(--paper)_/_2)] w-(--paper) h-(--sag-max) origin-top [transform:scaleY(0)] pointer-events-none print:hidden";
 
 const FRAME =
-  "h-full overflow-y-auto overflow-x-hidden px-(--g) pt-(--slot-line) focus-visible:[outline:none] [scrollbar-width:thin] [scrollbar-color:var(--pw-steel-lo)_transparent] origin-top [transition:transform_90ms_cubic-bezier(0.2,0.8,0.2,1)] data-[torn]:will-change-transform data-[torn=jerk]:[transform:translateY(calc(6*var(--u)))] data-[torn=rip]:animate-[receipt-rip_120ms_ease-out_1_both] data-[torn=fall]:animate-[receipt-fall_560ms_linear_1_both] motion-reduce:animate-none motion-reduce:transition-none print:h-auto print:overflow-visible print:px-0 print:pt-0";
+  "h-full overflow-y-auto overflow-x-hidden px-(--g) pb-(--sag-max) scroll-pb-(--sag-max) focus-visible:[outline:none] [scrollbar-width:none] origin-top [transition:transform_90ms_cubic-bezier(0.2,0.8,0.2,1)] data-[torn]:will-change-transform data-[torn=jerk]:[transform:translateY(calc(6*var(--u)))] data-[torn=rip]:animate-[receipt-rip_120ms_ease-out_1_both] data-[torn=fall]:animate-[receipt-fall_560ms_linear_1_both] motion-reduce:animate-none motion-reduce:transition-none print:h-auto print:overflow-visible print:px-0 print:pb-0 print:scroll-pb-0";
 
 const HANG =
   "relative origin-top animate-[receipt-settle_900ms_ease-out_1_both] [animation-delay:540ms] [[data-receipt-frame]:focus-visible_&]:[outline:--spacing(2)_solid_var(--pw-cobalt-hi)] [[data-receipt-frame]:focus-visible_&]:[outline-offset:4px] motion-reduce:animate-none print:animate-none";
@@ -67,15 +68,30 @@ export function ReceiptPage(props: {
   const machine = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
   const feed = useRef<HTMLElement>(null);
+  const slack = useRef<HTMLDivElement>(null);
   const tearing = useRef(false);
-  const [feeding, setFeeding] = useState(true);
 
   useEffect(() => {
-    const fed = setTimeout(
-      () => setFeeding(false),
-      reducedMotion() ? 0 : FEED_MS,
-    );
-    return () => clearTimeout(fed);
+    const paper = frame.current;
+    const held = feed.current;
+    const loop = slack.current;
+    if (paper === null || held === null || loop === null) return;
+    const hang = (): void => {
+      const sag = sagFor(
+        paper.scrollTop,
+        paper.scrollHeight,
+        paper.clientHeight,
+      );
+      loop.style.transform = `scaleY(${sag})`;
+      held.style.transform = `translateY(${Math.round(sag * loop.offsetHeight)}px)`;
+    };
+    hang();
+    paper.addEventListener("scroll", hang, { passive: true });
+    window.addEventListener("resize", hang);
+    return () => {
+      paper.removeEventListener("scroll", hang);
+      window.removeEventListener("resize", hang);
+    };
   }, []);
   const sound = useSound();
   const title = TITLES[props.kind];
@@ -176,9 +192,8 @@ export function ReceiptPage(props: {
       />
       <main
         ref={feed}
-        className={FEED}
+        className={`${SIZES} ${FEED}`}
         aria-labelledby="receipt-title"
-        data-feeding={feeding ? "" : undefined}
       >
         <div
           ref={frame}
@@ -199,6 +214,14 @@ export function ReceiptPage(props: {
           </div>
         </div>
       </main>
+      <div
+        ref={slack}
+        className={`${SIZES} ${SLACK}`}
+        data-receipt-slack
+        aria-hidden="true"
+      >
+        <Slack />
+      </div>
     </>
   );
 }

@@ -202,23 +202,52 @@ test("the receipt's paper feeds from the slot without the slot ever changing siz
   ).toBeLessThanOrEqual(1);
 });
 
-test("the paper hangs in front of the machine: read further and it rises over the machine, never into the slot", async ({
+test("what has been read hangs between the slot and the held edge, lower the further one reads, never over the machine", async ({
   page,
 }) => {
   await page.goto(`${GATEWAY}/privacy.html`);
   await page.waitForTimeout(1700);
   const slot = await boxOf(page, ".printer__slot");
-  await page
-    .locator("[data-receipt-frame]")
-    .evaluate((node) => (node.scrollTop = 400));
-  const above = await page.evaluate(
-    ([x, y]) => {
-      const hit = document.elementFromPoint(x!, y!);
-      return hit?.closest("[data-receipt]") !== null;
-    },
-    [slot.left + slot.width / 2, slot.top - 60],
+  const frame = page.locator("[data-receipt-frame]");
+  const sag = () =>
+    page
+      .locator("[data-receipt-slack]")
+      .evaluate((node) => node.getBoundingClientRect().height);
+  const held = () =>
+    page
+      .locator("main.receipt-feed")
+      .evaluate((node) => node.getBoundingClientRect().top);
+  const settle = () => page.waitForTimeout(150);
+  expect(await sag()).toBe(0);
+  const atRest = await held();
+
+  await frame.evaluate(
+    (node) => (node.scrollTop = (node.scrollHeight - node.clientHeight) * 0.2),
   );
-  expect(above, "a point above the slot shows the paper").toBe(true);
+  await settle();
+  const some = await sag();
+  expect(some).toBeGreaterThan(0);
+  expect(Math.abs((await held()) - atRest - some)).toBeLessThanOrEqual(1);
+  expect(
+    await page.evaluate(
+      ([x, y]) =>
+        document.elementFromPoint(x!, y!)?.closest("[data-receipt]") != null,
+      [slot.left + slot.width / 2, slot.top - 60],
+    ),
+    "nothing of the paper rises above the slot",
+  ).toBe(false);
+
+  await frame.evaluate((node) => (node.scrollTop = node.scrollHeight));
+  await settle();
+  expect(await sag()).toBeGreaterThan(some);
+  await expect(
+    page.getByRole("link", { name: "Tear off and return to the machine" }),
+  ).toBeInViewport();
+
+  await frame.evaluate((node) => (node.scrollTop = 0));
+  await settle();
+  expect(await sag()).toBe(0);
+  expect(await held()).toBe(atRest);
 });
 
 test("tearing a receipt off returns to the machine, which pulls back to the whole", async ({
@@ -524,4 +553,10 @@ test("only the paper scrolls on a receipt; the room stays where it is", async ({
   ).toBeGreaterThan(0);
   expect(await top()).toBe(room);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(
+    await page
+      .locator("[data-receipt-frame]")
+      .evaluate((node: HTMLElement) => node.offsetWidth - node.clientWidth),
+    "the paper shows no scrollbar",
+  ).toBe(0);
 });

@@ -203,7 +203,7 @@ describe("signing in on paw.", () => {
     });
     expect(
       container.querySelector("button[form='screen-form']"),
-    ).toBeDisabled();
+    ).toHaveAttribute("aria-disabled", "true");
     await userEvent.keyboard("{Backspace}{Backspace}{Backspace}");
     expect(screen.getByLabelText("Email address")).toBeVisible();
     expect(screen.getByLabelText("Email address")).toHaveValue("a@b.test");

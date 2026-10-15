@@ -4,6 +4,7 @@ import {
   TEAR_FALL_MS,
   TEAR_JERK_MS,
   TEAR_RIP_MS,
+  sagFor,
   scrollBack,
   tearOff,
 } from "./receipt";
@@ -39,6 +40,25 @@ describe("tearOff", () => {
     const frame = document.createElement("div");
     await tearOff(frame, { reduced: true });
     expect(frame.dataset.torn).toBeUndefined();
+  });
+});
+
+describe("sagFor", () => {
+  it("hangs no slack before any of the receipt is read, all of it at the end", () => {
+    expect(sagFor(0, 1100, 100)).toBe(0);
+    expect(sagFor(1000, 1100, 100)).toBe(1);
+  });
+
+  it("sags fast at first and slower later, as a rope does", () => {
+    expect(sagFor(250, 1100, 100)).toBe(0.5);
+    expect(sagFor(40, 1100, 100)).toBeCloseTo(0.2);
+  });
+
+  it("stays between none and all when the paper overscrolls or does not scroll", () => {
+    expect(sagFor(-30, 1100, 100)).toBe(0);
+    expect(sagFor(1200, 1100, 100)).toBe(1);
+    expect(sagFor(0, 100, 100)).toBe(0);
+    expect(sagFor(0, 0, 0)).toBe(0);
   });
 });
 

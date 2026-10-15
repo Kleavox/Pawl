@@ -254,6 +254,35 @@ test("pressing a bay twice still leaves the product in the tray", async ({
   await expect(page.locator("[data-screen]")).toContainText("DELIVERED");
 });
 
+test("every key looks alike and presses, even one with nothing to do", async ({
+  page,
+}) => {
+  await openBooted(page);
+  const keys = page.locator("[data-part='keypad'] [data-key]");
+  expect(
+    await keys.evaluateAll((all) => [
+      ...new Set(all.map((key) => getComputedStyle(key).opacity)),
+    ]),
+  ).toEqual(["1"]);
+  const idle = await page
+    .locator("[data-part='keypad'] [data-key][aria-disabled='true']")
+    .first()
+    .getAttribute("data-key");
+  const screen = await page.locator("[data-screen]").textContent();
+  expect(
+    await page.evaluate((key) => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key }));
+      return document
+        .querySelector(`[data-key='${key}']`)!
+        .classList.contains("is-pressed");
+    }, idle!),
+  ).toBe(true);
+  await page
+    .locator(`[data-part='keypad'] [data-key='${idle}']`)
+    .click({ force: true });
+  await expect(page.locator("[data-screen]")).toHaveText(screen!);
+});
+
 test("the keypad says which mode it is in, not only what colour", async ({
   page,
 }) => {

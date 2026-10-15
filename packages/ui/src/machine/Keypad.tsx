@@ -52,11 +52,7 @@ const RAISED_GO =
 const PRESS =
   "active:[transform:translateY(--spacing(2))] active:shadow-[0_--spacing(1)_0_var(--pw-steel-lo),0_--spacing(1)_--spacing(3)_rgb(0_0_0/30%),inset_0_--spacing(1)_0_var(--pw-white)] [&.is-pressed]:[transform:translateY(--spacing(2))] [&.is-pressed]:shadow-[0_--spacing(1)_0_var(--pw-steel-lo),0_--spacing(1)_--spacing(3)_rgb(0_0_0/30%),inset_0_--spacing(1)_0_var(--pw-white)]";
 
-const DIMMABLE =
-  "aria-disabled:opacity-42 aria-disabled:cursor-default aria-disabled:shadow-[0_--spacing(3)_0_var(--pw-steel-lo),inset_0_--spacing(1)_0_var(--pw-white)] aria-disabled:[transform:none] [&[aria-disabled=true]:active]:[transform:none] [&[aria-disabled=true]:active]:shadow-[0_--spacing(3)_0_var(--pw-steel-lo),inset_0_--spacing(1)_0_var(--pw-white)] disabled:opacity-42 disabled:cursor-default disabled:shadow-[0_--spacing(3)_0_var(--pw-steel-lo),inset_0_--spacing(1)_0_var(--pw-white)] disabled:[transform:none] [&:disabled:active]:[transform:none] [&:disabled:active]:shadow-[0_--spacing(3)_0_var(--pw-steel-lo),inset_0_--spacing(1)_0_var(--pw-white)]";
-
-const UNLIT =
-  "is-unlit opacity-42 cursor-default shadow-[0_--spacing(3)_0_var(--pw-steel-lo),inset_0_--spacing(1)_0_var(--pw-white)] [transform:none]";
+const PLATE = "is-plate";
 
 const BRAILLE_CELL =
   "pw-braille absolute right-9 bottom-8 w-8 h-13 pointer-events-none before:absolute before:-top-10 before:-left-10 before:size-3 before:rounded-full";
@@ -81,10 +77,13 @@ function Braille({ digit }: { digit: string }): ReactNode {
   );
 }
 
-function Unlit({ label }: { label: string }): ReactNode {
-  const { face, size } = tone(label);
+function Plate({ label }: { label: string }): ReactNode {
+  const { face, raised, size } = tone(label);
   return (
-    <span className={`${face} ${size} ${UNLIT}`} aria-hidden="true">
+    <span
+      className={`${face} ${raised} ${size} ${PRESS} ${PLATE}`}
+      aria-hidden="true"
+    >
       {label}
       <Braille digit={label} />
     </span>
@@ -104,9 +103,9 @@ function ServiceKey({
   described: boolean;
   onPress?: (key: string) => void;
 }): ReactNode {
-  if (machineKey === undefined) return <Unlit label={label} />;
+  if (machineKey === undefined) return <Plate label={label} />;
   const { face, raised, size } = tone(label);
-  const className = `${face} ${raised} ${size} ${PRESS} ${DIMMABLE}`;
+  const className = `${face} ${raised} ${size} ${PRESS} cursor-pointer`;
   const about = described ? "keys-caption" : undefined;
   if (machineKey.kind === "link") {
     return (
@@ -124,7 +123,10 @@ function ServiceKey({
         name={machineKey.name}
         value={machineKey.value}
         aria-describedby={about}
-        disabled={!lit}
+        aria-disabled={lit ? "false" : "true"}
+        onClick={(event) => {
+          if (!lit) event.preventDefault();
+        }}
       >
         {label}
       </button>
@@ -136,8 +138,10 @@ function ServiceKey({
       type="button"
       data-key={label}
       aria-describedby={about}
-      disabled={!lit}
-      onClick={() => (machineKey.onPress ?? (() => onPress?.(label)))()}
+      aria-disabled={lit ? "false" : "true"}
+      onClick={() => {
+        if (lit) (machineKey.onPress ?? (() => onPress?.(label)))();
+      }}
     >
       {label}
     </button>
@@ -155,11 +159,11 @@ function DigitKey({
   always: boolean;
   onPress?: (key: string) => void;
 }): ReactNode {
-  if (!always && !lit) return <Unlit label={label} />;
+  if (!always && !lit) return <Plate label={label} />;
   const { face, raised, size } = tone(label);
   return (
     <button
-      className={`${face} ${raised} ${size} ${PRESS} ${DIMMABLE}`}
+      className={`${face} ${raised} ${size} ${PRESS} cursor-pointer`}
       type="button"
       data-key={label}
       aria-disabled={lit ? "false" : "true"}

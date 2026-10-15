@@ -47,9 +47,8 @@ export function useMachineKeys(
         return;
       }
       event.preventDefault();
-      if (!latest.current.lit.has(pressed)) return;
       pressCap(pressed);
-      latest.current.onKey(pressed);
+      if (latest.current.lit.has(pressed)) latest.current.onKey(pressed);
     };
     document.addEventListener("keydown", listen);
     return () => document.removeEventListener("keydown", listen);

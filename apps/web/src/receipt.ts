@@ -1,8 +1,13 @@
 export const TEAR_JERK_MS = 90;
 export const TEAR_RIP_MS = 120;
 export const TEAR_FALL_MS = 560;
-export const FEED_MS = 540;
 const SCROLL_BACK_MS = 340;
+
+export function sagFor(top: number, height: number, client: number): number {
+  const most = height - client;
+  if (most <= 0) return 0;
+  return Math.sqrt(Math.min(1, Math.max(0, top / most)));
+}
 
 function wait(ms: number): Promise<void> {
   return new Promise((done) => setTimeout(done, ms));

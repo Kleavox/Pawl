@@ -232,8 +232,11 @@ page's framing, then goes, and the next page starts there (`#cam=screen` or
 `#cam=printer` carries it, read by a one-line inline script that runs before
 the camera is parsed and marks the page, so the first frame is already the
 hinted one). Every animation runs on the compositor: the camera glides on `transform`, and every keyframe moves only `transform` and `opacity` (a control's hover feedback still repaints, briefly and in place). A receipt
-hangs in front of the machine from the printer's slot, scrolls up over it,
-and tears with an uneven serrated edge before it falls. `paw.` carries sign-in (a code by email, a password, Google or
+hangs in front of the machine from the printer's slot; what has been read
+sags as slack between the slot and the edge being read, lower the further one
+reads, and the receipt tears with an uneven serrated edge before it falls.
+Every key on the keypad presses, and one with nothing to do changes
+nothing. `paw.` carries sign-in (a code by email, a password, Google or
 GitHub; registering in two steps) and the account (1 Profile, 2 Devices, 3
 Apps, 4 Security) inside the display, one short step at a time and lists three
 to a page, so nothing scrolls on a laptop or a phone; on consent the keypad's

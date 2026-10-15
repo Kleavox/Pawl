@@ -126,7 +126,7 @@ describe("Machine", () => {
     expect(root.querySelector('[data-keypad-mode="otp"]')).not.toBeNull();
   });
 
-  it("gives a service keypad unlit digits and only the keys the page offers", () => {
+  it("gives a service keypad digit plates and only the keys the page offers", () => {
     const root = drawn({
       framing: "screen",
       keypad: {
@@ -143,7 +143,7 @@ describe("Machine", () => {
       },
     });
     expect(
-      root.querySelectorAll(".pw-key.is-unlit[aria-hidden='true']"),
+      root.querySelectorAll(".pw-key.is-plate[aria-hidden='true']"),
     ).toHaveLength(10);
     const clr = root.querySelector("button[form='consent']")!;
     expect(clr).toHaveAttribute("type", "submit");
@@ -160,10 +160,10 @@ describe("Machine", () => {
     expect(root.textContent).not.toContain("Service");
   });
 
-  it("leaves a service key unlit when the page has nothing for it", () => {
+  it("draws a service key as a plate when the page has nothing for it", () => {
     const root = drawn({ keypad: { mode: "service", lit: new Set() } });
     expect(
-      root.querySelectorAll(".pw-key.is-unlit[aria-hidden='true']"),
+      root.querySelectorAll(".pw-key.is-plate[aria-hidden='true']"),
     ).toHaveLength(12);
   });
 

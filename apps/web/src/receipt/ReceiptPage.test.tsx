@@ -75,10 +75,8 @@ describe("ReceiptPage", () => {
     const frame = container.querySelector("[data-receipt-frame]")!;
     expect(frame).toHaveClass("overflow-y-auto");
     expect(frame).toHaveAttribute("tabindex", "0");
-    expect(frame.className).not.toMatch(
-      /scrollbar-width:none|scrollbar\]:hidden/,
-    );
-    expect(frame.className).toContain("[scrollbar-width:thin]");
+    expect(frame.className).toContain("[scrollbar-width:none]");
+    expect(frame.className).not.toContain("scrollbar-width:thin");
     expect(
       screen
         .getByRole("main")
@@ -88,37 +86,53 @@ describe("ReceiptPage", () => {
     ).toBe(true);
   });
 
-  it("hangs the paper in front of the machine, from the slot line down", () => {
+  it("hangs the paper from the slot line down, in front of the machine", () => {
     const { container } = render(
       <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
     );
     const feed = container.querySelector("main")!;
     expect(feed.className).not.toContain("--slot-line:");
-    expect(feed.className).toContain("inset-y-0");
-    expect(feed.className).not.toContain("top-[26svh]");
+    expect(feed.className).toContain("top-(--slot-line)");
+    expect(feed.className).not.toContain("inset-y-0");
     expect(
       container.querySelector("[data-receipt-frame]")!.className,
-    ).toContain("pt-(--slot-line)");
+    ).not.toContain("pt-(--slot-line)");
     expect(container.querySelector("[data-receipt-shadow]")).not.toBeNull();
   });
 
-  it("feeds out of the slot, clipped at the slot line only while it feeds, then settles once", async () => {
-    vi.useFakeTimers();
+  it("hangs what has been read as slack between the slot and the held edge, deeper the further one reads", async () => {
+    const { container } = render(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    const feed = container.querySelector<HTMLElement>("main")!;
+    const frame = container.querySelector<HTMLElement>("[data-receipt-frame]")!;
+    const slack = container.querySelector<HTMLElement>("[data-receipt-slack]")!;
+    expect(slack).toHaveAttribute("aria-hidden", "true");
+    expect(slack.style.transform).toBe("scaleY(0)");
+    expect(feed.contains(slack)).toBe(false);
+    Object.defineProperty(frame, "scrollHeight", { value: 1100 });
+    Object.defineProperty(frame, "clientHeight", { value: 100 });
+    Object.defineProperty(slack, "offsetHeight", { value: 200 });
+    frame.scrollTop = 250;
+    await act(async () => {
+      frame.dispatchEvent(new Event("scroll"));
+    });
+    expect(slack.style.transform).toBe("scaleY(0.5)");
+    expect(feed.style.transform).toBe("translateY(100px)");
+    expect(frame.className).toContain("pb-(--sag-max)");
+    expect(frame.className).toContain("scroll-pb-(--sag-max)");
+  });
+
+  it("feeds out of the slot, which the frame's own edge clips, then settles once", () => {
     const { container } = render(
       <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
     );
     const feed = container.querySelector("main")!;
-    expect(feed).toHaveAttribute("data-feeding");
-    expect(feed.className).toContain(
-      "data-feeding:[clip-path:inset(var(--slot-line)_0_0_0)]",
-    );
+    expect(feed).not.toHaveAttribute("data-feeding");
+    expect(feed.className).not.toContain("clip-path");
     expect(container.querySelector("[data-receipt-hang]")!.className).toMatch(
       /animate-\[receipt-settle_900ms_ease-out_1_both\]/,
     );
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(600);
-    });
-    expect(feed).not.toHaveAttribute("data-feeding");
   });
 
   it("tears with an uneven serrated edge, and its end carries one too", () => {
@@ -144,13 +158,19 @@ describe("ReceiptPage", () => {
     }
   });
 
-  it("prints the whole receipt even when the feed's clip never lifted", () => {
+  it("prints the receipt flat, without the slack or its sag", () => {
     const { container } = render(
       <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
     );
     expect(container.querySelector("main")!.className).toContain(
-      "print:data-feeding:[clip-path:none]",
+      "print:[transform:none]!",
     );
+    expect(
+      container.querySelector("[data-receipt-slack]")!.className,
+    ).toContain("print:hidden");
+    expect(
+      container.querySelector("[data-receipt-frame]")!.className,
+    ).toContain("print:pb-0");
   });
 
   it("rings the paper, not the whole screen, when the receipt has keyboard focus", () => {
