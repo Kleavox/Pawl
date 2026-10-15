@@ -1,12 +1,14 @@
 import { decodeBase64Url } from "@pawl/crypto";
+import { verifiedClaims } from "@pawl/oidc";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { Env } from "../env";
 import type { OidcClient } from "./clients";
-import { loadSigningKey } from "./keys";
+import { loadSigningKey, publicJwks } from "./keys";
 import {
   deriveSub,
   mintAccessToken,
+  mintCardToken,
   mintIdToken,
   verifyAccessToken,
 } from "./tokens";
@@ -219,5 +221,60 @@ describe("verifyAccessToken", () => {
   it("rejects something that is not a token at all", async () => {
     expect(await verifyAccessToken(env, "not.a.token", issuer)).toBeNull();
     expect(await verifyAccessToken(env, "", issuer)).toBeNull();
+  });
+});
+
+describe("mintCardToken", () => {
+  it("signs a one-minute token for one app and one subject, marked as a card request", async () => {
+    const token = await mintCardToken(env, {
+      clientId: "dns",
+      sub: "pairwise-1",
+      claims: { email: "budi@product.test", email_verified: true },
+    });
+    const payload = payloadOf(token);
+    expect(payload).toMatchObject({
+      iss: "https://paw.product.test",
+      aud: "dns",
+      sub: "pairwise-1",
+      token_use: "pawl-card",
+      email: "budi@product.test",
+      email_verified: true,
+    });
+    expect(payload.nonce).toBeUndefined();
+    expect(Number(payload.exp) - Number(payload.iat)).toBe(60);
+    expect(headerOf(token)).toMatchObject({ alg: "ES256" });
+    const { keys } = await publicJwks(env);
+    expect(
+      verifiedClaims(
+        token,
+        keys,
+        "https://paw.product.test",
+        "dns",
+        Date.now(),
+      ),
+    ).not.toBeNull();
+    expect(
+      verifiedClaims(
+        token,
+        keys,
+        "https://paw.product.test",
+        "other",
+        Date.now(),
+      ),
+    ).toBeNull();
+  });
+
+  it("never lets an app's claims replace who issued it, for whom, or when it ends", async () => {
+    const token = await mintCardToken(env, {
+      clientId: "dns",
+      sub: "pairwise-1",
+      claims: { iss: "https://evil.test", aud: "x", exp: 9e12, token_use: "x" },
+    });
+    expect(payloadOf(token)).toMatchObject({
+      iss: "https://paw.product.test",
+      aud: "dns",
+      token_use: "pawl-card",
+    });
+    expect(Number(payloadOf(token).exp)).toBeLessThan(Date.now() / 1000 + 61);
   });
 });

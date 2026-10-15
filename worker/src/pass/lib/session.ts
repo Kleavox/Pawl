@@ -155,6 +155,19 @@ export async function getSession(
   };
 }
 
+export async function sessionStartedAt(
+  env: Env,
+  token: string,
+): Promise<number | null> {
+  const stored = await env.SESSIONS.get<StoredSession>(
+    `session:${await hashToken(token)}`,
+    "json",
+  );
+  if (!stored) return null;
+  const started = Date.parse(stored.createdAt);
+  return Number.isNaN(started) ? null : started;
+}
+
 export async function putIdentityOverride(
   env: Env,
   identity: Identity,

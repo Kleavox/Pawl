@@ -276,6 +276,7 @@ describe("discovery", () => {
       jwks_uri: `${ISSUER}/oauth/jwks.json`,
       revocation_endpoint: `${ISSUER}/oauth/revoke`,
       end_session_endpoint: `${ISSUER}/oauth/logout`,
+      pawl_subjects_endpoint: `${ISSUER}/oauth/subjects`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code", "refresh_token"],
       subject_types_supported: ["public", "pairwise"],

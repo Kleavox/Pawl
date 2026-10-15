@@ -23,7 +23,13 @@ export type PassView =
   | "devices"
   | "apps"
   | "security"
-  | "delete";
+  | "delete"
+  | "registry"
+  | "registry-name"
+  | "registry-label"
+  | "registry-return"
+  | "registry-secret"
+  | "registry-remove";
 
 export type Method = "google" | "github" | "email" | "password";
 
@@ -82,6 +88,12 @@ export const BACK: Readonly<Partial<Record<PassView, PassView>>> = {
   "profile-name": "profile",
   "profile-key": "profile",
   delete: "security",
+  registry: "account",
+  "registry-name": "registry",
+  "registry-label": "registry-name",
+  "registry-return": "registry-label",
+  "registry-secret": "registry",
+  "registry-remove": "registry",
 };
 
 const FORMS: ReadonlySet<PassView> = new Set([
@@ -96,6 +108,11 @@ const FORMS: ReadonlySet<PassView> = new Set([
   "profile-name",
   "profile-key",
   "delete",
+  "registry",
+  "registry-name",
+  "registry-label",
+  "registry-return",
+  "registry-remove",
 ]);
 
 const SECTIONS: ReadonlySet<PassView> = new Set([
@@ -104,6 +121,7 @@ const SECTIONS: ReadonlySet<PassView> = new Set([
   "apps",
   "security",
   "sent",
+  "registry-secret",
 ]);
 
 const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -230,6 +248,7 @@ export function methodChoices(providers: {
 export function passKeys(
   state: PassState,
   choices: number,
+  sections = 4,
 ): ReadonlySet<string> {
   if (state.busy) return new Set();
   if (state.view === "methods") {
@@ -237,7 +256,11 @@ export function passKeys(
       Array.from({ length: choices }, (_, index) => String(index + 1)),
     );
   }
-  if (state.view === "account") return new Set(["1", "2", "3", "4"]);
+  if (state.view === "account") {
+    return new Set(
+      Array.from({ length: sections }, (_, index) => String(index + 1)),
+    );
+  }
   if (state.view === "code") {
     return new Set(
       state.digits.length < CODE_LENGTH ? [...DIGITS, "CLR"] : ["CLR", "GO"],

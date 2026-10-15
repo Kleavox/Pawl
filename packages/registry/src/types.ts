@@ -39,6 +39,7 @@ export interface BayView {
   access: Access;
   shape: Shape;
   href: string;
+  card: boolean;
 }
 
 export interface PublicView {
@@ -46,4 +47,13 @@ export interface PublicView {
   tools: Tool[];
   bays: BayView[];
   footer: { title: string; href: string }[];
+}
+
+export interface OutsideEntry {
+  key: string;
+  label: string;
+  title: string;
+  origin: string;
+  access: Access;
+  card: boolean;
 }

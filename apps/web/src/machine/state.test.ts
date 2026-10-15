@@ -308,3 +308,75 @@ describe("stepping back", () => {
     expect(reduce(guest, { type: "back" })).toBe(guest);
   });
 });
+
+const CARDED = [
+  ...CATALOG,
+  {
+    ...CATALOG[0]!,
+    code: "5",
+    key: "dns",
+    product: "DNS",
+    title: "DNS",
+    estate: false,
+    href: "https://enroll.elsewhere.test",
+    card: true,
+  },
+];
+
+function delivered(bay: string, catalog = CARDED): MachineState {
+  return { ...initialState("visitor", catalog), tray: bay };
+}
+
+describe("a card instead of a trip", () => {
+  it("opens the delivered app's card in place of the bridge", () => {
+    const next = reduce(delivered("5"), { type: "open-card" });
+    expect(next.card).toBe("5");
+    expect(next.tray).toBeNull();
+    expect(next.screenTransfer).toBeNull();
+    expect(next.busy).toBe(false);
+  });
+
+  it("opens no card for an app without one, or with nothing delivered", () => {
+    const plain = delivered("3");
+    expect(reduce(plain, { type: "open-card" })).toBe(plain);
+    const empty = initialState("visitor", CARDED);
+    expect(reduce(empty, { type: "open-card" })).toBe(empty);
+  });
+
+  it("goes back to the bays from the card on back, cancel and reset", () => {
+    const open = reduce(delivered("5"), { type: "open-card" });
+    for (const event of [
+      { type: "back" },
+      { type: "cancel" },
+      { type: "close-card" },
+      { type: "reset" },
+    ] as const) {
+      expect(reduce(open, event).card, event.type).toBeNull();
+    }
+  });
+
+  it("forgets the card when the pass is removed", () => {
+    const open = reduce(delivered("5"), { type: "open-card" });
+    expect(reduce(open, { type: "pass-removed" }).card).toBeNull();
+  });
+});
+
+describe("a catalog that arrives after the page", () => {
+  it("takes the new bays while the machine is idle", () => {
+    const next = reduce(initialState("visitor", CATALOG), {
+      type: "catalog",
+      catalog: CARDED,
+    });
+    expect(next.catalog).toBe(CARDED);
+  });
+
+  it("waits while the machine is busy, and lets go of a bay that left", () => {
+    const busy = { ...initialState("visitor", CATALOG), busy: true };
+    expect(reduce(busy, { type: "catalog", catalog: CARDED })).toBe(busy);
+    const holding = { ...delivered("5"), selection: "5" };
+    const after = reduce(holding, { type: "catalog", catalog: CATALOG });
+    expect(after.catalog).toBe(CATALOG);
+    expect(after.tray).toBeNull();
+    expect(after.selection).toBeNull();
+  });
+});

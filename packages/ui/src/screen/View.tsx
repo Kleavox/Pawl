@@ -70,7 +70,7 @@ const CHOICES =
   "choices grid gap-10 w-[min(100%,--spacing(460))] m-0 p-0 list-none max-desk:gap-5";
 
 const CHOICE =
-  "choice grid grid-cols-[--spacing(28)_--spacing(30)_minmax(0,1fr)] gap-12 items-center w-full h-56 px-16 border-[length:--spacing(1)] border-solid border-pw-screen-edge rounded-[--spacing(8)] bg-pw-screen-hi text-pw-ink font-pw-ui text-17 font-semibold text-left cursor-pointer [transition:border-color_var(--pw-t-key)_var(--pw-ease-mech),background_var(--pw-t-key)_var(--pw-ease-mech)] hover:border-pw-cobalt-hi hover:bg-[rgb(47_107_255/18%)] max-desk:grid-cols-[--spacing(26)_--spacing(24)_minmax(0,1fr)] max-desk:gap-8 max-desk:px-10 max-desk:text-16";
+  "choice grid grid-cols-[--spacing(28)_--spacing(30)_minmax(0,1fr)] gap-12 items-center w-full h-56 max-desk:[[data-dense]_&]:h-44 px-16 border-[length:--spacing(1)] border-solid border-pw-screen-edge rounded-[--spacing(8)] bg-pw-screen-hi text-pw-ink font-pw-ui text-17 font-semibold text-left cursor-pointer [transition:border-color_var(--pw-t-key)_var(--pw-ease-mech),background_var(--pw-t-key)_var(--pw-ease-mech)] hover:border-pw-cobalt-hi hover:bg-[rgb(47_107_255/18%)] max-desk:grid-cols-[--spacing(26)_--spacing(24)_minmax(0,1fr)] max-desk:gap-8 max-desk:px-10 max-desk:text-16";
 
 const CHOICE_KEY =
   "choice__key grid place-items-center h-26 rounded-[--spacing(4)] bg-pw-key shadow-[0_--spacing(2)_0_var(--pw-steel-lo)] text-pw-etch [font:700_--spacing(15)/1_var(--pw-mono)]";
@@ -309,8 +309,15 @@ export function Back(
   );
 }
 
-export function Choices(props: { children: ReactNode }): ReactNode {
-  return <ol className={CHOICES}>{props.children}</ol>;
+export function Choices(props: {
+  children: ReactNode;
+  dense?: boolean;
+}): ReactNode {
+  return (
+    <ol className={CHOICES} data-dense={props.dense ? "" : undefined}>
+      {props.children}
+    </ol>
+  );
 }
 
 export function Choice(

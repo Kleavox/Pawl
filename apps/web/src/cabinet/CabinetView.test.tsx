@@ -47,6 +47,8 @@ function props(
     lcd: null,
     leaving: null,
     sound: { on: false, toggle: vi.fn() },
+    card: { kind: "closed" },
+    copied: null,
     on: {
       key: vi.fn(),
       tile: vi.fn(),
@@ -57,10 +59,63 @@ function props(
       logout: vi.fn(),
       take: vi.fn(),
       cancelBridge: vi.fn(),
+      cardLeave: vi.fn(),
+      cardRetry: vi.fn(),
+      cardSignIn: vi.fn(),
+      copy: vi.fn(),
+      closeCard: vi.fn(),
     },
     ...extra,
   };
 }
+
+describe("an outside app's card", () => {
+  const carded = [
+    ...CATALOG,
+    {
+      ...CATALOG[0]!,
+      code: "5",
+      key: "dns",
+      title: "DNS",
+      product: "DNS",
+      estate: false,
+      card: true,
+      href: "https://enroll.elsewhere.test",
+    },
+  ];
+
+  it("takes the whole screen with the app's words, CLR and GO lit", () => {
+    const state = { ...initialState("visitor", carded), card: "5" };
+    const root = drawn(state, model, {
+      card: {
+        kind: "shown",
+        card: {
+          title: "Your DNS address",
+          message: "",
+          fields: [{ label: "Client ID", value: "0123", copy: true }],
+          action: { label: "Detail", href: "https://enroll.elsewhere.test/" },
+        },
+      },
+    });
+    const visible = [...root.querySelectorAll("[data-view-panel]")]
+      .filter((panel) => !(panel as HTMLElement).hidden)
+      .map((panel) => panel.getAttribute("data-view-panel"));
+    expect(visible).toEqual(["card"]);
+    expect(text(root, "[data-view-panel='card'] h2")).toBe("Your DNS address");
+    expect(text(root, "[data-screen]")).toBe("5 DNS");
+    for (const key of ["CLR", "GO"]) {
+      expect(
+        root
+          .querySelector(`[data-key='${key}']`)!
+          .getAttribute("aria-disabled"),
+        key,
+      ).not.toBe("true");
+    }
+    expect(
+      root.querySelector("[data-key='5']")!.getAttribute("aria-disabled"),
+    ).toBe("true");
+  });
+});
 
 function drawn(
   state: MachineState,

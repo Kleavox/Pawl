@@ -224,6 +224,42 @@ describe("passKeys", () => {
     expect([...passKeys(initialFlow(), 0)]).toEqual([]);
   });
 
+  it("lights a fifth section on the account for an admin", () => {
+    const account = { ...initialFlow(), view: "account" as const };
+    expect([...passKeys(account, 0, 5)].sort()).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+    ]);
+  });
+
+  it("steps through registering an app with GO, and back with CLR to where it came from", () => {
+    for (const view of [
+      "registry",
+      "registry-name",
+      "registry-label",
+      "registry-return",
+      "registry-remove",
+    ] as const) {
+      expect([...passKeys({ ...initialFlow(), view }, 0)].sort(), view).toEqual(
+        ["CLR", "GO"],
+      );
+    }
+    expect([
+      ...passKeys({ ...initialFlow(), view: "registry-secret" }, 0),
+    ]).toEqual(["CLR"]);
+    const back = (view: PassView) =>
+      reduceFlow({ ...initialFlow(), view }, { type: "back" }).view;
+    expect(back("registry")).toBe("account");
+    expect(back("registry-name")).toBe("registry");
+    expect(back("registry-label")).toBe("registry-name");
+    expect(back("registry-return")).toBe("registry-label");
+    expect(back("registry-secret")).toBe("registry");
+    expect(back("registry-remove")).toBe("registry");
+  });
+
   it("goes dark while a step is busy", () => {
     expect([
       ...passKeys({ ...initialFlow(), view: "password", busy: true }, 0),

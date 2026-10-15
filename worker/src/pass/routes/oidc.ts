@@ -16,6 +16,7 @@ import {
   type OidcClient,
 } from "../oidc/clients";
 import { consumeCode, issueCode } from "../oidc/codes";
+import { outsideAppForClient } from "../oidc/outside";
 import {
   findGrant,
   findGrantBySubject,
@@ -47,6 +48,8 @@ import {
 type OidcContext = Context<AppEnv>;
 
 const SUPPORTED_SCOPES = ["openid", "email", "profile"];
+const MAX_SUBJECTS = 1000;
+const SUBJECT_BATCH = 90;
 const CODE_CHALLENGE = /^[A-Za-z0-9_-]{43}$/u;
 const CODE_VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/u;
 
@@ -206,6 +209,50 @@ function consentPage(
     query: request.query,
     rootOrigin,
     siteName,
+  });
+}
+
+async function connectableClient(
+  env: Env,
+  clientId: string,
+): Promise<OidcClient | null> {
+  const client = await findClient(env, clientId);
+  if (!client || client.firstParty) return null;
+  return (await outsideAppForClient(env, client.id)) ? client : null;
+}
+
+function cabinetReturn(
+  requestUrl: string,
+  env: Env,
+  returnTo: string,
+): string | null {
+  try {
+    const target = new URL(returnTo);
+    if (target.origin !== cabinetOrigin(requestUrl, env)) return null;
+    target.hash = "";
+    return target.toString();
+  } catch {
+    return null;
+  }
+}
+
+function connectPage(
+  client: OidcClient,
+  identity: Identity,
+  back: string,
+  rootOrigin: string,
+  siteName: string,
+): string {
+  return renderConsentPage({
+    clientName: client.name,
+    sector: client.sector,
+    holder: identity.username ?? identity.email,
+    scopes: client.allowedScopes.map((scope) => SCOPE_WORDS[scope] ?? scope),
+    query: "",
+    rootOrigin,
+    siteName,
+    action: "/oauth/connect",
+    fields: { client_id: client.id, returnTo: back },
   });
 }
 
@@ -432,7 +479,7 @@ export function registerOidcRoutes(app: PassApp): void {
     const limiter =
       path === "/oauth/authorize"
         ? context.env.AUTHORIZE_RATE_LIMIT
-        : path === "/oauth/token"
+        : path === "/oauth/token" || path === "/oauth/subjects"
           ? context.env.TOKEN_RATE_LIMIT
           : undefined;
     if (
@@ -467,6 +514,7 @@ export function registerOidcRoutes(app: PassApp): void {
       jwks_uri: `${issuer}/oauth/jwks.json`,
       revocation_endpoint: `${issuer}/oauth/revoke`,
       end_session_endpoint: `${issuer}/oauth/logout`,
+      pawl_subjects_endpoint: `${issuer}/oauth/subjects`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code", "refresh_token"],
       subject_types_supported: ["public", "pairwise"],
@@ -581,6 +629,101 @@ export function registerOidcRoutes(app: PassApp): void {
     return redirectWithCode(context, request, userId);
   });
 
+  app.get("/oauth/connect", async (context) => {
+    const query = new URL(context.req.url).searchParams;
+    const client = await connectableClient(
+      context.env,
+      query.get("client_id") ?? "",
+    );
+    if (!client) return untrusted(context);
+    const back = cabinetReturn(
+      context.req.url,
+      context.env,
+      query.get("returnTo") ?? "",
+    );
+    if (!back) {
+      return apiError(
+        context,
+        400,
+        "invalid_request",
+        "Connect returns only to the cabinet.",
+      );
+    }
+    const session = await currentSession(context);
+    if (!session) {
+      const signIn = new URL("/", context.env.PUBLIC_ORIGIN);
+      signIn.searchParams.set("returnTo", context.req.url);
+      return context.redirect(signIn.toString(), 302);
+    }
+    const grant = await findGrant(context.env, session.identity.id, client.id);
+    if (
+      grant !== null &&
+      client.allowedScopes.every((scope) => grant.scopes.includes(scope))
+    ) {
+      return context.redirect(back, 302);
+    }
+    return context.html(
+      connectPage(
+        client,
+        session.identity,
+        back,
+        cabinetOrigin(context.req.url, context.env),
+        registryFor(context.env.ESTATE_MANIFEST ?? EMPTY_MANIFEST).siteName(),
+      ),
+    );
+  });
+
+  app.post("/oauth/connect", async (context) => {
+    if (!trustedOrigin(context)) {
+      return apiError(
+        context,
+        403,
+        "invalid_origin",
+        "Consent must come from Pawl's own page.",
+      );
+    }
+    const session = await currentSession(context);
+    if (!session) {
+      return apiError(context, 401, "login_required", "Sign in to continue.");
+    }
+    const form = new URLSearchParams(await context.req.text());
+    const client = await connectableClient(
+      context.env,
+      form.get("client_id") ?? "",
+    );
+    if (!client) return untrusted(context);
+    const back = cabinetReturn(
+      context.req.url,
+      context.env,
+      form.get("returnTo") ?? "",
+    );
+    if (!back) {
+      return apiError(
+        context,
+        400,
+        "invalid_request",
+        "Connect returns only to the cabinet.",
+      );
+    }
+    if (form.get("decision") === "allow") {
+      const userId = session.identity.id;
+      await recordGrant(
+        context.env,
+        userId,
+        client.id,
+        await deriveSub(context.env, client, userId),
+        client.allowedScopes,
+      );
+      await safeAudit(context.env, {
+        userId,
+        type: "app_connected",
+        request: context.req.raw,
+        metadata: { clientId: client.id },
+      });
+    }
+    return context.redirect(back, 302);
+  });
+
   app.post("/oauth/token", async (context) => {
     context.header("Cache-Control", "no-store");
     context.header("Pragma", "no-cache");
@@ -598,6 +741,51 @@ export function registerOidcRoutes(app: PassApp): void {
   });
 
   app.on(["GET", "POST"], "/oauth/userinfo", userinfo);
+
+  app.post("/oauth/subjects", async (context) => {
+    context.header("Cache-Control", "no-store");
+    const client = await authenticateClient(context, new URLSearchParams());
+    if (!client?.confidential) {
+      return tokenError(context, 401, "invalid_client");
+    }
+    let body: unknown;
+    try {
+      body = await context.req.json();
+    } catch {
+      return context.json({ error: "invalid_request" }, 400);
+    }
+    const asked = (body as { subjects?: unknown } | null)?.subjects;
+    if (
+      !Array.isArray(asked) ||
+      asked.length > MAX_SUBJECTS ||
+      asked.some(
+        (subject) =>
+          typeof subject !== "string" ||
+          subject.length === 0 ||
+          subject.length > 256,
+      )
+    ) {
+      return context.json({ error: "invalid_request" }, 400);
+    }
+    const subjects = [...new Set(asked as string[])];
+    const live = new Set<string>();
+    for (let start = 0; start < subjects.length; start += SUBJECT_BATCH) {
+      const chunk = subjects.slice(start, start + SUBJECT_BATCH);
+      const rows = await context.env.DB.prepare(
+        `SELECT g.subject FROM oauth_grants g
+         JOIN users u ON u.id = g.user_id
+         WHERE g.client_id = ? AND g.revoked_at IS NULL
+           AND u.disabled_at IS NULL
+           AND g.subject IN (${chunk.map(() => "?").join(", ")})`,
+      )
+        .bind(client.id, ...chunk)
+        .all<{ subject: string }>();
+      for (const row of rows.results) live.add(row.subject);
+    }
+    return context.json({
+      live: subjects.filter((subject) => live.has(subject)),
+    });
+  });
 
   app.post("/oauth/revoke", async (context) => {
     const form = new URLSearchParams(await context.req.text());

@@ -800,8 +800,58 @@ const OWNER_SESSION = {
   },
 };
 
+const PROBE_BAY = {
+  code: "5",
+  key: "probe",
+  estate: false,
+  product: "PROBEAPP",
+  chars: 8,
+  title: "A probe app with a long name ok!",
+  access: "visitor",
+  shape: "wide",
+  href: "https://probe.a-much-longer-company-domain.example",
+  card: true,
+};
+
+const LONGEST_CARD = {
+  title: "Wide words make the longest card title on it".slice(0, 40),
+  message: "Wide words wrap over several lines of the display. "
+    .repeat(4)
+    .slice(0, 90),
+  fields: [
+    { label: "The longest label ok", value: "W".repeat(70), copy: true },
+    { label: "Another label at 20!", value: "M".repeat(70), copy: true },
+  ],
+  action: {
+    label: "Sixteen letters!",
+    href: "https://probe.a-much-longer-company-domain.example/",
+  },
+};
+
+async function cardOn(page: Page, screen: string): Promise<void> {
+  await page.route("**/api/catalog", async (route) => {
+    const real = (await (await route.fetch()).json()) as {
+      bays: unknown[];
+    };
+    await route.fulfill({ json: { ...real, bays: [...real.bays, PROBE_BAY] } });
+  });
+  await page.route("**/api/apps/probe/card", (route) =>
+    screen === "card"
+      ? route.fulfill({ json: { card: LONGEST_CARD } })
+      : route.fulfill({
+          status: 409,
+          json: {
+            code: "CONSENT_REQUIRED",
+            connect: `${PASS}/oauth/connect?client_id=probe`,
+          },
+        }),
+  );
+}
+
 async function hardwareOn(page: Page, screen: string): Promise<string> {
-  if (screen === "owner" || screen === "account") {
+  const card = screen === "card" || screen === "card-connect";
+  if (card) await cardOn(page, screen);
+  if (screen === "owner" || screen === "account" || card) {
     await page.route("**/api/session", (route) =>
       route.fulfill({ json: OWNER_SESSION }),
     );
@@ -813,12 +863,20 @@ async function hardwareOn(page: Page, screen: string): Promise<string> {
     route.fulfill({ json: { ok: true } }),
   );
   await page.goto(GATEWAY);
-  if (screen === "owner" || screen === "account") {
+  if (screen === "owner" || screen === "account" || card) {
     await expect(page.locator("[data-account-open]")).toBeVisible();
   }
   if (screen === "account") {
     await page.locator("[data-account-open]").click();
     await expect(page.locator("[data-view-panel='account']")).toBeVisible();
+  }
+  if (card) {
+    await page.locator("[data-cartridge='5']").click();
+    await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "5");
+    await page.locator("[data-tray-action]").click();
+    await expect(
+      page.locator("[data-view-panel='card'] [data-card-go]"),
+    ).toBeVisible();
   }
   return page.evaluate(() =>
     [
@@ -838,7 +896,7 @@ async function hardwareOn(page: Page, screen: string): Promise<string> {
   );
 }
 
-const SCREENS = ["products", "owner", "account"];
+const SCREENS = ["products", "owner", "account", "card", "card-connect"];
 
 test("the machine keeps its size whatever the screen shows", async ({
   browser,
@@ -1003,7 +1061,27 @@ const PASS_VIEWS = [
   "apps",
   "security",
   "delete",
+  "registry",
+  "registry-name",
+  "registry-label",
+  "registry-return",
+  "registry-secret",
+  "registry-remove",
 ] as const;
+
+const LONG_ORIGIN = "https://apps.a-much-longer-company-domain.example";
+
+const LONG_OUTSIDE = Array.from({ length: 3 }, (_, index) => ({
+  key: `app${index}`,
+  label: `app${index}`,
+  title: `A registered app, long name ${index}`,
+  origin: LONG_ORIGIN,
+  access: "visitor",
+  card: true,
+  clientId: `app${index}`,
+  redirectUri: `${LONG_ORIGIN}/auth/callback`,
+  createdAt: "2026-10-01T10:00:00.000Z",
+}));
 
 const SIGNED_OUT = new Set([
   "methods",
@@ -1033,6 +1111,17 @@ async function passOn(page: Page, name: string): Promise<void> {
     );
     await page.route(`${PASS}/api/account/grants`, (route) =>
       route.fulfill({ json: { grants: LONG_APPS } }),
+    );
+    await page.route(`${PASS}/api/admin/apps`, (route) =>
+      route.request().method() === "POST"
+        ? route.fulfill({
+            status: 201,
+            json: {
+              app: LONG_OUTSIDE[0],
+              secret: "Zx9".repeat(14).slice(0, 43),
+            },
+          })
+        : route.fulfill({ json: { apps: LONG_OUTSIDE } }),
     );
   }
   await page.route(`${PASS}/api/auth/otp/start`, (route) =>
@@ -1090,11 +1179,50 @@ async function passOn(page: Page, name: string): Promise<void> {
     apps: "3",
     security: "4",
     delete: "4",
+    registry: "5",
+    "registry-name": "5",
+    "registry-label": "5",
+    "registry-return": "5",
+    "registry-secret": "5",
+    "registry-remove": "5",
   };
   const digit = sections[name];
   if (digit !== undefined) {
     await on("account");
     await page.keyboard.press(digit);
+  }
+  if (name.startsWith("registry-")) {
+    await on("registry");
+    await expect(
+      view(page, "registry").locator("[data-registry-row]"),
+    ).toHaveCount(3);
+  }
+  if (name === "registry-remove") {
+    await view(page, "registry")
+      .getByRole("button", { name: /^Remove / })
+      .first()
+      .click();
+  } else if (name.startsWith("registry-")) {
+    await view(page, "registry")
+      .getByRole("button", { name: "New app" })
+      .click();
+  }
+  if (["registry-label", "registry-return", "registry-secret"].includes(name)) {
+    await view(page, "registry-name")
+      .locator("#registry-app-title")
+      .fill("A registered app, the long one");
+    await view(page, "registry-name")
+      .locator("#registry-app-address")
+      .fill(LONG_ORIGIN);
+    await go();
+  }
+  if (["registry-return", "registry-secret"].includes(name)) {
+    await on("registry-label");
+    await go();
+  }
+  if (name === "registry-secret") {
+    await on("registry-return");
+    await go();
   }
   if (name === "profile-name") {
     await view(page, "profile")

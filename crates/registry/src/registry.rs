@@ -104,6 +104,7 @@ pub struct BayView {
     pub access: Access,
     pub shape: Shape,
     pub href: String,
+    pub card: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -269,6 +270,9 @@ impl Registry {
     }
 
     fn origin_of(&self, app: &App, scheme: &str, root_host: &str) -> Option<String> {
+        if let Some(href) = &app.href {
+            return Some(href.clone());
+        }
         let name = hostname(root_host);
         if is_loopback(name) {
             let local = app.local.as_ref()?;
@@ -287,12 +291,8 @@ impl Registry {
     pub fn placements(&self) -> Vec<(String, String)> {
         let mut taken = [false; BAY_COUNT as usize + 1];
         let mut placed: Vec<(String, String)> = Vec::new();
-        for app in self
-            .manifest
-            .apps
-            .iter()
-            .filter(|app| app.subdomain.is_some())
-        {
+        let linked = |app: &&App| app.subdomain.is_some() || app.href.is_some();
+        for app in self.manifest.apps.iter().filter(linked) {
             if let Some(pin) = app.bay.as_deref().and_then(|pin| pin.parse::<usize>().ok()) {
                 taken[pin] = true;
                 placed.push((app.key.clone(), pin.to_string()));
@@ -302,7 +302,8 @@ impl Registry {
             .manifest
             .apps
             .iter()
-            .filter(|app| app.subdomain.is_some() && app.bay.is_none())
+            .filter(linked)
+            .filter(|app| app.bay.is_none())
         {
             let first = fnv1a32(&app.key) % BAY_COUNT;
             let free = (0..BAY_COUNT)
@@ -356,6 +357,7 @@ impl Registry {
                         Shape::Wide
                     },
                     href: origin.clone(),
+                    card: app.card,
                 });
             }
             footer.push(FooterLink {
@@ -420,6 +422,67 @@ mod tests {
                 .iter()
                 .any(|link| link.title == "Krynodes" && link.href == "https://kry.example.test")
         );
+    }
+
+    const WITH_OUTSIDE: &str = r#"{
+      "site": { "name": "Example" },
+      "apps": [
+        { "key": "docs", "label": "docs", "title": "Docs", "subdomain": "docs",
+          "service": "docs", "local": { "port": 8791 } },
+        { "key": "dns", "label": "dns", "title": "DNS",
+          "href": "https://enroll.elsewhere.test", "access": "visitor", "card": true }
+      ]
+    }"#;
+
+    #[test]
+    fn gives_an_outside_app_a_bay_at_its_own_origin_with_its_card() {
+        for root in ["https://example.test", "http://127.0.0.1:8786"] {
+            let view = Registry::new(WITH_OUTSIDE)
+                .expect("valid")
+                .public_view(root, "https://paw.example.test");
+            let dns = view
+                .bays
+                .iter()
+                .find(|bay| bay.key == "dns")
+                .expect("dns bay");
+            assert_eq!(dns.href, "https://enroll.elsewhere.test", "{root}");
+            assert!(dns.card);
+            assert_eq!(dns.access, Access::Visitor);
+            assert!(
+                !view
+                    .bays
+                    .iter()
+                    .find(|bay| bay.key == "docs")
+                    .expect("docs")
+                    .card
+            );
+        }
+    }
+
+    #[test]
+    fn never_routes_an_outside_app() {
+        let registry = Registry::new(WITH_OUTSIDE).expect("valid");
+        assert_eq!(
+            registry.route("enroll.elsewhere.test", "example.test", "/"),
+            Route::None
+        );
+        assert!(
+            registry
+                .bindings()
+                .iter()
+                .all(|binding| binding.service != "dns")
+        );
+    }
+
+    #[test]
+    fn places_outside_apps_by_the_same_rule_as_the_rest() {
+        let registry = Registry::new(WITH_OUTSIDE).expect("valid");
+        let placed = registry.placements();
+        assert!(placed.iter().any(|(key, _)| key == "dns"));
+        let codes: Vec<&String> = placed.iter().map(|(_, code)| code).collect();
+        let mut unique = codes.clone();
+        unique.dedup();
+        assert_eq!(codes.len(), unique.len());
     }
 
     #[test]

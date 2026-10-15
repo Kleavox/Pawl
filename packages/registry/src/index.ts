@@ -2,6 +2,7 @@ import init, { initSync, WasmRegistry } from "../pkg/registry.js";
 import type {
   ApexTarget,
   Binding,
+  OutsideEntry,
   PublicView,
   Route,
   Target,
@@ -13,6 +14,28 @@ export const EMPTY_MANIFEST = JSON.stringify({
   site: { name: "Pawl" },
   apps: [],
 });
+
+export function withOutsideApps(
+  manifestJson: string,
+  apps: readonly OutsideEntry[],
+): string {
+  if (apps.length === 0) return manifestJson;
+  const manifest = JSON.parse(manifestJson) as { apps?: unknown[] };
+  return JSON.stringify({
+    ...manifest,
+    apps: [
+      ...(manifest.apps ?? []),
+      ...apps.map((app) => ({
+        key: app.key,
+        label: app.label,
+        title: app.title,
+        href: app.origin,
+        access: app.access,
+        card: app.card,
+      })),
+    ],
+  });
+}
 
 export class Registry {
   readonly #inner: WasmRegistry;

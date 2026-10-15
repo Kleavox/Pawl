@@ -5,6 +5,8 @@ import type { OidcClient } from "./clients";
 import { loadSigningKey, publicJwks } from "./keys";
 
 export const TOKEN_TTL_SECONDS = 600;
+const CARD_TOKEN_TTL_SECONDS = 60;
+const CARD_TOKEN_USE = "pawl-card";
 
 export interface AccessTokenClaims {
   iss: string;
@@ -79,6 +81,27 @@ export function mintIdToken(
     aud: input.client.id,
     sub: input.sub,
     ...(input.nonce === null ? {} : { nonce: input.nonce }),
+  });
+}
+
+export async function mintCardToken(
+  env: Env,
+  input: {
+    clientId: string;
+    sub: string;
+    claims: Record<string, unknown>;
+  },
+): Promise<string> {
+  const { pkcs8 } = await loadSigningKey(env);
+  const iat = Math.floor(Date.now() / 1000);
+  return signClaims(pkcs8, {
+    ...input.claims,
+    iss: env.PUBLIC_ORIGIN,
+    aud: input.clientId,
+    sub: input.sub,
+    token_use: CARD_TOKEN_USE,
+    iat,
+    exp: iat + CARD_TOKEN_TTL_SECONDS,
   });
 }
 

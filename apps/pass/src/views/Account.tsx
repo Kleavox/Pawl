@@ -8,6 +8,7 @@ import type { ConnectedApp, DeviceSession } from "../types";
 import { failed, Frame, usePass } from "./context";
 import { AppsStep, DevicesStep } from "./Lists";
 import { ProfileKeyStep, ProfileNameStep, ProfileStep } from "./Profile";
+import { RegistrySteps } from "./Registry";
 import { DeleteStep, SecurityStep } from "./Security";
 
 export const SECTIONS: readonly {
@@ -22,9 +23,21 @@ export const SECTIONS: readonly {
   { key: "4", view: "security", mark: "!!", label: "Security" },
 ];
 
+const REGISTRY_SECTION = {
+  key: "5",
+  view: "registry" as const,
+  mark: "RG",
+  label: "Registered apps",
+};
+
+export function sectionsFor(user: Identity | null): typeof SECTIONS {
+  return user?.role === "ADMIN" ? [...SECTIONS, REGISTRY_SECTION] : SECTIONS;
+}
+
 function AccountMenu(props: { user: Identity }): ReactNode {
   const pass = usePass();
   const { user } = props;
+  const sections = sectionsFor(user);
   return (
     <Frame
       name="account"
@@ -33,15 +46,15 @@ function AccountMenu(props: { user: Identity }): ReactNode {
       tells
       foot={
         <>
-          <Kbd>1</Kbd>–<Kbd>4</Kbd> choose
+          <Kbd>1</Kbd>–<Kbd>{String(sections.length)}</Kbd> choose
         </>
       }
     >
       <Title id="account-holder">
         {displayHandle(user.username, user.email)}
       </Title>
-      <Choices>
-        {SECTIONS.map((section, index) => (
+      <Choices dense={sections.length > SECTIONS.length}>
+        {sections.map((section, index) => (
           <Choice
             key={section.view}
             keyLabel={section.key}
@@ -121,6 +134,7 @@ export function SignedIn(props: { user: Identity }): ReactNode {
       />
       <SecurityStep />
       <DeleteStep />
+      {props.user.role === "ADMIN" && <RegistrySteps />}
     </>
   );
 }

@@ -15,10 +15,14 @@ export type MachineState = {
   authStep: "closed" | "leaving" | "account";
   authRequest: BayCode | null;
   screenTransfer: BayCode | null;
+  card: BayCode | null;
   catalog: Catalog;
 };
 
 export type MachineEvent =
+  | { type: "catalog"; catalog: Catalog }
+  | { type: "open-card" }
+  | { type: "close-card" }
   | { type: "select"; bay: BayCode }
   | { type: "preselect"; bay: BayCode }
   | { type: "sign-in" }
@@ -65,12 +69,55 @@ export function initialState(
     authStep: "closed",
     authRequest: null,
     screenTransfer: null,
+    card: null,
     catalog,
   };
 }
 
+function stocked(catalog: Catalog, bay: BayCode | null): BayCode | null {
+  return bay !== null && catalog.some((entry) => entry.code === bay)
+    ? bay
+    : null;
+}
+
 export function reduce(state: MachineState, event: MachineEvent): MachineState {
   switch (event.type) {
+    case "catalog": {
+      if (state.busy) return state;
+      const selection = stocked(event.catalog, state.selection);
+      return {
+        ...state,
+        catalog: event.catalog,
+        selection,
+        tray: stocked(event.catalog, state.tray),
+        card: stocked(event.catalog, state.card),
+        authRequest: stocked(event.catalog, state.authRequest),
+        status:
+          state.selection !== null && selection === null
+            ? "idle"
+            : state.status,
+      };
+    }
+
+    case "open-card": {
+      const bay = state.tray;
+      if (bay === null || state.busy) return state;
+      const entry = state.catalog.find((candidate) => candidate.code === bay);
+      if (!entry?.card) return state;
+      return {
+        ...state,
+        card: bay,
+        tray: null,
+        status: "idle",
+        screenTransfer: null,
+      };
+    }
+
+    case "close-card": {
+      if (state.card === null) return state;
+      return { ...state, card: null };
+    }
+
     case "select": {
       if (state.busy) return state;
       if (permits(state.access, event.bay, state.catalog)) {
@@ -168,6 +215,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         status: putBack ? "idle" : state.status,
         authRequest: state.status === "denied" ? null : state.authRequest,
         screenTransfer: null,
+        card: null,
         authStep: "closed",
         busy: false,
       };
@@ -175,6 +223,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
 
     case "back": {
       if (state.authStep === "account") return { ...state, authStep: "closed" };
+      if (state.card !== null) return { ...state, card: null };
       return state;
     }
 
@@ -187,6 +236,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         busy: false,
         authStep: "closed",
         screenTransfer: null,
+        card: null,
       };
     }
   }

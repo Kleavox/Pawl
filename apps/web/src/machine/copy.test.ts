@@ -319,4 +319,18 @@ describe("a key is lit only when it does something on this screen", () => {
       viewFor(reduce(initialState("guest", CATALOG), { type: "sign-in" })),
     ).toBe("working");
   });
+
+  it("shows an app's card on its own screen, with CLR back and GO only when the card offers a step", () => {
+    const open = { ...initialState("visitor", CATALOG), card: "1" };
+    expect(viewFor(open)).toBe("card");
+    expect(keys(open)).toEqual(["CLR"]);
+    expect([...litKeys(open, "PICK A BAY", false, true)].sort()).toEqual([
+      "CLR",
+      "GO",
+    ]);
+    expect(screenCopy(open, model)).toEqual({
+      main: "1 NOTE",
+      sub: "CLR TAKES YOU BACK",
+    });
+  });
 });

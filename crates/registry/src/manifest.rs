@@ -25,6 +25,8 @@ pub struct App {
     #[serde(default)]
     pub subdomain: Option<String>,
     #[serde(default)]
+    pub href: Option<String>,
+    #[serde(default)]
     pub service: Option<String>,
     #[serde(default)]
     pub proxy: Vec<String>,
@@ -34,6 +36,8 @@ pub struct App {
     pub estate: bool,
     #[serde(default)]
     pub purge: bool,
+    #[serde(default)]
+    pub card: bool,
     #[serde(default)]
     pub header: Option<Header>,
     #[serde(default)]

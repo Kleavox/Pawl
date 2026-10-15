@@ -31,7 +31,7 @@ import {
   type Draft,
   type Pass,
 } from "./views/context";
-import { SECTIONS } from "./views/Account";
+import { sectionsFor } from "./views/Account";
 import { choose } from "./views/Methods";
 import { Screens } from "./views/Screens";
 
@@ -59,6 +59,12 @@ const STATUS: Record<PassView, { main: string; sub: string }> = {
   apps: { main: "ACCOUNT · APPS", sub: "PASS ACCEPTED" },
   security: { main: "ACCOUNT SECURITY", sub: "PASS ACCEPTED" },
   delete: { main: "ACCOUNT · DELETE", sub: "PASS ACCEPTED" },
+  registry: { main: "REGISTERED APPS", sub: "PASS ACCEPTED" },
+  "registry-name": { main: "NEW APP · 1 OF 3", sub: "PASS ACCEPTED" },
+  "registry-label": { main: "NEW APP · 2 OF 3", sub: "PASS ACCEPTED" },
+  "registry-return": { main: "NEW APP · 3 OF 3", sub: "PASS ACCEPTED" },
+  "registry-secret": { main: "COPY THE SECRET", sub: "PASS ACCEPTED" },
+  "registry-remove": { main: "REMOVE AN APP", sub: "PASS ACCEPTED" },
 };
 
 const ROUTES: readonly Route[] = [
@@ -179,7 +185,8 @@ export function PassPage(props: {
   }, []);
 
   const choices = methodChoices(providers);
-  const lit = passKeys(state, choices.length);
+  const sections = sectionsFor(user);
+  const lit = passKeys(state, choices.length, sections.length);
 
   function press(key: string): void {
     if (key === "CLR") {
@@ -198,7 +205,7 @@ export function PassPage(props: {
       return;
     }
     if (state.view === "account") {
-      const section = SECTIONS.find((each) => each.key === key);
+      const section = sections.find((each) => each.key === key);
       if (section !== undefined) dispatch({ type: "open", view: section.view });
       return;
     }

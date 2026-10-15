@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { EMPTY_MANIFEST, registryFor } from "./index";
+import { EMPTY_MANIFEST, registryFor, withOutsideApps } from "./index";
 import { initRegistryFromDisk } from "./node";
 
 const MANIFEST = JSON.stringify({
@@ -51,6 +51,29 @@ describe("registryFor", () => {
     });
     expect(() => registryFor(invalid)).toThrow(/site name/);
     expect(() => registryFor(invalid)).toThrow(/belongs to Pawl/);
+  });
+
+  it("adds outside apps beside the manifest's own, linked by their origin", () => {
+    const merged = withOutsideApps(MANIFEST, [
+      {
+        key: "dns",
+        label: "dns",
+        title: "DNS",
+        origin: "https://enroll.elsewhere.test",
+        access: "visitor",
+        card: true,
+      },
+    ]);
+    const bays = registryFor(merged).publicView(
+      "https://example.test",
+      "https://paw.example.test",
+    ).bays;
+    expect(bays.map((bay) => bay.key).sort()).toEqual(["dns", "notes"]);
+    expect(bays.find((bay) => bay.key === "dns")).toMatchObject({
+      href: "https://enroll.elsewhere.test",
+      card: true,
+    });
+    expect(withOutsideApps(MANIFEST, [])).toBe(MANIFEST);
   });
 
   it("starts empty when nothing is registered", () => {

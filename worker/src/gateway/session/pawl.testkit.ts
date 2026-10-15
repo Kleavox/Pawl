@@ -25,6 +25,9 @@ export interface FakePawl {
   answerToken: (form: URLSearchParams) => Promise<Response>;
   sharedSession: unknown;
   devices: Record<string, number>;
+  outsideApps: unknown[] | null;
+  cardTokens: URL[];
+  answerCardToken: (url: URL) => Response;
 }
 
 export async function fakePawl(): Promise<FakePawl> {
@@ -44,6 +47,9 @@ export async function fakePawl(): Promise<FakePawl> {
     tokenHeaders: [],
     sharedSession: null,
     devices: {},
+    outsideApps: [],
+    cardTokens: [],
+    answerCardToken: () => new Response(null, { status: 404 }),
     async sign(claims, kid = "k1") {
       const input = `${segment({ alg: "ES256", typ: "JWT", kid })}.${segment(claims)}`;
       const signature = await crypto.subtle.sign(
@@ -85,6 +91,15 @@ export async function fakePawl(): Promise<FakePawl> {
         return pawl.sharedSession
           ? Response.json(pawl.sharedSession)
           : new Response(null, { status: 401 });
+      }
+      if (url.pathname === "/internal/outside-apps") {
+        return pawl.outsideApps === null
+          ? new Response(null, { status: 503 })
+          : Response.json({ apps: pawl.outsideApps });
+      }
+      if (url.pathname === "/internal/card-token") {
+        pawl.cardTokens.push(url);
+        return pawl.answerCardToken(url);
       }
       if (url.pathname === "/internal/devices") {
         const id = url.searchParams.get("id") ?? "";

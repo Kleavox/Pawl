@@ -29,6 +29,8 @@ export function CabinetPage(props: {
       lcd={cabinet.lcd}
       leaving={cabinet.leaving}
       sound={cabinet.sound}
+      card={cabinet.card}
+      copied={cabinet.copied}
       on={cabinet.on}
       refs={cabinet.refs}
       onProductsFocus={cabinet.onProductsFocus}

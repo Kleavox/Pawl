@@ -26,18 +26,18 @@ import {
 
 const ROWS = "grid gap-6 w-full m-0 p-0 list-none";
 
-const ROW =
+export const ROW =
   "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-12 min-h-50 px-12 py-4 border-[length:--spacing(1)] border-solid border-pw-screen-edge rounded-[--spacing(8)] bg-pw-screen-hi max-desk:gap-8 max-desk:min-h-46";
 
-const ROW_TITLE =
+export const ROW_TITLE =
   "min-w-0 overflow-hidden text-pw-ink text-15 font-semibold text-ellipsis whitespace-nowrap";
 
-const ROW_DETAIL =
+export const ROW_DETAIL =
   "block overflow-hidden text-pw-ink-dim text-14 font-normal text-ellipsis whitespace-nowrap";
 
-const ROW_AGE = "text-pw-ink-dim font-pw-mono text-14";
+export const ROW_AGE = "text-pw-ink-dim font-pw-mono text-14";
 
-const ROW_TOOL =
+export const ROW_TOOL =
   "h-34 px-12 border-[length:--spacing(1)] border-solid border-pw-screen-edge rounded-[--spacing(6)] bg-transparent text-pw-ice font-pw-ui text-14 font-bold cursor-pointer hover:border-pw-cobalt-hi disabled:opacity-55 data-current:border-pw-warn data-current:text-pw-warn";
 
 const PAGER =
@@ -88,7 +88,7 @@ function Pager(props: {
   );
 }
 
-function Paged<T>(props: {
+export function Paged<T>(props: {
   view: PassView;
   items: readonly T[];
   row: (item: T, index: number) => ReactNode;
@@ -146,7 +146,10 @@ function done(pass: Pass, text: string): void {
   pass.dispatch({ type: "say", say: { kind: "success", text } });
 }
 
-function Unread(props: { text: string; onRetry: () => void }): ReactNode {
+export function Unread(props: {
+  text: string;
+  onRetry: () => void;
+}): ReactNode {
   return (
     <Note tone="tries">
       <span>{props.text}</span>{" "}

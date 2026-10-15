@@ -465,13 +465,13 @@ test("the account origin is the same machine, seen close up", async () => {
     "href",
     /\/privacy\.html$/,
   );
-  for (const lit of ["1", "2", "3", "4"]) {
+  for (const lit of ["1", "2", "3", "4", "5"]) {
     await expect(page.locator(`[data-key='${lit}']`)).toHaveAttribute(
       "aria-disabled",
       "false",
     );
   }
-  for (const dark of ["0", "5", "6", "7", "8", "9"]) {
+  for (const dark of ["0", "6", "7", "8", "9"]) {
     await expect(page.locator(`[data-key='${dark}']`)).toHaveAttribute(
       "aria-disabled",
       "true",

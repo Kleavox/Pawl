@@ -1,9 +1,78 @@
 import { INTERNAL_HOSTS } from "@pawl/config";
 
 import { listSessions } from "../lib/session";
+import { claimsFor, findClaimsUser } from "../oidc/claims";
+import { findGrant } from "../oidc/grants";
+import { findOutsideApp, listOutsideApps } from "../oidc/outside";
+import { mintCardToken } from "../oidc/tokens";
 import { apiError, checkVerification, type PassApp } from "./shared";
 
 export function registerInternalRoutes(app: PassApp): void {
+  app.get("/internal/outside-apps", async (context) => {
+    if (new URL(context.req.url).hostname !== INTERNAL_HOSTS.PASS) {
+      return context.body(null, 404);
+    }
+    const apps = await listOutsideApps(context.env);
+    return context.json({
+      apps: apps.map(({ key, label, title, origin, access, card }) => ({
+        key,
+        label,
+        title,
+        origin,
+        access,
+        card,
+      })),
+    });
+  });
+
+  app.get("/internal/card-token", async (context) => {
+    if (new URL(context.req.url).hostname !== INTERNAL_HOSTS.PASS) {
+      return context.body(null, 404);
+    }
+    const key = context.req.query("key");
+    const userId = context.req.query("user");
+    if (!key || !userId) {
+      return context.json(
+        { code: "INVALID_INPUT", message: "Missing key or user." },
+        400,
+      );
+    }
+    const outside = await findOutsideApp(context.env, key);
+    if (!outside?.card) {
+      return context.json(
+        { code: "NOT_FOUND", message: "No app with a card has that key." },
+        404,
+      );
+    }
+    const user = await findClaimsUser(context.env, userId);
+    if (!user) {
+      return context.json(
+        {
+          code: "ACCOUNT_UNAVAILABLE",
+          message: "This account cannot be used.",
+        },
+        403,
+      );
+    }
+    const grant = await findGrant(context.env, user.id, outside.clientId);
+    if (!grant) {
+      return context.json(
+        { code: "CONSENT_REQUIRED", clientId: outside.clientId },
+        409,
+      );
+    }
+    const token = await mintCardToken(context.env, {
+      clientId: outside.clientId,
+      sub: grant.subject,
+      claims: claimsFor(user, grant.scopes),
+    });
+    return context.json({
+      token,
+      origin: outside.origin,
+      clientId: outside.clientId,
+    });
+  });
+
   app.get("/internal/identity", async (context) => {
     if (new URL(context.req.url).hostname !== INTERNAL_HOSTS.PASS) {
       return context.body(null, 404);

@@ -16,6 +16,8 @@ export type ConsentPageOptions = {
   query: string;
   rootOrigin: string;
   siteName: string;
+  action?: string;
+  fields?: Readonly<Record<string, string>>;
 };
 
 const SCOPES = "scopes grid gap-8 m-0 p-0 list-none";
@@ -60,9 +62,13 @@ export function renderConsentPage(options: ConsentPageOptions): string {
           id="consent"
           className={ACTIONS}
           method="post"
-          action="/oauth/consent"
+          action={options.action ?? "/oauth/consent"}
         >
-          <input type="hidden" name="request" value={options.query} />
+          {Object.entries(options.fields ?? { request: options.query }).map(
+            ([name, value]) => (
+              <input key={name} type="hidden" name={name} value={value} />
+            ),
+          )}
           <button className={BUTTON} type="submit" name="decision" value="deny">
             Deny
           </button>

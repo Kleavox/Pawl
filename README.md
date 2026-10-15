@@ -257,16 +257,18 @@ Pass is an OpenID Connect provider on `paw.<root>`: Authorization Code with
 PKCE (`S256` only), ES256-signed tokens, admin-registered clients with exact
 redirect URIs, and no dynamic registration.
 
-| Endpoint                                | Purpose                                                                 |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| `GET /.well-known/openid-configuration` | Discovery                                                               |
-| `GET /oauth/authorize`                  | Sign-in, then consent for third-party clients; `prompt=none` never asks |
-| `POST /oauth/consent`                   | The consent form's answer                                               |
-| `POST /oauth/token`                     | Code for tokens; refresh for third-party clients                        |
-| `GET /oauth/userinfo`                   | Claims for the access token's scopes                                    |
-| `GET /oauth/jwks.json`                  | The current and previous public signing keys                            |
-| `POST /oauth/revoke`                    | Revoke an access or refresh token, and with it the grant                |
-| `POST /oauth/logout`                    | End this browser's Pawl session (`end_session_endpoint`)                |
+| Endpoint                                | Purpose                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| `GET /.well-known/openid-configuration` | Discovery                                                                |
+| `GET /oauth/authorize`                  | Sign-in, then consent for third-party clients; `prompt=none` never asks  |
+| `POST /oauth/consent`                   | The consent form's answer                                                |
+| `POST /oauth/token`                     | Code for tokens; refresh for third-party clients                         |
+| `GET /oauth/userinfo`                   | Claims for the access token's scopes                                     |
+| `GET /oauth/jwks.json`                  | The current and previous public signing keys                             |
+| `POST /oauth/revoke`                    | Revoke an access or refresh token, and with it the grant                 |
+| `POST /oauth/logout`                    | End this browser's Pawl session (`end_session_endpoint`)                 |
+| `GET`/`POST /oauth/connect`             | Consent to an outside app from the cabinet, before its card can be asked |
+| `POST /oauth/subjects`                  | Which of a client's subjects still exist (`pawl_subjects_endpoint`)      |
 
 `/oauth/logout` is a form POST, so a cross-site page cannot sign anyone out: the
 `SameSite=Lax` session cookie never rides a cross-site POST. It returns to
@@ -317,6 +319,27 @@ pnpm admin:client -- --id <id> --name <name> --redirect-uri https://<app>/auth/c
 
 and its printed secret goes where that app reads it. `pawl` finds the D1
 database `pawl` by name, so it needs only `wrangler login`.
+
+### Outside apps
+
+An app that runs somewhere else, behind its own address, is registered from
+`paw.` instead: an admin opens **Account → Registered apps → New app** and gives
+its title, its address (an origin), a label, who may take its bay, its return
+address and whether it **shows a card on the cabinet**. Pawl makes a
+third-party confidential client whose id is the app's key, shows its secret
+once, and puts the app in a bay that links to its address. Registering and
+removing need a sign-in within the last 15 minutes; both are audited.
+**Remove** deletes the client, and with it every grant.
+
+The registry checks the stored apps together with the manifest, so an outside
+app can never take a key, label or address the manifest already uses. When Pawl
+cannot list them, the cabinet shows the manifest alone.
+
+`POST /oauth/subjects` takes `{ "subjects": [...] }` (at most 1000) with the
+client's Basic credentials and answers `{ "live": [...] }`: the subjects of
+that client whose account still exists and still has a grant. An app that asks
+now and then can end what it gave a person who deleted their account or
+disconnected it.
 
 ### Signing in to an app behind Cloudflare Access
 
@@ -386,7 +409,9 @@ The manifest is one JSON document:
 | `title`              | 1–32 printable characters                                                                                                                                                                                                  |
 | `subdomain`          | optional, `^[a-z][a-z0-9-]{0,30}$`, unique, not `paw`, `pass`, `www`. An app with a subdomain takes a bay; at most nine. With no `service` the app is only a link, listed at `https://<subdomain>.<root>` and never routed |
 | `service`            | the app's Worker name, bound as written (locally `local-<service>`); required when `proxy`, `apex`, `estate` or `purge` is set                                                                                             |
-| `proxy`              | prefixes starting and ending with `/`, unique and non-overlapping, never under `/api/estate`, `/api/session`, `/api/logout`, `/api/auth/`, `/oauth/`, `/.well-known/`, `/health`, `/assets/`                               |
+| `href`               | optional origin, `https://` (or `http://` on loopback), unique; an app that lives elsewhere. It takes a bay that links there and is never routed, so it has no `subdomain` and no `service`                                |
+| `card`               | optional `true`: the cabinet asks the app for a card (below) when its bay is taken; needs `subdomain` or `href`                                                                                                            |
+| `proxy`              | prefixes starting and ending with `/`, unique and non-overlapping, never under `/api/estate`, `/api/session`, `/api/logout`, `/api/auth/`, `/api/catalog`, `/api/apps/`, `/oauth/`, `/.well-known/`, `/health`, `/assets/` |
 | `apex`               | at most one app; `resolve` starts and ends with `/`; `fileSlugPrefix` optional, like `n_`                                                                                                                                  |
 | `estate`, `purge`    | the app implements the contract below                                                                                                                                                                                      |
 | `header`             | optional `{ noun }`, requires `estate`; the app appears in the shared header with its count                                                                                                                                |
@@ -461,6 +486,32 @@ it with its host rewritten to `<key>.internal`.
 
 An app that serves static assets first must let `/.well-known/*` reach its
 Worker (Wrangler's `assets.run_worker_first`).
+
+**Card**, `GET <app origin>/.well-known/pawl/card`, for an app with `card`.
+Taking its bay asks the gateway (`GET /api/apps/<key>/card`), which asks Pawl
+for a token and the app for its card. Before a person has connected the app
+once, the cabinet offers **Connect**, which consents on `paw.` and comes back.
+The request carries `Authorization: Bearer <token>`: an ES256 token from Pawl's
+keys, `iss` Pawl, `aud` the app's client id, `sub` the person's subject for
+that app, `token_use: "pawl-card"`, and `email` / `preferred_username` for the
+scopes granted; it lasts one minute. Check all of it. Answer `200` with:
+
+```json
+{
+  "title": "Your DNS address",
+  "message": "Use it as the DNS-over-HTTPS address on your devices.",
+  "fields": [{ "label": "Client ID", "value": "3f9c…", "copy": true }],
+  "action": { "label": "Detail", "href": "https://enroll.example.test/" }
+}
+```
+
+- `title` 1–40 characters; `message` at most 90; at most two `fields`, each
+  `label` at most 20 and `value` at most 70; `action` optional, `label` at most
+  16, `href` on the app's own origin. No control characters.
+- The body is at most 16 KB and answers within 5 seconds; redirects are not
+  followed. Anything else, a single field over its limit included, shows the
+  app as not answering, with `--`, never as empty.
+- Pawl writes none of it: the cabinet shows the app's own words.
 
 ## Security invariants
 

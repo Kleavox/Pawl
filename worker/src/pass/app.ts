@@ -4,6 +4,7 @@ import { securityHeaders } from "./lib/http";
 import { Hono } from "hono";
 
 import { registerAccountRoutes } from "./routes/account";
+import { registerAdminAppRoutes } from "./routes/admin-apps";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerGrantRoutes } from "./routes/grants";
 import { registerInternalRoutes } from "./routes/internal";
@@ -24,6 +25,7 @@ const MIGRATED_TABLES = [
   "oauth_grants",
   "oauth_codes",
   "oauth_refresh_tokens",
+  "outside_apps",
 ];
 
 const CABINET_CODE_ROUTES = new Set([
@@ -188,6 +190,7 @@ app.get("/api/estate", async (context) => {
 registerOAuthRoutes(app);
 registerGrantRoutes(app);
 registerAccountRoutes(app);
+registerAdminAppRoutes(app);
 registerAuthRoutes(app);
 registerOtpRoutes(app);
 registerInternalRoutes(app);

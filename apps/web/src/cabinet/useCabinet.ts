@@ -23,7 +23,7 @@ import {
 
 import { signOut, silentSignInPath } from "../auth-client";
 import { toMachineModel, type MachineModel } from "../estate-adapter";
-import { litKeys, viewFor, type ScreenCopy } from "../machine/copy";
+import { litKeys, productOf, viewFor, type ScreenCopy } from "../machine/copy";
 import { createKeypad } from "../machine/keypad";
 import {
   forgetRequest,
@@ -37,11 +37,13 @@ import {
   initialState,
   reduce,
   type BayCode,
+  type Catalog,
   type MachineEvent,
   type MachineHost,
   type MachineState,
 } from "../machine/state";
 import { useSound } from "../sound";
+import { cardStep, readCardFor, type AppCard, type CardState } from "./card";
 import { signInHref } from "./sign-in";
 
 type GatewaySession = {
@@ -53,7 +55,23 @@ type GatewaySession = {
 const FAULT_HOLD_MS = 2000;
 const PASS_WAIT_MS = 4000;
 const TICKER_SPEED = 40;
+const COPIED_MS = 1500;
 const SIGNED_OUT_KEY = "pawl:signed-out";
+
+async function readCatalog(): Promise<Catalog | null> {
+  try {
+    const response = await fetch("/api/catalog", { credentials: "include" });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { bays?: unknown };
+    return Array.isArray(body.bays) ? (body.bays as Catalog) : null;
+  } catch {
+    return null;
+  }
+}
+
+function sameCatalog(a: Catalog, b: Catalog): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 function hold(ms: number): Promise<void> {
   return new Promise((done) => setTimeout(done, ms));
@@ -126,16 +144,21 @@ export function useCabinet(input: {
   navigate: (url: string) => void;
 }) {
   const { site, passHref, navigate } = input;
-  const catalog = site.bays;
-  const codes = useMemo(() => catalog.map((bay) => bay.code), [catalog]);
+  const catalogRef = useRef<Catalog>(site.bays);
   const toolKeys = useMemo(() => site.tools.map((tool) => tool.key), [site]);
   const modelFor = useCallback(
     (session: GatewaySession, overview: Overview | null): MachineModel =>
-      toMachineModel(session, overview, catalog, toolKeys, site.site.name),
-    [catalog, toolKeys, site],
+      toMachineModel(
+        session,
+        overview,
+        catalogRef.current,
+        toolKeys,
+        site.site.name,
+      ),
+    [toolKeys, site],
   );
 
-  const stateRef = useRef<MachineState>(initialState("guest", catalog));
+  const stateRef = useRef<MachineState>(initialState("guest", site.bays));
   const [state, setState] = useState(stateRef.current);
   const modelRef = useRef<MachineModel>(
     modelFor({ authenticated: false }, null),
@@ -148,14 +171,19 @@ export function useCabinet(input: {
     text: "",
   });
   const [lcd, setLcd] = useState<ScreenCopy | null>(null);
-  const [leaving, setLeaving] = useState<"sign-in" | "manage" | null>(null);
+  const [leaving, setLeaving] = useState<"sign-in" | "manage" | "card" | null>(
+    null,
+  );
+  const cardRef = useRef<CardState>({ kind: "closed" });
+  const [card, setCardState] = useState<CardState>(cardRef.current);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const camera = useRef<HTMLDivElement>(null);
   const machine = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLDivElement>(null);
   const ticker = useRef<HTMLSpanElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
-  const keypad = useRef(createKeypad(codes));
+  const keypad = useRef(createKeypad(site.bays.map((bay) => bay.code)));
   const bridging = useRef<AbortController | null>(null);
   const retrying = useRef(false);
   const sound = useSound();
@@ -199,6 +227,40 @@ export function useCabinet(input: {
   const say = useCallback((text: string): void => {
     setSaid({ view: viewFor(stateRef.current), text });
   }, []);
+
+  const applyCatalog = useCallback(
+    (next: Catalog | null): void => {
+      if (next === null || sameCatalog(next, catalogRef.current)) return;
+      catalogRef.current = next;
+      keypad.current = createKeypad(next.map((bay) => bay.code));
+      dispatch({ type: "catalog", catalog: next });
+    },
+    [dispatch],
+  );
+
+  const showCard = useCallback((next: CardState): void => {
+    cardRef.current = next;
+    setCardState(next);
+  }, []);
+
+  const loadCard = useCallback(
+    async (bay: BayCode): Promise<void> => {
+      const entry = catalogRef.current.find(
+        (candidate) => candidate.code === bay,
+      );
+      if (entry === undefined) return;
+      showCard({ kind: "loading" });
+      const next = await readCardFor(entry.key);
+      if (stateRef.current.card === bay) showCard(next);
+    },
+    [showCard],
+  );
+
+  const closeCard = useCallback((): void => {
+    dispatch({ type: "close-card" });
+    showCard({ kind: "closed" });
+    setCopied(null);
+  }, [dispatch, showCard]);
 
   const keepRequest = useCallback((): boolean => {
     const wanted = stateRef.current.authRequest;
@@ -269,6 +331,79 @@ export function useCabinet(input: {
     [navigate, comeBack],
   );
 
+  const leaveFromCard = useCallback(
+    (event: MouseEvent<HTMLAnchorElement> | null): void => {
+      const bay = stateRef.current.card;
+      const step = cardStep(cardRef.current);
+      if (bay === null || step?.kind !== "leave") return;
+      if (
+        event !== null &&
+        !shouldAnimateClick(event as unknown as globalThis.MouseEvent)
+      ) {
+        return;
+      }
+      event?.preventDefault();
+      const connecting = cardRef.current.kind === "connect";
+      if (connecting && !rememberRequest(bay)) {
+        say(
+          "This browser cannot hold your bay request. Pick the bay again after connecting.",
+        );
+      }
+      const href = connecting ? withCamHint(step.href, "screen") : step.href;
+      setLeaving("card");
+      setLcd({
+        main: connecting
+          ? "OPENING PAWL"
+          : `OPENING ${productOf(catalogRef.current, bay)}`,
+        sub: "ONE MOMENT",
+      });
+      if (camera.current === null) {
+        navigate(href);
+        return;
+      }
+      void leave(camera.current, "screen", href, {
+        go: navigate,
+        stay: comeBack,
+      });
+    },
+    [navigate, comeBack, say],
+  );
+
+  const signInFromCard = useCallback((): void => {
+    const bay = stateRef.current.card;
+    if (bay !== null) rememberRequest(bay);
+    navigate(silentSignInPath(window.location));
+  }, [navigate]);
+
+  const copyField = useCallback(
+    (field: AppCard["fields"][number]): void => {
+      const failed = (): void =>
+        say("Copy did not work here. Select the text and copy it yourself.");
+      const clipboard = globalThis.navigator?.clipboard;
+      if (clipboard === undefined) {
+        failed();
+        return;
+      }
+      clipboard.writeText(field.value).then(() => {
+        setCopied(field.label);
+        setTimeout(
+          () => setCopied((now) => (now === field.label ? null : now)),
+          COPIED_MS,
+        );
+      }, failed);
+    },
+    [say],
+  );
+
+  const runCardGo = useCallback((): void => {
+    const step = cardStep(cardRef.current);
+    const bay = stateRef.current.card;
+    if (step === null || bay === null) return;
+    if (step.kind === "leave") leaveFromCard(null);
+    else if (step.kind === "retry") void loadCard(bay);
+    else signInFromCard();
+  }, [leaveFromCard, loadCard, signInFromCard]);
+
   const dispense = useCallback(
     async (bay: BayCode): Promise<void> => {
       if (!passRead.settled) {
@@ -286,11 +421,13 @@ export function useCabinet(input: {
   );
 
   const resumeRemembered = useCallback(async (): Promise<void> => {
-    const bay = readRememberedRequest(codes);
+    const bay = readRememberedRequest(
+      catalogRef.current.map((entry) => entry.code),
+    );
     if (bay === null) return;
     forgetRequest();
     await dispense(bay);
-  }, [codes, dispense]);
+  }, [dispense]);
 
   const estateUnread = useCallback(
     (): boolean =>
@@ -352,6 +489,15 @@ export function useCabinet(input: {
 
   const takeDelivery = useCallback(async (): Promise<void> => {
     if (bridging.current !== null) return;
+    const delivered = stateRef.current.tray;
+    if (
+      delivered !== null &&
+      catalogRef.current.find((entry) => entry.code === delivered)?.card
+    ) {
+      const next = dispatch({ type: "open-card" });
+      if (next.card === delivered) await loadCard(delivered);
+      return;
+    }
     const controller = new AbortController();
     bridging.current = controller;
     try {
@@ -362,7 +508,7 @@ export function useCabinet(input: {
             machine.current?.querySelector<HTMLElement>(
               `[data-cartridge="${bay}"]`,
             )?.dataset.href ??
-              catalog.find((entry) => entry.code === bay)?.href ??
+              catalogRef.current.find((entry) => entry.code === bay)?.href ??
               "/",
           ),
         controller.signal,
@@ -377,7 +523,7 @@ export function useCabinet(input: {
         ?.querySelector<HTMLElement>("[data-tray-action]")
         ?.focus({ preventScroll: true });
     }
-  }, [dispatch, navigate, catalog, raiseFault]);
+  }, [dispatch, navigate, loadCard, raiseFault]);
 
   const cancelBridge = useCallback((): void => {
     if (bridging.current !== null) {
@@ -399,6 +545,11 @@ export function useCabinet(input: {
         return;
       }
       if (now.authStep === "leaving") return;
+      if (now.card !== null) {
+        if (key === "CLR") closeCard();
+        if (key === "GO") runCardGo();
+        return;
+      }
       const result = keypad.current.press(key);
       if (key === "GO" && result.kind === "ignored" && estateUnread()) {
         await retryEstate();
@@ -416,7 +567,15 @@ export function useCabinet(input: {
         dispatch({ type: "cancel" });
       }
     },
-    [sound, dispatch, estateUnread, retryEstate, dispense],
+    [
+      sound,
+      dispatch,
+      estateUnread,
+      retryEstate,
+      dispense,
+      closeCard,
+      runCardGo,
+    ],
   );
 
   const logout = useCallback((): void => {
@@ -430,14 +589,17 @@ export function useCabinet(input: {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      let session: GatewaySession = { authenticated: false };
-      let unread = false;
-      try {
-        session = await readSession();
-      } catch {
-        unread = true;
-      }
+      const [read, fetched] = await Promise.all([
+        readSession().then(
+          (value) => value,
+          () => null,
+        ),
+        readCatalog(),
+      ]);
       if (cancelled) return;
+      applyCatalog(fetched);
+      const unread = read === null;
+      const session: GatewaySession = read ?? { authenticated: false };
       const overview = session.authenticated ? await readEstate() : null;
       if (cancelled) return;
       let next = modelFor(session, overview);
@@ -491,13 +653,18 @@ export function useCabinet(input: {
   useEffect(() => {
     const escape = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (stateRef.current.card !== null) {
+        event.preventDefault();
+        closeCard();
+        return;
+      }
       if (stateRef.current.authStep !== "account") return;
       event.preventDefault();
       dispatch({ type: "cancel" });
     };
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
-  }, [dispatch]);
+  }, [dispatch, closeCard]);
 
   useEffect(() => {
     const text = ticker.current;
@@ -519,7 +686,12 @@ export function useCabinet(input: {
   const arrived = useCameraArrival(camera, "whole", { onRestore: handBack });
   useScanWipe(screen, view, arrived === "screen");
   useFollowFocus(screen, view, returnTo);
-  const lit = litKeys(state, fault ?? model.screen, fault !== null);
+  const lit = litKeys(
+    state,
+    fault ?? model.screen,
+    fault !== null,
+    cardStep(card) !== null,
+  );
   useMachineKeys((key) => void pressKey(key), lit);
 
   return {
@@ -530,6 +702,8 @@ export function useCabinet(input: {
     lcd,
     leaving,
     sound,
+    card,
+    copied,
     refs: { camera, machine, screen, ticker },
     onProductsFocus: (target: HTMLElement) => {
       returnTo.current = target;
@@ -545,6 +719,14 @@ export function useCabinet(input: {
       logout,
       take: () => void takeDelivery(),
       cancelBridge,
+      cardLeave: (event: MouseEvent<HTMLAnchorElement>) => leaveFromCard(event),
+      cardRetry: () => {
+        const bay = stateRef.current.card;
+        if (bay !== null) void loadCard(bay);
+      },
+      cardSignIn: signInFromCard,
+      copy: copyField,
+      closeCard,
     },
   };
 }

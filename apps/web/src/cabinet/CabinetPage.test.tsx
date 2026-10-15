@@ -83,13 +83,13 @@ describe("CabinetPage", () => {
     expect(sessionStorage.getItem("pawl:machine-request")).toBe("1");
   });
 
-  it("shows only the products, working and account views", async () => {
+  it("shows only the products, working, account and card views", async () => {
     const { container } = await opened(vi.fn());
     expect(
       [...container.querySelectorAll("[data-view-panel]")].map((view) =>
         view.getAttribute("data-view-panel"),
       ),
-    ).toEqual(["products", "working", "account"]);
+    ).toEqual(["products", "working", "account", "card"]);
   });
 
   it("releases an open bay from the keypad: the number, then GO", async () => {
@@ -201,5 +201,151 @@ describe("CabinetPage", () => {
       await vi.advanceTimersByTimeAsync(5000);
     });
     expect(navigate).toHaveBeenCalledWith("#stay");
+  });
+});
+
+const DNS_BAY = {
+  ...CATALOG[0]!,
+  code: "5",
+  key: "dns",
+  title: "DNS",
+  product: "DNS",
+  estate: false,
+  access: "visitor" as const,
+  href: "https://enroll.elsewhere.test",
+  card: true,
+};
+
+const SIGNED_IN = {
+  authenticated: true,
+  identity: {
+    id: "u1",
+    email: "budi@example.test",
+    username: "budi",
+    role: "USER",
+  },
+};
+
+const DNS_CARD = {
+  title: "Your DNS address",
+  message: "Use it on your devices.",
+  fields: [{ label: "Client ID", value: "0123456789abcdef", copy: true }],
+  action: { label: "Detail", href: "https://enroll.elsewhere.test/" },
+};
+
+function routed(card: { status: number; body: unknown }) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string) => {
+      const path = String(input);
+      if (path.startsWith("/api/session")) return answer(SIGNED_IN);
+      if (path.startsWith("/api/estate")) {
+        return answer({ role: "USER", tools: {}, attention: [] });
+      }
+      if (path.startsWith("/api/catalog")) {
+        return answer({ ...SITE, bays: [...CATALOG, DNS_BAY] });
+      }
+      if (path.startsWith("/api/apps/dns/card")) {
+        return new Response(JSON.stringify(card.body), {
+          status: card.status,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return answer({});
+    }),
+  );
+}
+
+async function cardOpened(navigate: (url: string) => void) {
+  const opened_ = await opened(navigate);
+  const { user, container } = opened_;
+  await user.click(
+    container.querySelector<HTMLElement>("[data-cartridge='5']")!,
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1500);
+  });
+  await user.click(container.querySelector<HTMLElement>("[data-tray-action]")!);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  return opened_;
+}
+
+describe("an outside app with a card", () => {
+  it("adds the outside app's bay after the page loads and shows its card on delivery", async () => {
+    routed({ status: 200, body: { card: DNS_CARD } });
+    const { container } = await cardOpened(vi.fn());
+    const card = container.querySelector<HTMLElement>(
+      "[data-view-panel='card']",
+    )!;
+    expect(card.hidden).toBe(false);
+    expect(card.querySelector("h2")!.textContent).toBe("Your DNS address");
+    expect(card.textContent).toContain("0123456789abcdef");
+  });
+
+  it("copies a field and says so on its button", async () => {
+    routed({ status: 200, body: { card: DNS_CARD } });
+    const { user } = await cardOpened(vi.fn());
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    await user.click(screen.getByRole("button", { name: "Copy Client ID" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(writeText).toHaveBeenCalledWith("0123456789abcdef");
+    expect(
+      screen.getByRole("button", { name: "Copied Client ID" }),
+    ).toBeInTheDocument();
+  });
+
+  it("follows the app's action on GO, without a camera hint for the app", async () => {
+    routed({ status: 200, body: { card: DNS_CARD } });
+    const go = vi.fn();
+    const { user, container } = await cardOpened(go);
+    await user.click(container.querySelector<HTMLElement>("[data-key='GO']")!);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(go).toHaveBeenCalledWith("https://enroll.elsewhere.test/");
+  });
+
+  it("connects through Pawl on GO and remembers the bay for the way back", async () => {
+    routed({
+      status: 409,
+      body: {
+        code: "CONSENT_REQUIRED",
+        connect: "https://paw.example.test/oauth/connect?client_id=dns",
+      },
+    });
+    const go = vi.fn();
+    const { user, container } = await cardOpened(go);
+    expect(
+      screen.getByRole("heading", { name: "DNS needs to know who you are" }),
+    ).toBeInTheDocument();
+    await user.click(container.querySelector<HTMLElement>("[data-key='GO']")!);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(sessionStorage.getItem("pawl:machine-request")).toBe("5");
+    expect(go).toHaveBeenCalledWith(
+      "https://paw.example.test/oauth/connect?client_id=dns#cam=screen",
+    );
+  });
+
+  it("goes back to the bays on CLR", async () => {
+    routed({ status: 502, body: { code: "APP_UNREADABLE" } });
+    const { user, container } = await cardOpened(vi.fn());
+    expect(
+      screen.getByRole("heading", { name: "DNS did not answer" }),
+    ).toBeInTheDocument();
+    await user.click(container.querySelector<HTMLElement>("[data-key='CLR']")!);
+    expect(
+      container.querySelector<HTMLElement>("[data-view-panel='products']")!
+        .hidden,
+    ).toBe(false);
   });
 });

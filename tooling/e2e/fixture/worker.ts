@@ -18,6 +18,55 @@ function payload(token: string): Record<string, unknown> {
 
 const purged = new Set<string>();
 
+function bytes(text: string): Uint8Array<ArrayBuffer> {
+  const base64 = text.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+  return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+}
+
+function decoded(part: string): Record<string, unknown> {
+  return JSON.parse(new TextDecoder().decode(bytes(part))) as Record<
+    string,
+    unknown
+  >;
+}
+
+async function cardClaims(
+  request: Request,
+  env: Env,
+): Promise<Record<string, unknown> | null> {
+  const token = request.headers.get("authorization")?.replace(/^Bearer /u, "");
+  const [head, body, signature] = (token ?? "").split(".");
+  if (!head || !body || !signature) return null;
+  const { kid } = decoded(head);
+  const { keys } = (await (
+    await fetch(new URL("/oauth/jwks.json", env.PROVIDER))
+  ).json()) as { keys: (JsonWebKey & { kid?: string })[] };
+  const jwk = keys.find((candidate) => candidate.kid === kid);
+  if (!jwk) return null;
+  const key = await crypto.subtle.importKey(
+    "jwk",
+    { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y },
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["verify"],
+  );
+  const verified = await crypto.subtle.verify(
+    { name: "ECDSA", hash: "SHA-256" },
+    key,
+    bytes(signature),
+    new TextEncoder().encode(`${head}.${body}`),
+  );
+  if (!verified) return null;
+  const claims = decoded(body);
+  return claims.token_use === "pawl-card" &&
+    claims.aud === env.APP_KEY &&
+    claims.iss === env.PROVIDER &&
+    Number(claims.exp) * 1000 > Date.now()
+    ? claims
+    : null;
+}
+
 function internal(request: Request, env: Env): boolean {
   return new URL(request.url).hostname === `${env.APP_KEY}.internal`;
 }
@@ -73,6 +122,19 @@ export default {
       return new Response(null, { status: 204 });
     }
     if (url.pathname === "/fixture/purged") return Response.json([...purged]);
+    if (url.pathname === "/.well-known/pawl/card") {
+      const claims = await cardClaims(request, env);
+      if (!claims) return new Response(null, { status: 401 });
+      return Response.json(
+        {
+          title: "Monitor card",
+          message: `Hello ${String(claims.email)}`,
+          fields: [{ label: "Subject", value: String(claims.sub), copy: true }],
+          action: { label: "Detail", href: `${env.PUBLIC_ORIGIN}/` },
+        },
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
     if (url.pathname.startsWith("/internal/resolve/")) {
       const slug = url.pathname.slice("/internal/resolve/".length);
       return slug === "fixture-slug"

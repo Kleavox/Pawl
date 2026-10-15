@@ -3,6 +3,10 @@ import { renderErrorPage } from "@pawl/ui/pages";
 import {
   EMPTY_MANIFEST,
   registryFor,
+  withOutsideApps,
+  type Access,
+  type OutsideEntry,
+  type PublicView,
   type Route,
   type Target,
 } from "@pawl/registry";
@@ -13,6 +17,7 @@ import {
 } from "@pawl/topology";
 import { Hono, type Context } from "hono";
 
+import { askCard } from "./cards";
 import { hostRedirect } from "./hosts";
 import { IdentityUnavailable } from "./session/keys";
 import {
@@ -139,6 +144,135 @@ app.get("/api/session", async (context) => {
       ? { authenticated: false, reason: "expired" }
       : { authenticated: false },
   );
+});
+
+const NO_STORE = { "Cache-Control": "private, no-store" };
+
+const OPEN_TO: Record<"ADMIN" | "USER", readonly Access[]> = {
+  ADMIN: ["public", "visitor", "owner"],
+  USER: ["public", "visitor"],
+};
+
+async function outsideApps(env: Env): Promise<OutsideEntry[] | null> {
+  if (!env.PASS) return null;
+  try {
+    const response = await env.PASS.fetch(
+      `http://${INTERNAL_HOSTS.PASS}/internal/outside-apps`,
+    );
+    if (!response.ok) return null;
+    const body = (await response.json()) as { apps?: unknown };
+    return Array.isArray(body.apps) ? (body.apps as OutsideEntry[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function viewerOrigins(
+  request: Request,
+  env: Env,
+): { root: string; pass: string } {
+  const requestUrl = new URL(request.url);
+  if (isLoopback(requestUrl.hostname)) {
+    return {
+      root: requestUrl.origin,
+      pass: localWorkerOrigin("pass", requestUrl.hostname),
+    };
+  }
+  const configured = new URL(env.PUBLIC_ORIGIN);
+  return {
+    root: configured.origin,
+    pass: isLoopback(configured.hostname)
+      ? localWorkerOrigin("pass", configured.hostname)
+      : publicOrigin(configured.hostname, "pass"),
+  };
+}
+
+function catalogView(
+  request: Request,
+  env: Env,
+  outside: readonly OutsideEntry[],
+): PublicView {
+  const { root, pass } = viewerOrigins(request, env);
+  const manifest = env.ESTATE_MANIFEST ?? EMPTY_MANIFEST;
+  try {
+    return registryFor(withOutsideApps(manifest, outside)).publicView(
+      root,
+      pass,
+    );
+  } catch (cause) {
+    console.error("[gateway catalog]", cause);
+    return registryFor(manifest).publicView(root, pass);
+  }
+}
+
+app.get("/api/catalog", async (context) => {
+  const outside = (await outsideApps(context.env)) ?? [];
+  return context.json(
+    catalogView(context.req.raw, context.env, outside),
+    200,
+    NO_STORE,
+  );
+});
+
+app.get("/api/apps/:key/card", async (context) => {
+  const state = await sessionState(context.req.raw, context.env);
+  if (state.kind !== "signed-in") {
+    return context.json(
+      {
+        code: state.kind === "expired" ? "SESSION_EXPIRED" : "UNAUTHENTICATED",
+      },
+      401,
+      NO_STORE,
+    );
+  }
+  const outside = await outsideApps(context.env);
+  if (outside === null || !context.env.PASS) {
+    return context.json({ code: "PAWL_UNAVAILABLE" }, 503, NO_STORE);
+  }
+  const key = context.req.param("key");
+  const bay = catalogView(context.req.raw, context.env, outside).bays.find(
+    (entry) => entry.key === key && entry.card,
+  );
+  if (!bay) return context.json({ code: "NOT_FOUND" }, 404, NO_STORE);
+  const role = state.session.identity.role === "ADMIN" ? "ADMIN" : "USER";
+  if (!OPEN_TO[role].includes(bay.access)) {
+    return context.json({ code: "LOCKED" }, 403, NO_STORE);
+  }
+  const minted = await context.env.PASS.fetch(
+    `http://${INTERNAL_HOSTS.PASS}/internal/card-token?key=${encodeURIComponent(key)}&user=${encodeURIComponent(state.session.identity.id)}`,
+  );
+  if (minted.status === 409) {
+    const { clientId } = (await minted.json()) as { clientId: string };
+    const { root, pass } = viewerOrigins(context.req.raw, context.env);
+    const connect = new URL("/oauth/connect", pass);
+    connect.searchParams.set("client_id", clientId);
+    connect.searchParams.set("returnTo", `${root}/`);
+    return context.json(
+      { code: "CONSENT_REQUIRED", connect: connect.toString() },
+      409,
+      NO_STORE,
+    );
+  }
+  if (minted.status === 404) {
+    return context.json({ code: "NOT_FOUND" }, 404, NO_STORE);
+  }
+  if (minted.status === 403) {
+    return context.json({ code: "ACCOUNT_UNAVAILABLE" }, 403, NO_STORE);
+  }
+  if (!minted.ok) {
+    return context.json({ code: "PAWL_UNAVAILABLE" }, 503, NO_STORE);
+  }
+  const { token, origin } = (await minted.json()) as {
+    token: string;
+    origin: string;
+  };
+  const card = await askCard(
+    (input, init) => fetch(input, init),
+    origin,
+    token,
+  );
+  if (!card) return context.json({ code: "APP_UNREADABLE" }, 502, NO_STORE);
+  return context.json({ card }, 200, NO_STORE);
 });
 
 async function devicesOf(

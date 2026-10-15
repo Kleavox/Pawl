@@ -5,8 +5,10 @@ use crate::manifest::{App, Manifest};
 pub const RESERVED_KEYS: [&str; 3] = ["gateway", "pass", "pawl"];
 pub const RESERVED_LABELS: [&str; 3] = ["paw", "pass", "www"];
 pub const RESERVED_PORTS: [u16; 4] = [8786, 8787, 3000, 3001];
-pub const RESERVED_PATHS: [&str; 8] = [
+pub const RESERVED_PATHS: [&str; 10] = [
     "/api/estate",
+    "/api/catalog",
+    "/api/apps/",
     "/api/session",
     "/api/logout",
     "/api/auth/",
@@ -67,6 +69,60 @@ fn is_file_prefix(value: &str) -> bool {
         && chars_in(&value[..value.len() - 1], lower_alnum)
 }
 
+fn is_host(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 253
+        && !value.starts_with(['.', '-'])
+        && !value.ends_with(['.', '-'])
+        && chars_in(value, |c| lower_alnum(c) || c == '.' || c == '-')
+}
+
+fn is_loopback_host(value: &str) -> bool {
+    value == "localhost"
+        || value.ends_with(".localhost")
+        || value == "[::1]"
+        || value.strip_prefix("127.").is_some_and(|rest| {
+            rest.split('.').count() == 3
+                && rest
+                    .split('.')
+                    .all(|part| !part.is_empty() && part.parse::<u8>().is_ok())
+        })
+}
+
+fn is_origin(value: &str) -> bool {
+    let Some((scheme, authority)) = value.split_once("://") else {
+        return false;
+    };
+    if authority.is_empty()
+        || authority.chars().any(|c| {
+            matches!(c, '/' | '?' | '#' | '@' | '\\') || c.is_whitespace() || c.is_control()
+        })
+    {
+        return false;
+    }
+    let (host, port) = if authority.starts_with('[') {
+        match authority.find(']') {
+            Some(end) => (&authority[..=end], authority[end + 1..].strip_prefix(':')),
+            None => return false,
+        }
+    } else {
+        match authority.split_once(':') {
+            Some((host, port)) => (host, Some(port)),
+            None => (authority, None),
+        }
+    };
+    if let Some(port) = port {
+        if !port.parse::<u16>().is_ok_and(|number| number > 0) {
+            return false;
+        }
+    }
+    match scheme {
+        "https" => host == "[::1]" || is_host(host),
+        "http" => is_loopback_host(host),
+        _ => false,
+    }
+}
+
 fn overlaps(a: &str, b: &str) -> bool {
     a.starts_with(b) || b.starts_with(a)
 }
@@ -98,6 +154,24 @@ fn check_app(app: &App, problems: &mut Vec<String>) {
         if RESERVED_LABELS.contains(&subdomain.as_str()) {
             problems.push(format!("app {name}: subdomain {subdomain} belongs to Pawl"));
         }
+    }
+    if let Some(href) = &app.href {
+        if !is_origin(href) {
+            problems.push(format!(
+                "app {name}: href {href} must be an origin such as https://app.example"
+            ));
+        }
+        if app.subdomain.is_some() || app.service.is_some() {
+            problems.push(format!(
+                "app {name}: an app with an href has no subdomain and no service"
+            ));
+        }
+    }
+    let linked = app.subdomain.is_some() || app.href.is_some();
+    if app.card && !linked {
+        problems.push(format!(
+            "app {name}: a card needs a subdomain or an href to ask"
+        ));
     }
     let routed = !app.proxy.is_empty() || app.apex.is_some() || app.estate || app.purge;
     if routed && app.service.as_deref().is_none_or(str::is_empty) {
@@ -139,11 +213,9 @@ fn check_app(app: &App, problems: &mut Vec<String>) {
             ));
         }
     }
-    if (app.header.is_some() || app.bay.is_some() || app.access.is_some())
-        && app.subdomain.is_none()
-    {
+    if (app.header.is_some() || app.bay.is_some() || app.access.is_some()) && !linked {
         problems.push(format!(
-            "app {name}: a header, bay or access entry needs a subdomain to link to"
+            "app {name}: a header, bay or access entry needs a subdomain or an href to link to"
         ));
     }
     if let Some(bay) = &app.bay {
@@ -198,18 +270,23 @@ pub fn validate(manifest: &Manifest) -> Result<(), Vec<String>> {
             "subdomain {subdomain} is used by more than one app"
         ));
     }
+    for href in duplicates(manifest.apps.iter().filter_map(|app| app.href.as_deref())) {
+        problems.push(format!("href {href} is used by more than one app"));
+    }
     for code in duplicates(manifest.apps.iter().filter_map(|app| app.bay.as_deref())) {
         problems.push(format!("bay {code} is pinned to more than one app"));
     }
     if manifest
         .apps
         .iter()
-        .filter(|app| app.subdomain.is_some())
+        .filter(|app| app.subdomain.is_some() || app.href.is_some())
         .count()
         > 9
     {
-        problems
-            .push("the cabinet has nine bays; at most nine apps may have a subdomain".to_owned());
+        problems.push(
+            "the cabinet has nine bays; at most nine apps may have a subdomain or an href"
+                .to_owned(),
+        );
     }
     let ports: Vec<String> = manifest
         .apps
@@ -353,6 +430,14 @@ mod tests {
     }
 
     #[test]
+    fn refuses_a_proxy_over_the_catalog_or_the_cards() {
+        for path in ["/api/apps/", "/api/apps/dns/", "/api/catalog/"] {
+            let json = manifest(&NOTES.replace("/api/notes/", path));
+            assert!(errors(&json).contains(path), "{path}");
+        }
+    }
+
+    #[test]
     fn refuses_a_proxy_that_would_swallow_a_path_pawl_owns() {
         let json = manifest(&NOTES.replace("/api/notes/", "/api/"));
         assert!(errors(&json).contains("/api/"));
@@ -402,6 +487,68 @@ mod tests {
                 format!(r#"{{ "key": "app{index}", "label": "a{index}", "title": "App {index}", "subdomain": "app{index}", "service": "app{index}" }}"#)
             })
             .collect();
+        assert!(errors(&manifest(&apps.join(","))).contains("nine"));
+    }
+
+    const OUTSIDE: &str = r#"{
+        "key": "dns", "label": "dns", "title": "DNS",
+        "href": "https://enroll.example.test", "access": "visitor", "card": true
+    }"#;
+
+    #[test]
+    fn accepts_an_outside_app_linked_by_its_origin_with_a_card() {
+        assert!(parse(&manifest(OUTSIDE)).is_ok());
+        let loopback = OUTSIDE.replace("https://enroll.example.test", "http://127.0.0.1:8793");
+        assert!(parse(&manifest(&loopback)).is_ok());
+    }
+
+    #[test]
+    fn refuses_an_href_that_is_not_a_plain_origin() {
+        for href in [
+            "https://enroll.example.test/",
+            "https://enroll.example.test/path",
+            "https://enroll.example.test?x=1",
+            "http://enroll.example.test",
+            "enroll.example.test",
+            "https://",
+            "https://user@enroll.example.test",
+        ] {
+            let json = manifest(&OUTSIDE.replace("https://enroll.example.test", href));
+            assert!(errors(&json).contains("href"), "{href}");
+        }
+    }
+
+    #[test]
+    fn refuses_an_href_beside_a_subdomain_or_a_service() {
+        for extra in [r#""subdomain": "dns""#, r#""service": "dns""#] {
+            let json = manifest(&OUTSIDE.replace(
+                r#""access": "visitor""#,
+                &format!(r#""access": "visitor", {extra}"#),
+            ));
+            assert!(errors(&json).contains("href"), "{extra}");
+        }
+    }
+
+    #[test]
+    fn refuses_a_card_with_nowhere_to_ask() {
+        let json = manifest(r#"{ "key": "dns", "label": "dns", "title": "DNS", "card": true }"#);
+        assert!(errors(&json).contains("card"));
+    }
+
+    #[test]
+    fn refuses_two_apps_at_one_origin() {
+        let twin = OUTSIDE.replace("\"key\": \"dns\"", "\"key\": \"dns2\"");
+        assert!(errors(&manifest(&format!("{OUTSIDE},{twin}"))).contains("href"));
+    }
+
+    #[test]
+    fn counts_outside_apps_against_the_nine_bays() {
+        let mut apps: Vec<String> = (0..9)
+            .map(|index| {
+                format!(r#"{{ "key": "app{index}", "label": "a{index}", "title": "App {index}", "subdomain": "app{index}", "service": "app{index}" }}"#)
+            })
+            .collect();
+        apps.push(OUTSIDE.to_owned());
         assert!(errors(&manifest(&apps.join(","))).contains("nine"));
     }
 

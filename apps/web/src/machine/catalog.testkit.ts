@@ -11,6 +11,7 @@ export const CATALOG: Catalog = [
     access: "visitor",
     shape: "tall",
     href: "https://notes.example.test",
+    card: false,
   },
   {
     code: "3",
@@ -22,5 +23,6 @@ export const CATALOG: Catalog = [
     access: "public",
     shape: "wide",
     href: "https://docs.example.test",
+    card: false,
   },
 ];

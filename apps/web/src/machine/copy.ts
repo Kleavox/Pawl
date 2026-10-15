@@ -4,7 +4,7 @@ import type { MachineModel } from "../estate-adapter";
 import { permits } from "./state";
 import type { AccessRole, BayCode, Catalog, MachineState } from "./state";
 
-export type ScreenView = "products" | "working" | "account";
+export type ScreenView = "products" | "working" | "account" | "card";
 
 export type ScreenCopy = { main: string; sub: string };
 
@@ -51,6 +51,7 @@ export const ROLE_LINE: Record<AccessRole, string> = {
 export function viewFor(state: MachineState): ScreenView {
   if (state.authStep === "leaving") return "working";
   if (state.authStep === "account") return "account";
+  if (state.card !== null) return "card";
   return "products";
 }
 
@@ -82,6 +83,12 @@ export function screenCopy(
   }
   if (state.authStep === "account") {
     return { main: "YOUR ACCOUNT", sub: "MANAGE OR SIGN OUT" };
+  }
+  if (state.card !== null) {
+    return {
+      main: `${state.card} ${productOf(state.catalog, state.card)}`,
+      sub: "CLR TAKES YOU BACK",
+    };
   }
   if (state.status === "denied") {
     const sub =
@@ -199,10 +206,12 @@ export function litKeys(
   state: MachineState,
   screen: string,
   faulted: boolean,
+  cardGo = false,
 ): ReadonlySet<string> {
   const view = viewFor(state);
   if (view === "working") return new Set();
   if (view === "account") return new Set(["CLR"]);
+  if (view === "card") return new Set(cardGo ? ["CLR", "GO"] : ["CLR"]);
   if (state.busy) return new Set();
   const lit = new Set(state.catalog.map((bay) => bay.code));
   const pending = state.status === "selected";
