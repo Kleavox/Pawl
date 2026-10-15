@@ -78,7 +78,7 @@ function post(cookie: string | null, body: unknown = NEW_APP) {
 
 beforeEach(() => {
   db = migratedDb();
-  seedUser(db, { id: "ADMIN-1", email: "ADMIN@product.test" });
+  seedUser(db, { id: "ADMIN-1", email: "ADMIN@product.test", role: "ADMIN" });
   seedUser(db, { id: "USER-1", email: "USER@product.test" });
   env = {
     ENVIRONMENT: "production",
@@ -113,6 +113,18 @@ describe("registered apps, for the admin", () => {
       .prepare("SELECT event_type FROM auth_events")
       .all() as { event_type: string }[];
     expect(audit.map((row) => row.event_type)).toContain("app_registered");
+  });
+
+  it("follows the account's role, not the one the session was made with", async () => {
+    const promoted = await cookieFor("USER");
+    db.sqlite
+      .prepare("UPDATE users SET role = 'ADMIN' WHERE id = 'USER-1'")
+      .run();
+    expect((await post(promoted)).status).toBe(201);
+    db.sqlite
+      .prepare("UPDATE users SET role = 'USER' WHERE id = 'ADMIN-1'")
+      .run();
+    expect((await post(await cookieFor("ADMIN"))).status).toBe(403);
   });
 
   it("asks a signed-out person to sign in and refuses everyone but an admin", async () => {

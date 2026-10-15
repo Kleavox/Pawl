@@ -49,6 +49,10 @@ class MemoryKv {
   }
 }
 
+const noAccounts = {
+  prepare: () => ({ bind: () => ({ first: async () => null }) }),
+} as unknown as D1Database;
+
 const identity: Identity = {
   id: "user-1",
   email: "person@example.com",
@@ -59,7 +63,10 @@ const identity: Identity = {
 describe("sessions", () => {
   it("stores only a hash of the opaque browser token", async () => {
     const kv = new MemoryKv();
-    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const env = {
+      SESSIONS: kv as unknown as KVNamespace,
+      DB: noAccounts,
+    } as Env;
     const created = await createSession(env, identity, 1);
 
     expect([...kv.values.keys()]).not.toContain(`session:${created.token}`);
@@ -70,7 +77,10 @@ describe("sessions", () => {
 
   it("invalidates every old session when auth version changes", async () => {
     const kv = new MemoryKv();
-    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const env = {
+      SESSIONS: kv as unknown as KVNamespace,
+      DB: noAccounts,
+    } as Env;
     const created = await createSession(env, identity, 1);
 
     await invalidateUserSessions(env, identity.id, 2);
@@ -79,7 +89,10 @@ describe("sessions", () => {
 
   it("deletes an individual session", async () => {
     const kv = new MemoryKv();
-    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const env = {
+      SESSIONS: kv as unknown as KVNamespace,
+      DB: noAccounts,
+    } as Env;
     const created = await createSession(env, identity, 1);
 
     await deleteSession(env, created.token);
@@ -88,7 +101,10 @@ describe("sessions", () => {
 
   it("propagates identity changes to every existing session", async () => {
     const kv = new MemoryKv();
-    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const env = {
+      SESSIONS: kv as unknown as KVNamespace,
+      DB: noAccounts,
+    } as Env;
     const deviceA = await createSession(env, identity, 1);
     const deviceB = await createSession(env, identity, 1);
 
@@ -102,9 +118,40 @@ describe("sessions", () => {
     });
   });
 
+  it("takes the role from the account, so a promotion reaches a session made before it", async () => {
+    const kv = new MemoryKv();
+    const roles = new Map<string, Identity["role"]>([[identity.id, "USER"]]);
+    const db = {
+      prepare: () => ({
+        bind: (id: string) => ({
+          first: async () => (roles.has(id) ? { role: roles.get(id) } : null),
+        }),
+      }),
+    };
+    const env = {
+      SESSIONS: kv as unknown as KVNamespace,
+      DB: db as unknown as D1Database,
+    } as Env;
+    const created = await createSession(env, identity, 1);
+    await putIdentityOverride(env, { ...identity, username: "renamed_person" });
+
+    roles.set(identity.id, "ADMIN");
+    await expect(getSession(env, created.token)).resolves.toMatchObject({
+      identity: { role: "ADMIN", username: "renamed_person" },
+    });
+
+    roles.set(identity.id, "USER");
+    await expect(getSession(env, created.token)).resolves.toMatchObject({
+      identity: { role: "USER" },
+    });
+  });
+
   it("keeps the stored identity when no override exists", async () => {
     const kv = new MemoryKv();
-    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const env = {
+      SESSIONS: kv as unknown as KVNamespace,
+      DB: noAccounts,
+    } as Env;
     const created = await createSession(env, identity, 1);
 
     await expect(getSession(env, created.token)).resolves.toMatchObject({
@@ -114,7 +161,10 @@ describe("sessions", () => {
 
   it("lists devices and revokes a single session", async () => {
     const kv = new MemoryKv();
-    const env = { SESSIONS: kv as unknown as KVNamespace } as Env;
+    const env = {
+      SESSIONS: kv as unknown as KVNamespace,
+      DB: noAccounts,
+    } as Env;
     const laptop = await createSession(env, identity, 1, {
       userAgent: "Laptop UA",
       ip: "10.0.0.1",

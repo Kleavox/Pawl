@@ -133,9 +133,12 @@ export async function getSession(
     return null;
   }
 
-  const [currentVersion, override] = await Promise.all([
+  const [currentVersion, override, account] = await Promise.all([
     env.SESSIONS.get(`auth-version:${stored.identity.id}`),
     env.SESSIONS.get<Identity>(`identity:${stored.identity.id}`, "json"),
+    env.DB.prepare("SELECT role FROM users WHERE id = ? LIMIT 1")
+      .bind(stored.identity.id)
+      .first<{ role: Identity["role"] }>(),
   ]);
   if (
     currentVersion !== null &&
@@ -148,8 +151,9 @@ export async function getSession(
     return null;
   }
 
+  const identity = override ?? stored.identity;
   return {
-    identity: override ?? stored.identity,
+    identity: account ? { ...identity, role: account.role } : identity,
     sessionId,
     expiresAt: stored.expiresAt,
   };

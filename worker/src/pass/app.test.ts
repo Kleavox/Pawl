@@ -3,7 +3,7 @@ import app from "./app";
 import type { Env } from "./env";
 import { hashToken } from "./lib/crypto";
 import { fakeOtpDb } from "./lib/otp-db.testkit";
-import { migratedDb } from "./oidc/db.testkit";
+import { migratedDb, seedUser } from "./oidc/db.testkit";
 import { issueOtp } from "./lib/otp";
 import { createSession } from "./lib/session";
 
@@ -109,8 +109,15 @@ describe("Pass HTTP boundary", () => {
       put: async (key: string, value: string) => void store.set(key, value),
       delete: async (key: string) => void store.delete(key),
     };
+    const accounts = migratedDb();
+    seedUser(accounts, {
+      id: "user-1",
+      email: "o@product.test",
+      role: "ADMIN",
+    });
     const env = {
       ...baseEnv,
+      DB: accounts.DB,
       SESSIONS: sessions,
       GATEWAY: {
         fetch: async (request: Request) => {

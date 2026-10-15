@@ -49,18 +49,20 @@ export function seedUser(
     email: string;
     username?: string | null;
     verified?: boolean;
+    role?: "ADMIN" | "USER";
   },
 ): void {
   db.sqlite
     .prepare(
-      `INSERT INTO users (id, email, username, email_verified_at)
-       VALUES (?, ?, ?, ?)`,
+      `INSERT INTO users (id, email, username, email_verified_at, role)
+       VALUES (?, ?, ?, ?, ?)`,
     )
     .run(
       user.id,
       user.email,
       user.username ?? null,
       user.verified === false ? null : "2026-10-08T00:00:00.000Z",
+      user.role ?? "USER",
     );
 }
 
