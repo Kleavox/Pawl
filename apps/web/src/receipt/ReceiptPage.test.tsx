@@ -1,7 +1,7 @@
 import type { PublicView } from "@pawl/registry";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CATALOG } from "../machine/catalog.testkit";
 import { ReceiptPage } from "./ReceiptPage";
@@ -25,6 +25,10 @@ function text(kind: "privacy" | "terms"): string {
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ");
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("ReceiptPage", () => {
   it.each(["privacy", "terms"] as const)(
@@ -84,13 +88,90 @@ describe("ReceiptPage", () => {
     ).toBe(true);
   });
 
+  it("hangs the paper in front of the machine, from the slot line down", () => {
+    const { container } = render(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    const feed = container.querySelector("main")!;
+    expect(feed.className).not.toContain("--slot-line:");
+    expect(feed.className).toContain("inset-y-0");
+    expect(feed.className).not.toContain("top-[26svh]");
+    expect(
+      container.querySelector("[data-receipt-frame]")!.className,
+    ).toContain("pt-(--slot-line)");
+    expect(container.querySelector("[data-receipt-shadow]")).not.toBeNull();
+  });
+
+  it("feeds out of the slot, clipped at the slot line only while it feeds, then settles once", async () => {
+    vi.useFakeTimers();
+    const { container } = render(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    const feed = container.querySelector("main")!;
+    expect(feed).toHaveAttribute("data-feeding");
+    expect(feed.className).toContain(
+      "data-feeding:[clip-path:inset(var(--slot-line)_0_0_0)]",
+    );
+    expect(container.querySelector("[data-receipt-hang]")!.className).toMatch(
+      /animate-\[receipt-settle_900ms_ease-out_1_both\]/,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    expect(feed).not.toHaveAttribute("data-feeding");
+  });
+
+  it("tears with an uneven serrated edge, and its end carries one too", () => {
+    const { container } = render(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    const paper = container.querySelector("[data-receipt]")!.className;
+    expect(paper).toContain("receipt-edge");
+    expect(paper).toContain("[[data-torn=rip]_&]:receipt-torn");
+    expect(paper).toContain("[[data-torn=fall]_&]:receipt-torn");
+    expect(paper).not.toContain("[[data-torn]_&]:receipt-torn");
+  });
+
+  it("never feeds or settles again when a torn receipt is put back", () => {
+    const { container } = render(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    for (const node of [
+      container.querySelector("[data-receipt]")!,
+      container.querySelector("[data-receipt-hang]")!,
+    ]) {
+      expect(node.className).not.toContain("[[data-torn]_&]:animate-none");
+    }
+  });
+
+  it("prints the whole receipt even when the feed's clip never lifted", () => {
+    const { container } = render(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    expect(container.querySelector("main")!.className).toContain(
+      "print:data-feeding:[clip-path:none]",
+    );
+  });
+
+  it("rings the paper, not the whole screen, when the receipt has keyboard focus", () => {
+    const { container } = render(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    expect(
+      container.querySelector("[data-receipt-frame]")!.className,
+    ).toContain("focus-visible:[outline:none]");
+    expect(container.querySelector("[data-receipt-hang]")!.className).toContain(
+      "[[data-receipt-frame]:focus-visible_&]:",
+    );
+  });
+
   it("tears on the frame with transform and opacity only, never on the whole paper", () => {
     const { container } = render(
       <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
     );
     const frame = container.querySelector("[data-receipt-frame]")!;
     expect(frame.className).toMatch(
-      /data-\[torn=fall\]:animate-\[receipt-fall_380ms/,
+      /data-\[torn=fall\]:animate-\[receipt-fall_560ms/,
     );
     expect(frame.className).toMatch(
       /data-\[torn=rip\]:animate-\[receipt-rip_120ms/,

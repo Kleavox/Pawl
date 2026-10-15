@@ -17,10 +17,16 @@ import {
   View,
   withCamHint,
 } from "@pawl/ui";
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { contactAddress } from "../legal-facts";
-import { scrollBack, tearOff } from "../receipt";
+import { FEED_MS, scrollBack, tearOff } from "../receipt";
 import { useSound } from "../sound";
 import { Privacy } from "./Privacy";
 import { Terms } from "./Terms";
@@ -30,13 +36,19 @@ const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 const TITLES = { privacy: "Privacy policy", terms: "Terms of service" };
 
 const FEED =
-  "receipt-feed fixed z-2 top-[26svh] bottom-0 left-[calc(50dvw_-_var(--paper)_/_2_-_var(--g))] w-[calc(var(--paper)_+_2_*_var(--g))] [--k:calc(var(--u)*var(--printer-s))] [--paper:calc((var(--slot-w)_-_12)_*_var(--k))] [--g:clamp(0px,calc((100dvw_-_var(--paper))_/_2),80px)] before:absolute before:z-1 before:top-0 before:right-(--g) before:left-(--g) before:h-[calc(5*var(--k))] before:bg-[linear-gradient(180deg,rgb(0_0_0/38%),transparent)] before:pointer-events-none print:static print:w-auto print:before:hidden";
+  "receipt-feed fixed z-2 inset-y-0 data-feeding:[clip-path:inset(var(--slot-line)_0_0_0)] left-[calc(50dvw_-_var(--paper)_/_2_-_var(--g))] w-[calc(var(--paper)_+_2_*_var(--g))] [--k:calc(var(--u)*var(--printer-s))] [--paper:calc((var(--slot-w)_-_12)_*_var(--k))] [--g:clamp(0px,calc((100dvw_-_var(--paper))_/_2),80px)] print:static print:w-auto print:data-feeding:[clip-path:none]";
 
 const FRAME =
-  "h-full overflow-y-auto overflow-x-hidden px-(--g) [scrollbar-width:thin] [scrollbar-color:var(--pw-steel-lo)_transparent] origin-top [transition:transform_90ms_cubic-bezier(0.2,0.8,0.2,1)] data-[torn]:will-change-transform data-[torn=jerk]:[transform:translateY(calc(6*var(--u)))] data-[torn=rip]:animate-[receipt-rip_120ms_ease-out_1_both] data-[torn=fall]:animate-[receipt-fall_380ms_ease-in_1_both] motion-reduce:animate-none motion-reduce:transition-none print:h-auto print:overflow-visible print:px-0";
+  "h-full overflow-y-auto overflow-x-hidden px-(--g) pt-(--slot-line) focus-visible:[outline:none] [scrollbar-width:thin] [scrollbar-color:var(--pw-steel-lo)_transparent] origin-top [transition:transform_90ms_cubic-bezier(0.2,0.8,0.2,1)] data-[torn]:will-change-transform data-[torn=jerk]:[transform:translateY(calc(6*var(--u)))] data-[torn=rip]:animate-[receipt-rip_120ms_ease-out_1_both] data-[torn=fall]:animate-[receipt-fall_560ms_linear_1_both] motion-reduce:animate-none motion-reduce:transition-none print:h-auto print:overflow-visible print:px-0 print:pt-0";
+
+const HANG =
+  "relative origin-top animate-[receipt-settle_900ms_ease-out_1_both] [animation-delay:540ms] [[data-receipt-frame]:focus-visible_&]:[outline:--spacing(2)_solid_var(--pw-cobalt-hi)] [[data-receipt-frame]:focus-visible_&]:[outline-offset:4px] motion-reduce:animate-none print:animate-none";
+
+const SHADOW =
+  "absolute inset-x-0 top-[calc(4*var(--k))] bottom-0 rounded-[2px] shadow-[calc(10*var(--k))_calc(16*var(--k))_calc(24*var(--k))_rgb(0_0_0/55%)] pointer-events-none print:hidden";
 
 const PAPER =
-  "receipt relative -mt-[calc(12*var(--k))] pt-[calc(12*var(--k)_+_26px)] px-[clamp(14px,6%,28px)] pb-[46px] bg-pw-paper bg-[repeating-linear-gradient(180deg,rgb(0_0_0/1.6%)_0_1px,transparent_1px_4px),linear-gradient(90deg,rgb(0_0_0/5%),transparent_5%,transparent_95%,rgb(0_0_0/5%))] shadow-[0_26px_50px_var(--pw-shade)] text-pw-paper-ink font-pw-serif text-[1.0625rem] leading-[1.6] [mask:linear-gradient(var(--pw-black)_0_0)_top/100%_calc(100%_-_12px)_no-repeat,conic-gradient(from_-45deg_at_bottom,transparent,var(--pw-black)_1deg_89deg,transparent_90deg)_bottom/18px_12px_repeat-x] origin-top animate-[receipt-feed_540ms_steps(24,end)_1_both] motion-reduce:animate-none [[data-torn]_&]:animate-none [[data-torn]_&]:[mask:conic-gradient(from_135deg_at_top,transparent,var(--pw-black)_1deg_89deg,transparent_90deg)_top/14px_7px_repeat-x,linear-gradient(var(--pw-black)_0_0)_0_7px/100%_calc(100%_-_19px)_no-repeat,conic-gradient(from_-45deg_at_bottom,transparent,var(--pw-black)_1deg_89deg,transparent_90deg)_bottom/18px_12px_repeat-x] [&_h1]:m-0 [&_h1]:font-pw-mono [&_h1]:text-[clamp(1.375rem,4vw,1.75rem)] [&_h1]:font-extrabold [&_h1]:tracking-[0.08em] [&_h1]:leading-[1.15] [&_h1]:uppercase [&_h2]:mt-0 [&_h2]:mb-[8px] [&_h2]:font-pw-mono [&_h2]:text-rem-small [&_h2]:font-extrabold [&_h2]:tracking-[0.1em] [&_h2]:uppercase [&_section]:mt-[26px] [&_p]:m-0 [&_p]:mb-[10px] [&_ul]:m-0 [&_ul]:mb-[10px] [&_ul]:pl-[1.2em] [&_li]:mb-[6px] marker:text-pw-paper-dim marker:content-['–_'] [&_a:not(.pw-button)]:text-pw-cobalt-lo [&_a:not(.pw-button)]:decoration-1 [&_a:not(.pw-button)]:underline-offset-[3px] [&_a:not(.pw-button)]:[overflow-wrap:anywhere] [&_code]:px-[4px] [&_code]:py-[1px] [&_code]:rounded-[3px] [&_code]:bg-[rgb(0_0_0/6%)] [&_code]:font-pw-mono [&_code]:text-[0.85em] [&_code]:[overflow-wrap:anywhere] max-desk:text-[1rem] print:m-0 print:pt-0 print:shadow-none print:[mask:none] print:animate-none";
+  "receipt relative pt-[26px] before:absolute before:inset-x-0 before:top-0 before:h-[calc(6*var(--k))] before:bg-[linear-gradient(180deg,rgb(0_0_0/38%),transparent)] before:pointer-events-none print:before:hidden px-[clamp(14px,6%,28px)] pb-[46px] bg-pw-paper bg-[repeating-linear-gradient(180deg,rgb(0_0_0/1.6%)_0_1px,transparent_1px_4px),linear-gradient(90deg,rgb(0_0_0/5%),transparent_5%,transparent_95%,rgb(0_0_0/5%))] text-pw-paper-ink font-pw-serif text-[1.0625rem] leading-[1.6] receipt-edge origin-top animate-[receipt-feed_540ms_steps(24,end)_1_both] motion-reduce:animate-none [[data-torn=rip]_&]:receipt-torn [[data-torn=fall]_&]:receipt-torn [&_h1]:m-0 [&_h1]:font-pw-mono [&_h1]:text-[clamp(1.375rem,4vw,1.75rem)] [&_h1]:font-extrabold [&_h1]:tracking-[0.08em] [&_h1]:leading-[1.15] [&_h1]:uppercase [&_h2]:mt-0 [&_h2]:mb-[8px] [&_h2]:font-pw-mono [&_h2]:text-rem-small [&_h2]:font-extrabold [&_h2]:tracking-[0.1em] [&_h2]:uppercase [&_section]:mt-[26px] [&_p]:m-0 [&_p]:mb-[10px] [&_ul]:m-0 [&_ul]:mb-[10px] [&_ul]:pl-[1.2em] [&_li]:mb-[6px] marker:text-pw-paper-dim marker:content-['–_'] [&_a:not(.pw-button)]:text-pw-cobalt-lo [&_a:not(.pw-button)]:decoration-1 [&_a:not(.pw-button)]:underline-offset-[3px] [&_a:not(.pw-button)]:[overflow-wrap:anywhere] [&_code]:px-[4px] [&_code]:py-[1px] [&_code]:rounded-[3px] [&_code]:bg-[rgb(0_0_0/6%)] [&_code]:font-pw-mono [&_code]:text-[0.85em] [&_code]:[overflow-wrap:anywhere] max-desk:text-[1rem] print:pt-0 print:[mask:none] print:animate-none";
 
 function reducedMotion(): boolean {
   try {
@@ -56,6 +68,15 @@ export function ReceiptPage(props: {
   const frame = useRef<HTMLDivElement>(null);
   const feed = useRef<HTMLElement>(null);
   const tearing = useRef(false);
+  const [feeding, setFeeding] = useState(true);
+
+  useEffect(() => {
+    const fed = setTimeout(
+      () => setFeeding(false),
+      reducedMotion() ? 0 : FEED_MS,
+    );
+    return () => clearTimeout(fed);
+  }, []);
   const sound = useSound();
   const title = TITLES[props.kind];
   const facts = {
@@ -153,7 +174,12 @@ export function ReceiptPage(props: {
           </Screen>
         }
       />
-      <main ref={feed} className={FEED} aria-labelledby="receipt-title">
+      <main
+        ref={feed}
+        className={FEED}
+        aria-labelledby="receipt-title"
+        data-feeding={feeding ? "" : undefined}
+      >
         <div
           ref={frame}
           className={FRAME}
@@ -161,13 +187,16 @@ export function ReceiptPage(props: {
           tabIndex={0}
           aria-label="Receipt"
         >
-          <article className={PAPER} data-receipt>
-            {props.kind === "privacy" ? (
-              <Privacy {...facts} />
-            ) : (
-              <Terms {...facts} />
-            )}
-          </article>
+          <div className={HANG} data-receipt-hang>
+            <div className={SHADOW} data-receipt-shadow aria-hidden="true" />
+            <article className={PAPER} data-receipt>
+              {props.kind === "privacy" ? (
+                <Privacy {...facts} />
+              ) : (
+                <Terms {...facts} />
+              )}
+            </article>
+          </div>
         </div>
       </main>
     </>

@@ -44,7 +44,11 @@ describe("scanWipe", () => {
     const views = screens();
     swap(views, "products", "signin");
     expect(views.classList.contains("is-wiping")).toBe(true);
-    const ghost = views.querySelector<HTMLElement>(".screen__ghost")!;
+    const pane = views.querySelector<HTMLElement>(".screen__window")!;
+    expect(pane.className).toContain("animate-[wipe-window_");
+    const ghost = pane.querySelector<HTMLElement>(":scope > .screen__ghost")!;
+    expect(ghost.className).toContain("animate-[wipe-ghost_");
+    expect(ghost.className).toContain("bg-(image:--pw-lcd)!");
     expect(ghost.hasAttribute("inert")).toBe(true);
     expect(ghost.getAttribute("aria-hidden")).toBe("true");
     expect(ghost.hidden).toBe(false);
@@ -56,7 +60,7 @@ describe("scanWipe", () => {
     ).toHaveLength(1);
     vi.advanceTimersByTime(WIPE_MS);
     expect(views.classList.contains("is-wiping")).toBe(false);
-    expect(views.querySelector(".screen__ghost")).toBeNull();
+    expect(views.querySelector(".screen__window")).toBeNull();
   });
 
   it("scans a screen on from blank when there was none before it", () => {
@@ -65,7 +69,8 @@ describe("scanWipe", () => {
     const views = screens();
     scanWipe(views, null);
     expect(views.classList.contains("is-wiping")).toBe(true);
-    expect(views.querySelector(".screen__ghost")).toBeNull();
+    const blank = views.querySelector(".screen__window > .screen__ghost")!;
+    expect(blank.childElementCount).toBe(0);
     vi.advanceTimersByTime(WIPE_MS);
     expect(views.classList.contains("is-wiping")).toBe(false);
   });

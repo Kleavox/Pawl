@@ -177,8 +177,7 @@ test("the receipt's paper feeds from the slot without the slot ever changing siz
 }) => {
   await page.goto(`${GATEWAY}/privacy.html`);
   const before = await boxOf(page, ".printer__slot");
-  const feed = await boxOf(page, "[data-receipt-frame]");
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(1700);
   const after = await boxOf(page, ".printer__slot");
   const paper = await boxOf(page, "[data-receipt]");
   expectSameBox(after, before, "slot after the feed");
@@ -199,8 +198,27 @@ test("the receipt's paper feeds from the slot without the slot ever changing siz
   );
   expect(Math.abs(paper.left - before.left - 6 * unit)).toBeLessThanOrEqual(1);
   expect(
-    Math.abs(feed.top - (before.top + before.height / 2)),
+    Math.abs(paper.top - (before.top + before.height / 2)),
   ).toBeLessThanOrEqual(1);
+});
+
+test("the paper hangs in front of the machine: read further and it rises over the machine, never into the slot", async ({
+  page,
+}) => {
+  await page.goto(`${GATEWAY}/privacy.html`);
+  await page.waitForTimeout(1700);
+  const slot = await boxOf(page, ".printer__slot");
+  await page
+    .locator("[data-receipt-frame]")
+    .evaluate((node) => (node.scrollTop = 400));
+  const above = await page.evaluate(
+    ([x, y]) => {
+      const hit = document.elementFromPoint(x!, y!);
+      return hit?.closest("[data-receipt]") !== null;
+    },
+    [slot.left + slot.width / 2, slot.top - 60],
+  );
+  expect(above, "a point above the slot shows the paper").toBe(true);
 });
 
 test("tearing a receipt off returns to the machine, which pulls back to the whole", async ({
@@ -447,9 +465,7 @@ test("a hinted arrival's first frame is the hinted framing and the pull-back nev
     const tick = () => {
       const camera = document.querySelector("[data-camera]");
       if (camera !== null) {
-        seen.push(
-          parseFloat(getComputedStyle(camera).getPropertyValue("--cam-s")),
-        );
+        seen.push(new DOMMatrix(getComputedStyle(camera).transform).a);
       }
       if (document.readyState !== "complete" || seen.length < 90) {
         requestAnimationFrame(tick);

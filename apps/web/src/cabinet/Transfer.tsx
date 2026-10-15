@@ -11,7 +11,7 @@ const GRID = `screen-transfer__grid absolute -inset-[50%] [background:linear-gra
 
 const CARTRIDGE = `screen-transfer__cartridge absolute top-1/2 left-1/2 grid justify-items-center gap-[18px] w-[min(420px,86vw)] pt-[28px] px-[24px] pb-[22px] border border-solid border-pw-cobalt rounded-[14px_14px_8px_8px] bg-pw-graphite-lo bg-[linear-gradient(165deg,var(--pw-graphite),var(--pw-graphite-lo))] shadow-[0_0_0_6px_rgb(47_107_255/18%),0_30px_80px_rgb(0_0_0/70%)] [transform:translate(-50%,-50%)] [[data-transfer]:not([data-transfer=none])_&]:animate-[cartridge-to-screen_var(--pw-t6)_var(--pw-ease-mech)_1_both] [[data-transfer-shape=wide]_&]:rounded-[6px_16px_6px_6px]`;
 
-const RAIL_BAR = `w-[34px] h-[4px] rounded-[2px] bg-pw-screen-edge [[data-transfer]:not([data-transfer=none])_&]:animate-[transfer-rail_var(--pw-t6)_linear_1_both]`;
+const RAIL_BAR = `relative w-[34px] h-[4px] rounded-[2px] bg-pw-screen-edge after:absolute after:inset-0 after:rounded-[inherit] after:bg-pw-cobalt after:opacity-0 [[data-transfer]:not([data-transfer=none])_&]:after:animate-[transfer-rail_var(--pw-t6)_linear_1_both]`;
 
 export function Transfer(props: {
   state: MachineState;

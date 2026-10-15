@@ -29,7 +29,7 @@ const RINGED =
   "shadow-[inset_0_0_0_--spacing(2)_var(--pw-cobalt-hi),0_0_--spacing(18)_var(--pw-cobalt-glow)]";
 
 const REFUSED =
-  "shadow-[inset_0_0_0_--spacing(1)_var(--pw-screen-edge)] animate-[tile-denied_540ms_steps(1,end)_1_both] motion-reduce:animate-none motion-reduce:shadow-[inset_0_0_0_--spacing(2)_var(--pw-danger)]";
+  "shadow-[inset_0_0_0_--spacing(1)_var(--pw-screen-edge)] after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_--spacing(2)_var(--pw-danger),0_0_--spacing(18)_rgb(255_77_94/45%)] after:opacity-0 after:pointer-events-none after:animate-[tile-denied_540ms_steps(1,end)_1_both] motion-reduce:after:animate-none motion-reduce:after:opacity-100";
 
 const CODE =
   "tile__code [grid-area:code] self-center [font:800_--spacing(14)/1_var(--pw-mono)] tracking-[0.1em] max-desk:[grid-area:art] max-desk:self-start max-desk:justify-self-start";

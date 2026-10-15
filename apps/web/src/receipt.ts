@@ -1,6 +1,7 @@
 export const TEAR_JERK_MS = 90;
 export const TEAR_RIP_MS = 120;
-export const TEAR_FALL_MS = 380;
+export const TEAR_FALL_MS = 560;
+export const FEED_MS = 540;
 const SCROLL_BACK_MS = 340;
 
 function wait(ms: number): Promise<void> {

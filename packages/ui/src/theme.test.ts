@@ -96,3 +96,68 @@ describe("the machine's design tokens", () => {
     expect(theme).not.toMatch(/--dt-/);
   });
 });
+
+describe("motion the compositor can run alone", () => {
+  it("moves every keyframe by transform and opacity only, so no frame repaints", () => {
+    const heavy: string[] = [];
+    for (const match of theme.matchAll(/@keyframes ([\w-]+)\s*\{/g)) {
+      let depth = 0;
+      let end = match.index;
+      for (let at = match.index; at < theme.length; at += 1) {
+        if (theme[at] === "{") depth += 1;
+        if (theme[at] === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            end = at;
+            break;
+          }
+        }
+      }
+      const body = theme.slice(match.index + match[0].length, end);
+      for (const property of body.matchAll(/([a-z-]+)\s*:/g)) {
+        if (!["transform", "opacity"].includes(property[1]!)) {
+          heavy.push(`${match[1]}: ${property[1]}`);
+        }
+      }
+    }
+    expect([...new Set(heavy)]).toEqual([]);
+  });
+});
+
+describe("the receipt's torn edges", () => {
+  function teeth(utility: string): number[] {
+    const start = theme.indexOf(`@utility ${utility} {`);
+    expect(start, utility).toBeGreaterThan(-1);
+    const body = theme.slice(start, theme.indexOf("}", start));
+    const points = /points='([^']+)'/.exec(body)![1]!.trim().split(" ");
+    return points.map((point) => Number(point.split(",")[0]));
+  }
+
+  it("tears unevenly, as paper does against a printer's teeth, never in a regular zigzag", () => {
+    for (const utility of ["receipt-edge", "receipt-torn"]) {
+      const xs = teeth(utility);
+      const widths = new Set(
+        xs.slice(1).map((x, index) => Math.round(Math.abs(x - xs[index]!))),
+      );
+      expect(widths.size, utility).toBeGreaterThan(3);
+    }
+  });
+});
+
+describe("the printer's slot line", () => {
+  it("is named once, and both the camera and the receipt hang from it", () => {
+    expect(theme).toMatch(/--slot-line:\s*26svh;/);
+    expect(theme.match(/26svh/g)).toHaveLength(1);
+    expect(theme).toMatch(/--cam-y: calc\(\s*var\(--slot-line\)/);
+  });
+});
+
+describe("the scan line", () => {
+  it("leaves the screen when its sweep ends, even if the clean-up comes late", () => {
+    const start = theme.indexOf("@keyframes wipe-line {");
+    const body = theme.slice(start, theme.indexOf("\n}\n", start));
+    expect(body).toMatch(
+      /to\s*\{\s*transform: translateY\(calc\(20 \* var\(--u\)\)\);/,
+    );
+  });
+});

@@ -82,6 +82,28 @@ test("paw.'s sign-in lives on its screen, not in a dialog", async ({
   await expect(methods.locator("[data-method]").first()).toBeFocused();
 });
 
+test("while the scan line sweeps, the old screen's ghost hides the new one below it", async ({
+  page,
+}) => {
+  await page.goto(`${PASS}/`);
+  await expect(view(page, "methods")).toBeVisible();
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { ghosts: string[] }).ghosts = seen;
+    new MutationObserver(() => {
+      const node = document.querySelector(".screen__window > .screen__ghost");
+      if (node !== null) seen.push(getComputedStyle(node).backgroundImage);
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  await view(page, "methods").locator("[data-method='email']").click();
+  const ghost = await page.evaluate(
+    () => (window as unknown as { ghosts: string[] }).ghosts[0] ?? null,
+  );
+  expect(ghost, "a ghost is on screen during the wipe").not.toBeNull();
+  expect(ghost, "the ghost paints the screen's glass").not.toBe("none");
+});
+
 test("a step back walks one step, and ‹ MACHINE leaves for the cabinet", async ({
   page,
 }) => {

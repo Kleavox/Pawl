@@ -216,6 +216,7 @@
       radial-gradient(70% 40% at 50% 0%, rgb(47 107 255 / 6%), transparent 70%),
       linear-gradient(180deg, var(--pw-glass-hi), var(--pw-glass));
 
+    --slot-line: 26svh;
     --mw: 1000;
     --mh: 748;
     --margin: 24px;
@@ -380,12 +381,6 @@
   initial-value: 0px;
 }
 
-@keyframes pw-scan {
-  to {
-    background-position: -1200% 0;
-  }
-}
-
 @keyframes machine-ticker {
   0%,
   12% {
@@ -402,14 +397,12 @@
 @keyframes printer-blink {
   0%,
   50% {
-    background: var(--pw-ok);
-    box-shadow: 0 0 calc(6 * var(--u)) var(--pw-ok);
+    opacity: 1;
   }
   25%,
   75%,
   100% {
-    background: var(--pw-off);
-    box-shadow: none;
+    opacity: 0;
   }
 }
 
@@ -445,15 +438,13 @@
   0%,
   33%,
   66% {
-    box-shadow:
-      inset 0 0 0 calc(2 * var(--u)) var(--pw-danger),
-      0 0 calc(18 * var(--u)) rgb(255 77 94 / 45%);
+    opacity: 1;
   }
   16%,
   50%,
   83%,
   100% {
-    box-shadow: inset 0 0 0 calc(1 * var(--u)) var(--pw-screen-edge);
+    opacity: 0;
   }
 }
 
@@ -472,30 +463,30 @@
   }
 }
 
-@keyframes wipe-in {
+@keyframes wipe-window {
   from {
-    clip-path: inset(0 0 100% 0);
+    transform: translateY(0);
   }
   to {
-    clip-path: inset(0 0 0 0);
+    transform: translateY(100%);
   }
 }
 
-@keyframes wipe-out {
+@keyframes wipe-ghost {
   from {
-    clip-path: inset(0 0 0 0);
+    transform: translateY(0);
   }
   to {
-    clip-path: inset(100% 0 0 0);
+    transform: translateY(-100%);
   }
 }
 
 @keyframes wipe-line {
   from {
-    top: 0;
+    transform: translateY(-100%);
   }
   to {
-    top: 100%;
+    transform: translateY(calc(20 * var(--u)));
   }
 }
 
@@ -599,7 +590,7 @@
 
 @keyframes transfer-rail {
   to {
-    background: var(--pw-cobalt);
+    opacity: 1;
   }
 }
 
@@ -614,31 +605,20 @@
 
 @keyframes printer-blink-once {
   0% {
-    background: var(--pw-ok);
-    box-shadow: 0 0 calc(6 * var(--u)) var(--pw-ok);
+    opacity: 1;
   }
   50%,
   100% {
-    background: var(--pw-off);
-    box-shadow: none;
-  }
-}
-
-@keyframes pass-wipe-in {
-  from {
-    clip-path: inset(0 0 100% 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
+    opacity: 0;
   }
 }
 
 @keyframes pass-scan-off {
   from {
-    clip-path: inset(0 0 0 0);
+    transform: translateY(-100%);
   }
   to {
-    clip-path: inset(100% 0 0 0);
+    transform: translateY(0);
   }
 }
 
@@ -651,18 +631,61 @@
   }
 }
 
+@keyframes receipt-settle {
+  0% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(calc(4 * var(--u)));
+  }
+  60% {
+    transform: translateY(calc(-1.5 * var(--u)));
+  }
+  85% {
+    transform: translateY(calc(0.5 * var(--u)));
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
 @keyframes receipt-fall {
   0% {
-    transform: translateY(calc(6 * var(--u))) rotate(2deg);
+    transform: perspective(900px) translateY(calc(6 * var(--u))) rotate(2deg)
+      rotateX(0deg);
     opacity: 1;
   }
+  22% {
+    transform: perspective(900px) translateY(18svh) rotate(-2deg) rotateX(14deg);
+  }
+  45% {
+    transform: perspective(900px) translateY(42svh) rotate(5deg) rotateX(-10deg);
+  }
   70% {
+    transform: perspective(900px) translateY(72svh) rotate(-1deg) rotateX(8deg);
     opacity: 1;
   }
   100% {
-    transform: translateY(110svh) rotate(8deg);
+    transform: perspective(900px) translateY(115svh) rotate(8deg) rotateX(-6deg);
     opacity: 0;
   }
+}
+
+@utility receipt-edge {
+  mask:
+    linear-gradient(var(--pw-black) 0 0) top / 100% calc(100% - 12px) no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='12' viewBox='0 0 240 12' preserveAspectRatio='none'%3E%3Cpolygon points='0,0 240,0 240,7 231,2 224,11 212,4 205,12 196,2 186,10 178,5 167,12 160,3 151,9 139,2 131,11 122,4 113,12 104,5 97,10 85,3 77,12 69,4 58,11 49,2 41,9 30,4 22,12 13,3 6,10 0,7' fill='black'/%3E%3C/svg%3E")
+      bottom / 240px 12px repeat-x;
+}
+
+@utility receipt-torn {
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='10' viewBox='0 0 240 10' preserveAspectRatio='none'%3E%3Cpolygon points='0,10 240,10 240,5 233,1 225,8 214,2 207,9 197,3 188,10 180,1 171,7 159,2 151,9 142,4 133,8 121,1 114,10 105,3 96,7 86,1 78,9 70,3 61,8 50,2 43,10 33,4 24,8 15,1 7,9 0,5' fill='black'/%3E%3C/svg%3E")
+      top / 240px 10px repeat-x,
+    linear-gradient(var(--pw-black) 0 0) 0 10px / 100% calc(100% - 22px)
+      no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='12' viewBox='0 0 240 12' preserveAspectRatio='none'%3E%3Cpolygon points='0,0 240,0 240,7 231,2 224,11 212,4 205,12 196,2 186,10 178,5 167,12 160,3 151,9 139,2 131,11 122,4 113,12 104,5 97,10 85,3 77,12 69,4 58,11 49,2 41,9 30,4 22,12 13,3 6,10 0,7' fill='black'/%3E%3C/svg%3E")
+      bottom / 240px 12px repeat-x;
 }
 
 @utility camera-whole {
@@ -690,7 +713,7 @@
 @utility camera-printer {
   --cam-s: var(--printer-s);
   --cam-x: calc(50dvw - var(--slot-cx) * var(--u) * var(--cam-s));
-  --cam-y: calc(26svh - var(--slot-cy) * var(--u) * var(--cam-s));
+  --cam-y: calc(var(--slot-line) - var(--slot-cy) * var(--u) * var(--cam-s));
 }
 
 @utility room-printer {

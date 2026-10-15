@@ -13,8 +13,8 @@ afterEach(() => {
 });
 
 describe("tearOff", () => {
-  it("jerks for 90 ms, rips for 120 ms and falls for 380 ms", () => {
-    expect([TEAR_JERK_MS, TEAR_RIP_MS, TEAR_FALL_MS]).toEqual([90, 120, 380]);
+  it("jerks for 90 ms, rips for 120 ms and falls, fluttering, for 560 ms", () => {
+    expect([TEAR_JERK_MS, TEAR_RIP_MS, TEAR_FALL_MS]).toEqual([90, 120, 560]);
   });
 
   it("jerks, rips and falls, then is gone", async () => {

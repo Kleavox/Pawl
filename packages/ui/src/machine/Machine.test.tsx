@@ -41,6 +41,13 @@ describe("Machine", () => {
     );
   });
 
+  it("glides the camera on transform, which the compositor runs, and promotes it only while it moves", () => {
+    const camera = drawn().querySelector("[data-camera]")!;
+    expect(camera.className).toContain("transition-[transform]");
+    expect(camera.className).not.toMatch(/transition-\[--cam/);
+    expect(camera.className).toContain("data-moving:will-change-transform");
+  });
+
   it("runs the hint script before the camera exists, so no frame can paint the camera unhinted", () => {
     const html = renderToStaticMarkup(<Machine {...BASE} />);
     expect(html).toMatch(
