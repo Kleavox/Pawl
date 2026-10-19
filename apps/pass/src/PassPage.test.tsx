@@ -38,6 +38,12 @@ describe("paw.'s prerendered page", () => {
     expect(shell).toContain(`<script>${CAMERA_HINT_SCRIPT}</script>`);
   });
 
+  it("keeps paw.'s hashed assets in the browser for good", () => {
+    expect(headers).toContain(
+      "/assets/*\n  Cache-Control: public, max-age=31536000, immutable",
+    );
+  });
+
   it("lets the camera hint run under paw.'s content security policy", () => {
     const policy = headers
       .split("\n")

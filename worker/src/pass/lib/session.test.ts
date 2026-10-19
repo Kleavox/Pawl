@@ -1,5 +1,5 @@
 import type { Identity } from "@pawl/core";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../env";
 import {
   createSession,
@@ -33,6 +33,13 @@ class MemoryKv {
     if (options?.metadata !== undefined) {
       this.metadata.set(key, options.metadata);
     }
+  }
+
+  async getWithMetadata(key: string) {
+    return {
+      value: this.values.get(key) ?? null,
+      metadata: this.metadata.get(key) ?? null,
+    };
   }
 
   async delete(key: string): Promise<void> {
@@ -190,5 +197,80 @@ describe("sessions", () => {
     await expect(getSession(env, phone.token)).resolves.toBeNull();
     await expect(getSession(env, laptop.token)).resolves.not.toBeNull();
     await expect(listSessions(env, identity.id)).resolves.toHaveLength(1);
+  });
+});
+
+describe("a session in use", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const start = Date.parse("2026-10-01T00:00:00.000Z");
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function made() {
+    vi.useFakeTimers({ now: start, toFake: ["Date"] });
+    const kv = new MemoryKv();
+    const env = {
+      SESSIONS: kv as unknown as KVNamespace,
+      DB: noAccounts,
+    } as Env;
+    const created = await createSession(env, identity, 1, {
+      userAgent: "Phone UA",
+      ip: "10.0.0.2",
+    });
+    return { kv, env, token: created.token };
+  }
+
+  function at(days: number) {
+    vi.setSystemTime(start + days * DAY);
+  }
+
+  it("lives seven days past its last use", async () => {
+    const { env, token } = await made();
+    at(5);
+    expect((await getSession(env, token))?.expiresAt).toBe(
+      new Date(start + 12 * DAY).toISOString(),
+    );
+    at(11);
+    expect(await getSession(env, token)).not.toBeNull();
+  });
+
+  it("ends seven days after its last use", async () => {
+    const { env, token } = await made();
+    at(7.01);
+    expect(await getSession(env, token)).toBeNull();
+  });
+
+  it("never lives past thirty days", async () => {
+    const { env, token } = await made();
+    for (const day of [5, 10, 15, 20, 25, 29]) {
+      at(day);
+      const session = await getSession(env, token);
+      expect(Date.parse(session?.expiresAt ?? "")).toBeLessThanOrEqual(
+        start + 30 * DAY,
+      );
+    }
+    at(30.01);
+    expect(await getSession(env, token)).toBeNull();
+  });
+
+  it("is not rewritten while most of its week is left", async () => {
+    const { env, token } = await made();
+    at(1);
+    expect((await getSession(env, token))?.expiresAt).toBe(
+      new Date(start + 7 * DAY).toISOString(),
+    );
+  });
+
+  it("keeps its device entry in step", async () => {
+    const { env, token } = await made();
+    at(5);
+    await getSession(env, token);
+    const [device] = await listSessions(env, identity.id);
+    expect(device).toMatchObject({
+      userAgent: "Phone UA",
+      expiresAt: new Date(start + 12 * DAY).toISOString(),
+    });
   });
 });

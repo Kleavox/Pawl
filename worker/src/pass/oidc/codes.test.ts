@@ -11,6 +11,7 @@ const input: CodeInput = {
   codeChallenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
   nonce: "n-0S6",
   scopes: ["openid", "email"],
+  sessionId: "session-1",
 };
 
 let db: TestDb;

@@ -23,7 +23,7 @@ import type { OAuthProfile, OAuthProvider } from "../lib/oauth";
 import { getSession, readSessionToken } from "../lib/session";
 
 export type AppEnv = { Bindings: Env };
-type AppContext = Context<AppEnv>;
+export type AppContext = Context<AppEnv>;
 export type PassApp = Hono<AppEnv>;
 
 interface UserRow {

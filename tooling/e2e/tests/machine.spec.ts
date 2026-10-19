@@ -1684,6 +1684,7 @@ test("cancel still leaves the bridge after the transfer has resolved", async ({
   page,
 }) => {
   await page.goto(GATEWAY);
+  await expect(page.locator("[data-screen]")).toHaveText("PICK A BAY");
   await page.evaluate(() => {
     document.querySelector<HTMLElement>("[data-cartridge='7']")!.dataset.href =
       "#stay";

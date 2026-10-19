@@ -78,11 +78,22 @@ fn services(registry: &Registry, name: impl Fn(&str) -> String) -> Value {
     )
 }
 
-fn rate_limits(authorize: u32, token: u32) -> Value {
-    json!([
-        { "name": "AUTHORIZE_RATE_LIMIT", "namespace_id": "3401", "simple": { "limit": authorize, "period": 60 } },
-        { "name": "TOKEN_RATE_LIMIT", "namespace_id": "3402", "simple": { "limit": token, "period": 60 } },
-    ])
+fn rate_limits(local: bool) -> Value {
+    let limit = |production: u32| if local { 1000 } else { production };
+    Value::Array(
+        [
+            ("AUTHORIZE_RATE_LIMIT", "3401", 30),
+            ("TOKEN_RATE_LIMIT", "3402", 60),
+            ("SIGNIN_RATE_LIMIT", "3403", 10),
+            ("SIGNIN_TRY_LIMIT", "3404", 30),
+            ("SIGNIN_FAILURE_LIMIT", "3405", 10),
+        ]
+        .into_iter()
+        .map(|(name, namespace, production)| {
+            json!({ "name": name, "namespace_id": namespace, "simple": { "limit": limit(production), "period": 60 } })
+        })
+        .collect(),
+    )
 }
 
 pub struct Production<'a> {
@@ -136,7 +147,7 @@ pub fn production(input: &Production) -> Result<Value, String> {
             "migrations_dir": "../../worker/migrations",
         }],
         "services": services(&registry, str::to_owned),
-        "ratelimits": rate_limits(30, 60),
+        "ratelimits": rate_limits(false),
         "routes": routes,
     }))
 }
@@ -178,7 +189,7 @@ pub fn local(root: &Path, manifest: &str, signing_key: &str) -> Result<Value, St
             "migrations_dir": path("worker/migrations"),
         }],
         "services": services(&registry, |service| format!("local-{service}")),
-        "ratelimits": rate_limits(1000, 1000),
+        "ratelimits": rate_limits(true),
     }))
 }
 
@@ -291,6 +302,22 @@ mod tests {
         let limit = |config: &Value| config["ratelimits"][0]["simple"]["limit"].clone();
         assert_eq!(limit(&production(&input("")).unwrap()), 30);
         assert_eq!(limit(&local(&root(), FIXTURE, "key").unwrap()), 1000);
+    }
+
+    #[test]
+    fn counts_sign_ins_at_the_edge() {
+        let config = production(&input("")).unwrap();
+        let named = |name: &str| {
+            config["ratelimits"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entry| entry["name"] == name)
+                .map(|entry| entry["simple"]["limit"].clone())
+        };
+        assert_eq!(named("SIGNIN_RATE_LIMIT"), Some(json!(10)));
+        assert_eq!(named("SIGNIN_TRY_LIMIT"), Some(json!(30)));
+        assert_eq!(named("SIGNIN_FAILURE_LIMIT"), Some(json!(10)));
     }
 
     #[test]

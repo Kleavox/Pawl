@@ -4,10 +4,27 @@ import { listSessions } from "../lib/session";
 import { claimsFor, findClaimsUser } from "../oidc/claims";
 import { findGrant } from "../oidc/grants";
 import { findOutsideApp, listOutsideApps } from "../oidc/outside";
+import { renewAccessToken } from "../oidc/renew";
 import { mintCardToken } from "../oidc/tokens";
 import { apiError, checkVerification, type PassApp } from "./shared";
 
 export function registerInternalRoutes(app: PassApp): void {
+  app.post("/internal/renew", async (context) => {
+    if (new URL(context.req.url).hostname !== INTERNAL_HOSTS.PASS) {
+      return context.body(null, 404);
+    }
+    const body = (await context.req.json().catch(() => null)) as {
+      token?: unknown;
+    } | null;
+    const renewed =
+      typeof body?.token === "string"
+        ? await renewAccessToken(context.env, body.token)
+        : null;
+    return renewed === null
+      ? context.json({ code: "session_ended" }, 401)
+      : context.json({ access_token: renewed });
+  });
+
   app.get("/internal/outside-apps", async (context) => {
     if (new URL(context.req.url).hostname !== INTERNAL_HOSTS.PASS) {
       return context.body(null, 404);

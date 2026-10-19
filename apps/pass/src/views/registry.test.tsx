@@ -148,8 +148,13 @@ describe("registered apps on paw.", () => {
     await go();
     await go();
     await go();
-    expect(await screen.findByText(/older than 15 minutes/)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Sign in again" })).toBeVisible();
+    expect(
+      await screen.findByText("Sign in again to change registered apps."),
+    ).toBeVisible();
+    expect(api).toHaveBeenCalledWith("/api/logout", {});
+    expect(
+      screen.getByRole("heading", { name: /Sign in to Fixture/ }),
+    ).toBeVisible();
   });
 
   it("removes an app after one confirmation", async () => {

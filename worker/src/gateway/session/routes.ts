@@ -1,4 +1,4 @@
-import { readCookie } from "@pawl/auth";
+import { readCookie, SIGNED_IN_COOKIE } from "@pawl/auth";
 import { pkceS256 } from "@pawl/oidc";
 import type { Hono } from "hono";
 
@@ -51,6 +51,20 @@ function cookie(name: string, value: string, maxAge: number): string {
   return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
+export function sessionCookie(
+  token: string,
+  maxAge = SESSION_COOKIE_MAX_AGE,
+): string {
+  return cookie(SESSION_COOKIE_NAME, token, maxAge);
+}
+
+function forgetSignedInHint(url: URL, env: SessionEnv): string {
+  const root = env.PUBLIC_ORIGIN ? new URL(env.PUBLIC_ORIGIN).hostname : "";
+  const shared =
+    root !== "" && (url.hostname === root || url.hostname.endsWith(`.${root}`));
+  return `${SIGNED_IN_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0${shared ? `; Domain=.${root}` : ""}`;
+}
+
 function browserSessionCookie(name: string, value: string): string {
   return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax`;
 }
@@ -71,7 +85,8 @@ export async function silentArrival(
   if (state.kind === "signed-in") return null;
   if (
     state.kind === "guest" &&
-    readCookie(request, SILENT_COOKIE_NAME) === "1"
+    (readCookie(request, SILENT_COOKIE_NAME) === "1" ||
+      readCookie(request, SIGNED_IN_COOKIE) !== "1")
   ) {
     return null;
   }
@@ -191,20 +206,32 @@ export function registerSessionRoutes<E extends { Bindings: SessionEnv }>(
     context.header("Set-Cookie", cookie(SIGNIN_COOKIE_NAME, "", 0), {
       append: true,
     });
-    if (!pending || url.searchParams.get("state") !== pending.state) {
-      return context.json(
+    const toCabinet = (search: string) => {
+      context.header(
+        "Set-Cookie",
+        browserSessionCookie(SILENT_COOKIE_NAME, "1"),
         {
-          code: "SIGNIN_STATE_MISMATCH",
-          message: "This sign-in was not started here. Start it again.",
+          append: true,
         },
-        400,
       );
+      return context.redirect(
+        new URL(`/${search}`, url.origin).toString(),
+        302,
+      );
+    };
+    if (!pending || url.searchParams.get("state") !== pending.state) {
+      return toCabinet("");
     }
     const back = new URL(pending.returnTo, url.origin).toString();
     if (url.searchParams.get("error")) {
       context.header("Set-Cookie", cookie(SESSION_COOKIE_NAME, "", 0), {
         append: true,
       });
+      if (url.searchParams.get("error") === "login_required") {
+        context.header("Set-Cookie", forgetSignedInHint(url, env), {
+          append: true,
+        });
+      }
       return context.redirect(back, 302);
     }
     if (
@@ -260,13 +287,7 @@ export function registerSessionRoutes<E extends { Bindings: SessionEnv }>(
       access?.kind !== "valid" ||
       access.claims.sub !== id.claims.sub
     ) {
-      return context.json(
-        {
-          code: "SIGNIN_FAILED",
-          message: "Pawl did not complete this sign-in. Start it again.",
-        },
-        502,
-      );
+      return toCabinet("?signin=failed");
     }
     context.header(
       "Set-Cookie",

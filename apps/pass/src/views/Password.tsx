@@ -4,12 +4,13 @@ import { Back, Field, Form, Kbd, Note, PW_LINK, Title } from "@pawl/ui";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { api } from "../helpers";
-import { useChallenge } from "../useChallenge";
+import { useChallenge, useHumanCheck } from "../useChallenge";
 import { finish, Frame, SCREEN_FORM, usePass } from "./context";
 
 export function PasswordStep(): ReactNode {
   const pass = usePass();
   const shown = pass.state.view === "password";
+  const human = useHumanCheck(shown);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [wasShown, setWasShown] = useState(shown);
@@ -25,15 +26,16 @@ export function PasswordStep(): ReactNode {
     pass.dispatch({ type: "say", say: null });
     pass.dispatch({ type: "busy", busy: true });
     try {
-      const { salt } = await api<{ salt: string | null }>(
-        "/api/login/prelogin",
-        { email },
+      const { salt } = await human.checked(() =>
+        api<{ salt: string | null }>("/api/login/prelogin", { email }),
       );
       if (!salt) throw new Error("Email or password is incorrect.");
       const { authVerifier } = await deriveLoginKeys(password, salt);
-      const response = await api<{ authenticated: true; user: Identity }>(
-        "/api/login",
-        { email, authVerifier },
+      const response = await human.checked(() =>
+        api<{ authenticated: true; user: Identity }>("/api/login", {
+          email,
+          authVerifier,
+        }),
       );
       finish(pass, response.user);
     } catch (cause) {
@@ -90,6 +92,7 @@ export function PasswordStep(): ReactNode {
           onChange={(event) => setPassword(event.target.value)}
         />
       </Form>
+      {human.widget}
       <Note tone="line" aside>
         <button
           className={PW_LINK}

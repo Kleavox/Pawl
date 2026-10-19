@@ -141,6 +141,29 @@ test("the cabinet trusts only its own session, and gets one from Pawl without a 
   });
 });
 
+test("signing out on paw. signs the cabinet out at once, not when its token runs out", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const account = await freshAccount(page, "probeleave");
+  await signInAtProvider(page, account);
+  await page.goto(`${CABINET}/`);
+  await expect(page.locator("[data-account-name]")).toHaveText(account.user, {
+    timeout: 20_000,
+  });
+  await page.goto(`${PROVIDER}/`);
+  await openSection(page, "Devices");
+  await page.getByRole("button", { name: "Sign out of this device" }).click();
+  await expect(page.locator("[data-view-panel='methods']")).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.goto(`${CABINET}/`);
+  await expect(page.locator("[data-cabinet-state]")).toHaveText("GUEST MODE", {
+    timeout: 20_000,
+  });
+  await expect(page.locator("[data-sign-in]")).toBeVisible();
+});
+
 const BEHIND_ITS_OWN_LOGIN = "http://localhost:8792";
 
 test("an app behind its own login, as Cloudflare Access is, signs a person in with a client secret", async ({

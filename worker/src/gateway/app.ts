@@ -25,7 +25,12 @@ import {
   sessionState,
   type SessionEnv,
 } from "./session/resolve";
-import { registerSessionRoutes, silentArrival } from "./session/routes";
+import { renewalOf, withSessionToken } from "./session/renew";
+import {
+  registerSessionRoutes,
+  sessionCookie,
+  silentArrival,
+} from "./session/routes";
 import {
   buildEstate,
   readEstate,
@@ -115,6 +120,24 @@ app.onError((error, context) => {
 app.get("/health", (context) =>
   context.json({ service: "gateway", status: "ok" }),
 );
+
+app.use("*", async (context, next) => {
+  const path = context.req.path;
+  if (path.startsWith("/assets/") || path.startsWith("/auth/")) return next();
+  const reading = path === "/api/session";
+  const renewal = await renewalOf(context.req.raw, context.env, reading).catch(
+    () => null,
+  );
+  if (renewal?.kind === "ended" && reading) {
+    context.header("Set-Cookie", sessionCookie("", 0));
+    return context.json({ authenticated: false, reason: "expired" });
+  }
+  if (renewal?.kind !== "renewed") return next();
+  context.req.raw = withSessionToken(context.req.raw, renewal.token);
+  await next();
+  context.res = new Response(context.res.body, context.res);
+  context.res.headers.append("Set-Cookie", sessionCookie(renewal.token));
+});
 
 registerSessionRoutes(app);
 

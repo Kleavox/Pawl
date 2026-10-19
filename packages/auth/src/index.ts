@@ -1,11 +1,12 @@
 import {
   INTERNAL_URLS,
   SESSION_COOKIE,
+  SIGNED_IN_COOKIE,
   VERIFICATION_COOKIE,
 } from "@pawl/config";
 import type { SessionIdentity } from "@pawl/core";
 
-export { SESSION_COOKIE, VERIFICATION_COOKIE };
+export { SESSION_COOKIE, SIGNED_IN_COOKIE, VERIFICATION_COOKIE };
 export { verifyTurnstile, type TurnstileEnv } from "./turnstile";
 
 export type VerificationScope = "basic" | "fresh";

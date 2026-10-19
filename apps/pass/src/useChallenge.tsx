@@ -1,4 +1,5 @@
 import { Turnstile } from "@marsidev/react-turnstile";
+import { ApiError } from "@pawl/core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { PW_LINK } from "@pawl/ui";
@@ -127,7 +128,10 @@ export function useChallenge(
     return wait;
   };
 
-  const retry = () => setAttempt((value) => value + 1);
+  const retry = () => {
+    statusRef.current = "checking";
+    setAttempt((value) => value + 1);
+  };
 
   const widget =
     status === "ready" ? null : (
@@ -165,4 +169,32 @@ export function useChallenge(
     retry,
     widget,
   };
+}
+
+export function useHumanCheck(shown: boolean): {
+  checked: <T>(run: () => Promise<T>) => Promise<T>;
+  widget: ReactNode;
+} {
+  const [asked, setAsked] = useState(false);
+  const challenge = useChallenge({
+    active: shown && asked,
+    scope: "basic",
+    skipStatusCheck: true,
+  });
+
+  async function checked<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (cause) {
+      if (!(cause instanceof ApiError) || cause.code !== "challenge_required") {
+        throw cause;
+      }
+      if (asked) challenge.retry();
+      setAsked(true);
+      await challenge.ensure();
+      return run();
+    }
+  }
+
+  return { checked, widget: shown && asked ? challenge.widget : null };
 }

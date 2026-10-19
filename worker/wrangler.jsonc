@@ -36,6 +36,30 @@
         "period": 60,
       },
     },
+    {
+      "name": "SIGNIN_RATE_LIMIT",
+      "namespace_id": "3403",
+      "simple": {
+        "limit": 10,
+        "period": 60,
+      },
+    },
+    {
+      "name": "SIGNIN_TRY_LIMIT",
+      "namespace_id": "3404",
+      "simple": {
+        "limit": 30,
+        "period": 60,
+      },
+    },
+    {
+      "name": "SIGNIN_FAILURE_LIMIT",
+      "namespace_id": "3405",
+      "simple": {
+        "limit": 10,
+        "period": 60,
+      },
+    },
   ],
   "kv_namespaces": [
     {

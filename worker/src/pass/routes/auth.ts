@@ -1,15 +1,20 @@
-import { readCookie, VERIFICATION_COOKIE, verifyTurnstile } from "@pawl/auth";
+import {
+  readCookie,
+  SIGNED_IN_COOKIE,
+  VERIFICATION_COOKIE,
+  verifyTurnstile,
+} from "@pawl/auth";
 
 import { findAccountKeys } from "../account/credentials";
 import {
   clearSessionCookie,
   makeSessionCookie,
   makeVerificationCookie,
+  signedInHint,
   VERIFICATION_TTL_SECONDS,
 } from "../lib/cookies";
 import { hashToken, randomToken, verifyAuthVerifier } from "../lib/crypto";
 import { safeReturnTo } from "../lib/oauth";
-import { rateLimit } from "../lib/rate-limit";
 import {
   createSession,
   deleteSession,
@@ -30,13 +35,18 @@ import {
   firstIssue,
   loginSchema,
   preloginSchema,
-  rateLimitError,
   safeAudit,
   sessionClient,
   toIdentity,
   type PassApp,
   type VerificationRecord,
 } from "./shared";
+import {
+  edgeLimited,
+  guardSignIn,
+  noteFailedSignIn,
+  rememberDevice,
+} from "./guard";
 
 export function registerAuthRoutes(app: PassApp): void {
   app.post("/api/login/prelogin", async (context) => {
@@ -44,17 +54,12 @@ export function registerAuthRoutes(app: PassApp): void {
     if (!body.success) {
       return apiError(context, 400, "invalid_input", firstIssue(body.error));
     }
-    const limit = await rateLimit(
-      context.env,
-      "prelogin-ip",
-      clientIp(context.req.raw),
-      30,
-      900,
-    );
-    if (!limit.allowed) return rateLimitError(context, limit.retryAfter);
+    const held = await guardSignIn(context, "prelogin", body.data.email);
+    if (held) return held;
 
     const user = await findUserByEmail(context.env, body.data.email);
     const keys = user?.id ? await findAccountKeys(context.env, user.id) : null;
+    if (!keys) await noteFailedSignIn(context, body.data.email);
     return context.json({ salt: keys?.kdf_salt ?? null });
   });
 
@@ -64,21 +69,8 @@ export function registerAuthRoutes(app: PassApp): void {
       return apiError(context, 400, "invalid_input", firstIssue(body.error));
     }
 
-    const ip = clientIp(context.req.raw);
-    const ipLimit = await rateLimit(context.env, "login-ip", ip, 20, 900);
-    const emailLimit = await rateLimit(
-      context.env,
-      "login-email",
-      body.data.email,
-      10,
-      900,
-    );
-    if (!ipLimit.allowed || !emailLimit.allowed) {
-      return rateLimitError(
-        context,
-        Math.max(ipLimit.retryAfter, emailLimit.retryAfter),
-      );
-    }
+    const held = await guardSignIn(context, "login", body.data.email);
+    if (held) return held;
 
     const user = await findUserByEmail(context.env, body.data.email);
     const keys = user?.id ? await findAccountKeys(context.env, user.id) : null;
@@ -89,11 +81,14 @@ export function registerAuthRoutes(app: PassApp): void {
         )
       : false;
     if (!user || !keys || !verifierValid || user.disabled_at) {
-      await safeAudit(context.env, {
-        userId: user?.id,
-        type: "login_failed",
-        request: context.req.raw,
-      });
+      await noteFailedSignIn(context, body.data.email);
+      if (user) {
+        await safeAudit(context.env, {
+          userId: user.id,
+          type: "login_failed",
+          request: context.req.raw,
+        });
+      }
       return apiError(
         context,
         401,
@@ -133,6 +128,7 @@ export function registerAuthRoutes(app: PassApp): void {
       "Set-Cookie",
       makeSessionCookie(context.req.raw, context.env, created.token),
     );
+    await rememberDevice(context, body.data.email);
     return context.json({ authenticated: true, user: identity });
   });
 
@@ -158,7 +154,21 @@ export function registerAuthRoutes(app: PassApp): void {
   app.get("/api/session", async (context) => {
     const token = readSessionToken(context.req.raw);
     const session = token ? await getSession(context.env, token) : null;
-    if (!session) return context.json({ authenticated: false });
+    if (!session) {
+      if (token) {
+        context.header(
+          "Set-Cookie",
+          clearSessionCookie(context.req.raw, context.env),
+        );
+      }
+      return context.json({ authenticated: false });
+    }
+    if (readCookie(context.req.raw, SIGNED_IN_COOKIE) !== "1") {
+      context.header(
+        "Set-Cookie",
+        signedInHint(context.req.raw, context.env, true),
+      );
+    }
 
     return context.json({
       authenticated: true,
@@ -263,6 +273,8 @@ export function registerAuthRoutes(app: PassApp): void {
       return apiError(context, 400, "invalid_input", firstIssue(body.error));
     }
 
+    const limited = await edgeLimited(context, "challenge", null);
+    if (limited) return limited;
     const ip = clientIp(context.req.raw);
     if (!(await verifyTurnstile(context.env, body.data.token, ip))) {
       return apiError(

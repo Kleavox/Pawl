@@ -43,6 +43,7 @@ export type PassState = {
   page: number;
   busy: boolean;
   say: Say;
+  resume: PassView | null;
 };
 
 export type Route =
@@ -68,7 +69,8 @@ export type PassEvent =
   | { type: "busy"; busy: boolean }
   | { type: "say"; say: Say }
   | { type: "back" }
-  | { type: "signed-out" };
+  | { type: "signed-out" }
+  | { type: "expired"; text: string };
 
 export const CODE_LENGTH = 6;
 
@@ -124,6 +126,22 @@ const SECTIONS: ReadonlySet<PassView> = new Set([
   "registry-secret",
 ]);
 
+const RESUMABLE: ReadonlySet<PassView> = new Set<PassView>([
+  "account",
+  "profile",
+  "profile-name",
+  "profile-key",
+  "devices",
+  "apps",
+  "security",
+  "delete",
+  "registry",
+  "registry-name",
+  "registry-label",
+  "registry-return",
+  "registry-remove",
+]);
+
 const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 export function initialFlow(): PassState {
@@ -135,6 +153,7 @@ export function initialFlow(): PassState {
     page: 0,
     busy: false,
     say: null,
+    resume: null,
   };
 }
 
@@ -202,7 +221,8 @@ export function reduceFlow(state: PassState, event: PassEvent): PassState {
         say: { kind: "error", text: event.text },
       };
     case "signed-in":
-      return opened(state, event.needsUsername ? "welcome" : "account");
+      if (event.needsUsername) return opened(state, "welcome");
+      return { ...opened(state, state.resume ?? "account"), resume: null };
     case "done":
       return {
         ...opened(state, "sent"),
@@ -228,7 +248,14 @@ export function reduceFlow(state: PassState, event: PassEvent): PassState {
       return { ...opened(state, to), email: state.email };
     }
     case "signed-out":
-      return { ...opened(state, "methods"), email: "" };
+      return { ...opened(state, "methods"), email: "", resume: null };
+    case "expired":
+      return {
+        ...opened(state, "methods"),
+        email: "",
+        resume: RESUMABLE.has(state.view) ? state.view : state.resume,
+        say: { kind: "error", text: event.text },
+      };
   }
 }
 

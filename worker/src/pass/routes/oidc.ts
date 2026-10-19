@@ -8,7 +8,12 @@ import { pkceS256 } from "@pawl/oidc";
 import type { Env } from "../env";
 import { clearSessionCookie } from "../lib/cookies";
 import { deleteSession, getSession, readSessionToken } from "../lib/session";
-import { claimsFor, findClaimsUser, type ClaimsUser } from "../oidc/claims";
+import {
+  claimsFor,
+  findClaimsUser,
+  firstPartyClaims,
+  type ClaimsUser,
+} from "../oidc/claims";
 import {
   findClient,
   redirectUriAllowed,
@@ -171,6 +176,7 @@ async function redirectWithCode(
   context: OidcContext,
   request: AuthorizeRequest,
   userId: string,
+  sessionId: string,
 ) {
   const code = await issueCode(context.env, {
     clientId: request.client.id,
@@ -179,6 +185,7 @@ async function redirectWithCode(
     codeChallenge: request.codeChallenge,
     nonce: request.nonce,
     scopes: request.scopes,
+    sessionId: request.client.firstParty ? sessionId : null,
   });
   return context.redirect(
     withParams(request.redirectUri, { code, state: request.state }),
@@ -313,6 +320,7 @@ async function tokenSet(
   sub: string,
   scopes: string[],
   nonce: string | null,
+  sid: string | null,
 ): Promise<Record<string, string | number>> {
   return {
     access_token: await mintAccessToken(env, {
@@ -321,7 +329,7 @@ async function tokenSet(
       scopes,
       clientId: client.id,
       ...(client.firstParty
-        ? { identity: { ...claimsFor(user, scopes), role: user.role } }
+        ? { identity: firstPartyClaims(user, scopes, sid) }
         : {}),
     }),
     token_type: "Bearer",
@@ -367,7 +375,15 @@ async function exchangeCode(
   const scopes = JSON.parse(code.scopes) as string[];
   const sub = await deriveSub(env, client, user.id);
   const grant = await recordGrant(env, user.id, client.id, sub, scopes);
-  const body = await tokenSet(env, client, user, sub, scopes, code.nonce);
+  const body = await tokenSet(
+    env,
+    client,
+    user,
+    sub,
+    scopes,
+    code.nonce,
+    code.session_id,
+  );
   if (!client.firstParty) {
     body.refresh_token = await issueRefreshToken(env, grant.id);
   }
@@ -400,6 +416,7 @@ async function exchangeRefresh(
     user,
     rotated.grant.subject,
     rotated.grant.scopes,
+    null,
     null,
   );
   body.refresh_token = rotated.raw;
@@ -590,7 +607,7 @@ export function registerOidcRoutes(app: PassApp): void {
         ),
       );
     }
-    return redirectWithCode(context, request, userId);
+    return redirectWithCode(context, request, userId, session.sessionId);
   });
 
   app.post("/oauth/consent", async (context) => {
@@ -626,7 +643,7 @@ export function registerOidcRoutes(app: PassApp): void {
       await deriveSub(context.env, request.client, userId),
       request.scopes,
     );
-    return redirectWithCode(context, request, userId);
+    return redirectWithCode(context, request, userId, session.sessionId);
   });
 
   app.get("/oauth/connect", async (context) => {

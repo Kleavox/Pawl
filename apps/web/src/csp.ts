@@ -26,5 +26,5 @@ export function headersFile(passOrigin: string): string {
     `form-action 'self' ${pass}`,
     "frame-ancestors 'none'",
   ].join("; ");
-  return `/*\n  Content-Security-Policy: ${policy}\n`;
+  return `/*\n  Content-Security-Policy: ${policy}\n\n/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n`;
 }

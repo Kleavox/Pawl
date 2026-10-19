@@ -12,7 +12,7 @@ const HINTS: Readonly<Record<string, Hinted>> = {
 const DOLLY_MS = 560;
 const PULL_BACK_MS = 620;
 const LONGEST_LEAVE_MS = 600;
-const STILL_HERE_MS = 3000;
+const STILL_HERE_MS = 10_000;
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 const leaving = new WeakMap<HTMLElement, Promise<void>>();

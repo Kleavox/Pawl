@@ -20,11 +20,12 @@ function answering(status: number, body: unknown) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("reading a card through the cabinet's own origin", () => {
-  it("asks the gateway for the app's card with the cabinet's session", async () => {
+  it("asks the gateway for the app's card with the cabinet's session, for a limited time", async () => {
     const fetch = answering(200, { card: CARD });
     expect(await readCardFor("dns")).toEqual({ kind: "shown", card: CARD });
     expect(fetch).toHaveBeenCalledWith("/api/apps/dns/card", {
       credentials: "include",
+      signal: expect.any(AbortSignal),
     });
   });
 
