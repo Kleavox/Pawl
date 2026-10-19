@@ -623,6 +623,7 @@ export function useCabinet(input: {
           () => null,
         ),
         readCatalog(),
+        readEstate(),
       ]);
       if (cancelled) return;
       applyCatalog(fetched);
