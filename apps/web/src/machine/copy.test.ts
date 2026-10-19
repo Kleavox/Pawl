@@ -320,17 +320,14 @@ describe("a key is lit only when it does something on this screen", () => {
     ).toBe("working");
   });
 
-  it("shows an app's card on its own screen, with CLR back and GO only when the card offers a step", () => {
-    const open = { ...initialState("visitor", CATALOG), card: "1" };
-    expect(viewFor(open)).toBe("card");
-    expect(keys(open)).toEqual(["CLR"]);
-    expect([...litKeys(open, "PICK A BAY", false, true)].sort()).toEqual([
-      "CLR",
-      "GO",
-    ]);
-    expect(screenCopy(open, model)).toEqual({
-      main: "1 NOTE",
-      sub: "CLR TAKES YOU BACK",
+  it("shows the printed view while a receipt is out, with every key dark and the machine busy", () => {
+    const out = { ...initialState("visitor", CATALOG), receipt: "1" };
+    expect(viewFor(out)).toBe("receipt");
+    expect(keys(out)).toEqual([]);
+    expect(machineAttributes(out)["data-busy"]).toBe("true");
+    expect(screenCopy(out, model)).toEqual({
+      main: "RECEIPT PRINTED",
+      sub: "1 NOTE",
     });
   });
 });

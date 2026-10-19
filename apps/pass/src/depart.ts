@@ -2,8 +2,6 @@ import { ROOT_ORIGIN, withCamHint } from "@pawl/ui";
 
 const SCAN_OFF_MS = 150;
 const STILL_HERE_MS = 3000;
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-
 export function departure(
   url: string,
   here: string,
@@ -17,14 +15,6 @@ export function departure(
   };
 }
 
-function reducedMotion(): boolean {
-  try {
-    return globalThis.matchMedia(REDUCED_MOTION_QUERY).matches;
-  } catch {
-    return false;
-  }
-}
-
 let departing = false;
 
 export function departTo(url: string): void {
@@ -36,7 +26,7 @@ export function departTo(url: string): void {
   }, STILL_HERE_MS);
   const { href, toMachine } = departure(url, window.location.href, ROOT_ORIGIN);
   const view = document.getElementById("screen");
-  if (!toMachine || view === null || reducedMotion()) {
+  if (!toMachine || view === null) {
     window.location.assign(href);
     return;
   }

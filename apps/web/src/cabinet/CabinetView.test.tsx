@@ -5,6 +5,7 @@ import type { MachineModel } from "../estate-adapter";
 import { CATALOG } from "../machine/catalog.testkit";
 import { initialState, reduce, type MachineState } from "../machine/state";
 import { CabinetView, type CabinetViewProps } from "./CabinetView";
+import type { Delivered } from "./DeliveryReceipt";
 
 const model: MachineModel = {
   access: "guest",
@@ -47,7 +48,7 @@ function props(
     lcd: null,
     leaving: null,
     sound: { on: false, toggle: vi.fn() },
-    card: { kind: "closed" },
+    delivery: null,
     copied: null,
     on: {
       key: vi.fn(),
@@ -58,62 +59,68 @@ function props(
       manage: vi.fn(),
       logout: vi.fn(),
       take: vi.fn(),
-      cancelBridge: vi.fn(),
-      cardLeave: vi.fn(),
-      cardRetry: vi.fn(),
-      cardSignIn: vi.fn(),
-      copy: vi.fn(),
-      closeCard: vi.fn(),
+      paper: {
+        open: vi.fn(),
+        stay: vi.fn(),
+        copy: vi.fn(),
+        retry: vi.fn(),
+        leave: vi.fn(),
+        crumple: vi.fn(),
+      },
     },
     ...extra,
   };
 }
 
-describe("an outside app's card", () => {
-  const carded = [
-    ...CATALOG,
-    {
-      ...CATALOG[0]!,
-      code: "5",
-      key: "dns",
-      title: "DNS",
-      product: "DNS",
-      estate: false,
-      card: true,
-      href: "https://enroll.elsewhere.test",
-    },
-  ];
+const PRINTED: Delivered = {
+  printKey: 1,
+  facts: {
+    bay: "3",
+    item: "MANUAL",
+    place: { word: "To", host: "docs.example.test" },
+    pass: "VISITOR PASS",
+    holder: "annisa",
+    printed: new Date(2026, 9, 19, 14, 3),
+  },
+  body: { kind: "link", href: "https://docs.example.test/", left: 10 },
+};
 
-  it("takes the whole screen with the app's words, CLR and GO lit", () => {
-    const state = { ...initialState("visitor", carded), card: "5" };
-    const root = drawn(state, model, {
-      card: {
-        kind: "shown",
-        card: {
-          title: "Your DNS address",
-          message: "",
-          fields: [{ label: "Client ID", value: "0123", copy: true }],
-          action: { label: "Detail", href: "https://enroll.elsewhere.test/" },
-        },
-      },
-    });
+describe("a receipt in hand", () => {
+  it("shows the printed view on the screen and the delivery on the paper, with every key dark", () => {
+    const state = { ...initialState("visitor", CATALOG), receipt: "3" };
+    const root = drawn(state, model, { delivery: PRINTED });
     const visible = [...root.querySelectorAll("[data-view-panel]")]
       .filter((panel) => !(panel as HTMLElement).hidden)
       .map((panel) => panel.getAttribute("data-view-panel"));
-    expect(visible).toEqual(["card"]);
-    expect(text(root, "[data-view-panel='card'] h2")).toBe("Your DNS address");
-    expect(text(root, "[data-screen]")).toBe("5 DNS");
-    for (const key of ["CLR", "GO"]) {
-      expect(
-        root
-          .querySelector(`[data-key='${key}']`)!
-          .getAttribute("aria-disabled"),
-        key,
-      ).not.toBe("true");
-    }
+    expect(visible).toEqual(["receipt"]);
+    expect(text(root, "[data-screen]")).toBe("RECEIPT PRINTED");
+    expect(text(root, "[data-screen-sub]")).toBe("3 MANUAL");
+    expect(root.querySelector("dialog[data-delivery]")).toHaveAttribute("open");
+    expect(text(root, "[data-receipt] h1")).toBe("MANUAL");
     expect(
-      root.querySelector("[data-key='5']")!.getAttribute("aria-disabled"),
-    ).toBe("true");
+      [...root.querySelectorAll<HTMLElement>("[data-key]")].every(
+        (key) => key.getAttribute("aria-disabled") === "true",
+      ),
+    ).toBe(true);
+  });
+
+  it("says what went wrong on the receipt view, like every other view", () => {
+    const state = { ...initialState("visitor", CATALOG), receipt: "3" };
+    const root = drawn(state, model, {
+      delivery: PRINTED,
+      said: "This browser cannot hold your bay request.",
+    });
+    expect(text(root, "[data-view-panel='receipt'] [data-say]")).toBe(
+      "This browser cannot hold your bay request.",
+    );
+  });
+
+  it("keeps the dialog closed and empty while nothing is printed", () => {
+    const root = drawn(initialState("visitor", CATALOG), model);
+    expect(root.querySelector("dialog[data-delivery]")).not.toHaveAttribute(
+      "open",
+    );
+    expect(root.querySelector("[data-receipt-sheet]")).toBeNull();
   });
 });
 
@@ -197,6 +204,7 @@ describe("CabinetView", () => {
         model,
         "working",
       ],
+      [{ ...initialState("visitor", CATALOG), receipt: "3" }, model, "receipt"],
     ];
     for (const [state, at, expected] of steps) {
       const root = drawn(state, at);
@@ -240,7 +248,7 @@ describe("CabinetView", () => {
     expect(attr(root, "[data-machine]", "data-busy")).toBe("true");
   });
 
-  it("moves the cartridge, the tray and the bridge with the state, with the catalog's shape", () => {
+  it("moves the cartridge, the tray and the receipt with the state, with the catalog's shape", () => {
     const dropping = reduce(initialState("guest", CATALOG), {
       type: "select",
       bay: "3",
@@ -255,11 +263,10 @@ describe("CabinetView", () => {
     expect(attr(root, "[data-tray]", "data-tray")).toBe("3");
     expect(attr(root, "[data-tray]", "data-tray-shape")).toBe("wide");
     expect(text(root, "[data-tray-name]")).toBe("MANUAL");
-    const bridging = reduce(delivered, { type: "activate-tray" });
-    root = drawn(bridging, model);
-    expect(attr(root, "[data-transfer]", "data-transfer")).toBe("3");
-    expect(attr(root, "[data-transfer]", "data-transfer-shape")).toBe("wide");
-    expect(text(root, "[data-transfer-name]")).toBe("MANUAL");
+    const out = reduce(delivered, { type: "take" });
+    root = drawn(out, model, { delivery: PRINTED });
+    expect(attr(root, "[data-tray]", "data-tray")).toBe("none");
+    expect(root.querySelector("dialog[data-delivery]")).toHaveAttribute("open");
   });
 
   it("marks an unlit key aria-disabled, so it is announced as unavailable", () => {

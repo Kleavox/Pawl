@@ -1,21 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DENIED_BLINK_MS,
-  RELEASE_SEQUENCE_MS,
   forgetRequest,
   motionDelay,
   readRememberedRequest,
   rememberRequest,
   runDispense,
   runRelease,
-  runScreenTransfer,
   type Dispatch,
 } from "./sequence";
 import {
   initialState,
   reduce,
   type AccessRole,
-  type BayCode,
   type MachineEvent,
   type MachineState,
 } from "./state";
@@ -38,8 +35,8 @@ function machine(access: AccessRole): {
   return { dispatch, seen, read: () => state };
 }
 
-function reduceMotion(reduced: boolean): void {
-  vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
+function ran<T>(work: Promise<T>): Promise<T> {
+  return vi.runAllTimersAsync().then(() => work);
 }
 
 beforeEach(() => {
@@ -52,15 +49,7 @@ afterEach(() => {
 });
 
 describe("motionDelay", () => {
-  it("shortens but never skips when motion is reduced", async () => {
-    vi.stubGlobal("matchMedia", () => ({ matches: true }));
-    const started = Date.now();
-    await motionDelay(900);
-    expect(Date.now() - started).toBeLessThan(200);
-  });
-
-  it("waits the whole duration when motion is not reduced", async () => {
-    reduceMotion(false);
+  it("waits the whole duration", async () => {
     vi.useFakeTimers();
     let settled = false;
     const waiting = motionDelay(900).then(() => {
@@ -74,7 +63,7 @@ describe("motionDelay", () => {
   });
 
   it("resolves at once when the wait is aborted", async () => {
-    reduceMotion(false);
+    vi.useFakeTimers();
     const controller = new AbortController();
     const started = Date.now();
     const waiting = motionDelay(900, controller.signal);
@@ -139,19 +128,19 @@ describe("remembering a locked request across a redirect", () => {
 
 describe("the release sequence", () => {
   it("selects the bay, waits, then lands it in the tray", async () => {
-    reduceMotion(true);
+    vi.useFakeTimers();
     const m = machine("owner");
-    await runDispense(m, "1");
+    await ran(runDispense(m, "1"));
     expect(m.seen).toEqual(["select", "tray-ready"]);
     expect(m.read().tray).toBe("1");
     expect(m.read().busy).toBe(false);
   });
 
   it("never lands a locked bay in the tray; a guest's bay goes to sign-in after the refusal blinks", async () => {
-    reduceMotion(true);
+    vi.useFakeTimers();
     const m = machine("guest");
     const denied = vi.fn();
-    await runDispense(m, "1", denied);
+    await ran(runDispense(m, "1", denied));
     expect(m.seen).toEqual(["select"]);
     expect(denied).toHaveBeenCalledWith("1");
     expect(m.read().tray).toBeNull();
@@ -159,7 +148,6 @@ describe("the release sequence", () => {
   });
 
   it("lets the refusal blink before the sign-in is asked for", async () => {
-    reduceMotion(false);
     vi.useFakeTimers();
     const m = machine("guest");
     const denied = vi.fn();
@@ -168,23 +156,23 @@ describe("the release sequence", () => {
     expect(m.read().status).toBe("denied");
     expect(denied).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
-    await done;
+    await ran(done);
     expect(denied).toHaveBeenCalledOnce();
   });
 
   it("does not ask for the sign-in when the refusal was put back while it blinked", async () => {
-    reduceMotion(true);
+    vi.useFakeTimers();
     const m = machine("guest");
     const denied = vi.fn();
     const done = runDispense(m, "1", denied);
     m.dispatch({ type: "cancel" });
-    await done;
+    await ran(done);
     expect(denied).not.toHaveBeenCalled();
     expect(m.seen).toEqual(["select", "cancel"]);
   });
 
   it("keeps a visitor on the products when a bay needs the owner's pass", async () => {
-    reduceMotion(true);
+    vi.useFakeTimers();
     let state = initialState("visitor", [
       { ...CATALOG[0]!, access: "owner" as const },
       CATALOG[1]!,
@@ -198,120 +186,51 @@ describe("the release sequence", () => {
       },
     };
     const denied = vi.fn();
-    await runDispense(host, "1", denied);
+    await ran(runDispense(host, "1", denied));
     expect(seen).toEqual(["select"]);
     expect(state.status).toBe("denied");
     expect(denied).not.toHaveBeenCalled();
   });
 
-  it("shortens under reduced motion without dropping a state change", async () => {
-    reduceMotion(true);
-    const m = machine("visitor");
-    const started = Date.now();
-    await runDispense(m, "1");
-    expect(Date.now() - started).toBeLessThan(RELEASE_SEQUENCE_MS);
-    expect(m.seen).toEqual(["select", "tray-ready"]);
-    expect(m.read().tray).toBe("1");
-  });
-
   it("leaves the product in the tray when the bay is pressed twice", async () => {
-    reduceMotion(true);
+    vi.useFakeTimers();
     const m = machine("owner");
-    await Promise.all([runDispense(m, "1"), runDispense(m, "1")]);
+    await ran(Promise.all([runDispense(m, "1"), runDispense(m, "1")]));
     expect(m.read().tray).toBe("1");
   });
 
   it("completes one release for two presses of the same bay", async () => {
-    reduceMotion(true);
+    vi.useFakeTimers();
     const m = machine("owner");
-    await Promise.all([runDispense(m, "1"), runDispense(m, "1")]);
+    await ran(Promise.all([runDispense(m, "1"), runDispense(m, "1")]));
     expect(m.seen.filter((type) => type === "tray-ready")).toHaveLength(1);
   });
 
   it("keeps the first bay when a second bay is pressed mid release", async () => {
-    reduceMotion(true);
+    vi.useFakeTimers();
     const m = machine("owner");
-    await Promise.all([runDispense(m, "1"), runDispense(m, "3")]);
+    await ran(Promise.all([runDispense(m, "1"), runDispense(m, "3")]));
     expect(m.read().tray).toBe("1");
   });
 });
 
 describe("finishing a release the reducer already began", () => {
   it("lands the requested bay after the pass is accepted", async () => {
-    reduceMotion(true);
+    vi.useFakeTimers();
     const m = machine("guest");
     m.dispatch({ type: "select", bay: "1" });
     m.dispatch({ type: "pass-issued", access: "visitor" });
     expect(m.read().status).toBe("dispensing");
-    await runRelease(m);
+    await ran(runRelease(m));
     expect(m.read().tray).toBe("1");
     expect(m.read().busy).toBe(false);
   });
 
   it("does nothing when no release is running", async () => {
-    reduceMotion(true);
+    vi.useFakeTimers();
     const m = machine("owner");
-    await runRelease(m);
+    await ran(runRelease(m));
     expect(m.seen).toEqual([]);
     expect(m.read().tray).toBeNull();
-  });
-});
-
-describe("the cartridge to screen bridge", () => {
-  it("opens the bridge and then leaves for the application", async () => {
-    reduceMotion(true);
-    const m = machine("owner");
-    await runDispense(m, "1");
-    const left: BayCode[] = [];
-    await runScreenTransfer(m.dispatch, (bay) => left.push(bay));
-    expect(m.seen).toEqual(["select", "tray-ready", "activate-tray"]);
-    expect(left).toEqual(["1"]);
-    expect(m.read().screenTransfer).toBe("1");
-  });
-
-  it("cancelling mid bridge leaves the machine where it was", async () => {
-    reduceMotion(false);
-    const m = machine("owner");
-    await runDispense(m, "1");
-    const left: BayCode[] = [];
-    const controller = new AbortController();
-    const bridging = runScreenTransfer(
-      m.dispatch,
-      (bay) => left.push(bay),
-      controller.signal,
-    );
-    expect(m.read().screenTransfer).toBe("1");
-    controller.abort();
-    await bridging;
-    expect(left).toEqual([]);
-    expect(m.read().screenTransfer).toBeNull();
-    expect(m.read().busy).toBe(false);
-  });
-
-  it("cancels the same way when motion is reduced", async () => {
-    reduceMotion(true);
-    const m = machine("owner");
-    await runDispense(m, "1");
-    const left: BayCode[] = [];
-    const controller = new AbortController();
-    const bridging = runScreenTransfer(
-      m.dispatch,
-      (bay) => left.push(bay),
-      controller.signal,
-    );
-    controller.abort();
-    await bridging;
-    expect(left).toEqual([]);
-    expect(m.read().screenTransfer).toBeNull();
-  });
-
-  it("does not open a bridge from an empty tray", async () => {
-    reduceMotion(true);
-    const m = machine("owner");
-    const left: BayCode[] = [];
-    await runScreenTransfer(m.dispatch, (bay) => left.push(bay));
-    expect(m.seen).toEqual(["activate-tray"]);
-    expect(left).toEqual([]);
-    expect(m.read().screenTransfer).toBeNull();
   });
 });

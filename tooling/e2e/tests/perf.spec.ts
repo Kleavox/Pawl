@@ -62,15 +62,30 @@ test("the camera glides on transform, which the compositor runs", async ({
   ).toBe("transform");
 });
 
-test("every animation at an arrival, a dispense, a paw. step and a tear moves only transform and opacity", async ({
+test("every animation at an arrival, a dispense, a paw. step, a print and a crumple moves only transform and opacity", async ({
   page,
 }) => {
   await page.addInitScript(watchMotion);
 
   await page.goto(`${GATEWAY}/#cam=printer`);
   await page.waitForTimeout(1200);
+  await page.evaluate(() => {
+    document.querySelector<HTMLElement>("[data-cartridge='7']")!.dataset.href =
+      "#stay";
+  });
   await page.locator("[data-cartridge='7']").click();
   await page.waitForTimeout(1500);
+  await page.locator("[data-tray-action]").click();
+  await expect(page.locator("[data-receipt-sheet]")).toHaveAttribute(
+    "data-stage",
+    "hand",
+  );
+  await page.waitForTimeout(700);
+  await page.getByRole("button", { name: "Crumple the receipt" }).click();
+  await expect(page.locator("dialog[data-delivery]")).not.toHaveAttribute(
+    "open",
+    /.*/,
+  );
   expect(await heavyMotion(page), "cabinet").toEqual([]);
 
   await page.goto(`${PASS}/#cam=screen`);
@@ -81,14 +96,17 @@ test("every animation at an arrival, a dispense, a paw. step and a tear moves on
 
   await page.route(/:8786\/(#.*)?$/, (route) => route.fulfill({ status: 204 }));
   await page.goto(`${GATEWAY}/terms.html`);
-  await page.waitForTimeout(800);
-  await page.locator(".receipt__head a[data-tear]").click();
-  await expect(page.locator("[data-receipt-frame]")).toHaveAttribute(
-    "data-torn",
-    "fall",
+  await expect(page.locator("[data-receipt-sheet]")).toHaveAttribute(
+    "data-stage",
+    "hand",
   );
-  await page.waitForTimeout(600);
-  await expect(page).toHaveURL(/terms/);
+  await page.waitForTimeout(700);
+  await page.getByRole("button", { name: "Crumple the receipt" }).click();
+  await expect(page.locator("[data-receipt-sheet]")).toHaveAttribute(
+    "data-stage",
+    "gone",
+  );
+  await page.waitForTimeout(300);
   expect(await heavyMotion(page), "receipt").toEqual([]);
 });
 
@@ -102,6 +120,20 @@ function watchFrames(): void {
       seen.push({ start: entry.startTime, duration: entry.duration });
     }
   }).observe({ type: "long-animation-frame", buffered: true });
+}
+
+function watchTear(): void {
+  new MutationObserver(() => {
+    const seen = window as unknown as { tornAt?: number };
+    const sheet = document.querySelector<HTMLElement>("[data-receipt-sheet]");
+    if (sheet?.dataset.stage === "jerk" && seen.tornAt === undefined) {
+      seen.tornAt = performance.now();
+    }
+  }).observe(document, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["data-stage"],
+  });
 }
 
 async function onPhone(browser: Browser): Promise<Page> {
@@ -138,16 +170,34 @@ async function longestAfter(
   );
 }
 
-test("on a slow phone, a bay press, a paw. step and a tear keep every frame under the budget", async ({
+test("on a slow phone, a bay press, a paw. step, a print and a crumple keep every frame under the budget", async ({
   browser,
 }) => {
   test.setTimeout(120_000);
 
   const cabinet = await onPhone(browser);
   await cabinet.goto(`${GATEWAY}/`);
+  await cabinet.evaluate(() => {
+    document.querySelector<HTMLElement>("[data-cartridge='7']")!.dataset.href =
+      "#stay";
+  });
   const press = await longestAfter(cabinet, () =>
     cabinet.locator("[data-cartridge='7']").click(),
   );
+  const take = await longestAfter(cabinet, async () => {
+    await cabinet.locator("[data-tray-action]").click();
+    await expect(cabinet.locator("[data-receipt-sheet]")).toHaveAttribute(
+      "data-stage",
+      "hand",
+    );
+  });
+  const thrown = await longestAfter(cabinet, async () => {
+    await cabinet.getByRole("button", { name: "Crumple the receipt" }).click();
+    await expect(cabinet.locator("dialog[data-delivery]")).not.toHaveAttribute(
+      "open",
+      /.*/,
+    );
+  });
   await cabinet.context().close();
 
   const pass = await onPhone(browser);
@@ -161,18 +211,39 @@ test("on a slow phone, a bay press, a paw. step and a tear keep every frame unde
   await receipt.route(/:8786\/(#.*)?$/, (route) =>
     route.fulfill({ status: 204 }),
   );
+  await receipt.addInitScript(watchTear);
   await receipt.goto(`${GATEWAY}/terms.html`);
-  const tear = await longestAfter(receipt, async () => {
-    await receipt.locator(".receipt__head a[data-tear]").click();
-    await expect(receipt.locator("[data-receipt-frame]")).toHaveAttribute(
-      "data-torn",
-      "fall",
+  await expect(receipt.locator("[data-receipt-sheet]")).toHaveAttribute(
+    "data-stage",
+    "hand",
+  );
+  await receipt.waitForTimeout(1000);
+  const printed = await receipt.evaluate(() => {
+    const seen = window as unknown as { loafs: Loaf[]; tornAt: number };
+    return Math.max(
+      0,
+      ...seen.loafs
+        .filter((loaf) => loaf.start >= seen.tornAt)
+        .map((loaf) => loaf.duration),
     );
   });
-  await expect(receipt).toHaveURL(/terms/);
+  const crumple = await longestAfter(receipt, async () => {
+    await receipt.getByRole("button", { name: "Crumple the receipt" }).click();
+    await expect(receipt.locator("[data-receipt-sheet]")).toHaveAttribute(
+      "data-stage",
+      "gone",
+    );
+  });
   await receipt.context().close();
 
   expect(press, "bay press").toBeLessThanOrEqual(BUDGET_MS);
+  expect(take, "take delivery to the paper in hand").toBeLessThanOrEqual(
+    BUDGET_MS,
+  );
+  expect(thrown, "cabinet crumple and throw").toBeLessThanOrEqual(BUDGET_MS);
   expect(step, "paw. step").toBeLessThanOrEqual(BUDGET_MS);
-  expect(tear, "receipt tear").toBeLessThanOrEqual(BUDGET_MS);
+  expect(printed, "receipt print, tear and step back").toBeLessThanOrEqual(
+    BUDGET_MS,
+  );
+  expect(crumple, "receipt crumple and throw").toBeLessThanOrEqual(BUDGET_MS);
 });

@@ -1,4 +1,3 @@
-import { PW_BUTTON_PRIMARY } from "@pawl/ui";
 import type { ReactNode } from "react";
 
 import { EFFECTIVE } from "../legal-facts";
@@ -19,13 +18,6 @@ export function Privacy({
   return (
     <>
       <div className="receipt__head grid justify-items-center gap-[10px] pb-[18px] [border-bottom:2px_dashed_var(--pw-paper-rule)] text-center">
-        <a
-          className="receipt__tear-top justify-self-end -mt-[14px] -mr-[4px] px-[4px] py-[6px] text-pw-cobalt-lo font-pw-mono text-rem-label font-bold tracking-[0.12em] uppercase after:content-['_✂']"
-          href="/"
-          data-tear
-        >
-          Tear off
-        </a>
         <p className="receipt__serial m-0 text-pw-paper-dim font-pw-mono text-rem-label font-bold tracking-[0.18em]">
           PAWL-GW-01 · {siteName.toUpperCase()}
         </p>
@@ -342,13 +334,6 @@ export function Privacy({
           className="receipt__barcode w-[min(280px,80%)] h-[46px] [background:repeating-linear-gradient(90deg,var(--pw-paper-ink)_0_2px,transparent_2px_4px,var(--pw-paper-ink)_4px_5px,transparent_5px_8px,var(--pw-paper-ink)_8px_11px,transparent_11px_13px)] opacity-85"
           aria-hidden="true"
         />
-        <a
-          className={`receipt__tear ${PW_BUTTON_PRIMARY} mt-[4px] print:hidden`}
-          href="/"
-          data-tear
-        >
-          Tear off and return to the machine
-        </a>
         <p className="receipt__other text-rem-small">
           Also printed: <a href="/terms.html">Terms of service</a>
         </p>

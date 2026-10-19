@@ -216,8 +216,8 @@ no pass card.
 | Placard            | A printed sticker: 1 pick a bay, 2 sign in, 3 take it                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Keypad             | On the cabinet it picks bays; on `paw.` it chooses a way to sign in, types the six-digit email code and opens the account's sections. `GO` continues, `CLR` goes back one step. Two lamps say SELECT or CODE; every digit carries its braille cell. A key is lit only when it does something                                                                                                                                                            |
 | Lenses             | READY, BUSY, DENIED                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Printer            | Prints the receipts: `/privacy.html` and `/terms.html` feed out of its slot; Tear off (at the slot or at the end of the paper) tears them off and they fall away                                                                                                                                                                                                                                                                                        |
-| Delivery bay       | A released cartridge drops behind the flap; taking it opens the app                                                                                                                                                                                                                                                                                                                                                                                     |
+| Printer            | Prints every receipt: a taken delivery, `/privacy.html` and `/terms.html` feed out of its slot, tear off on their own and are read in the hand in front of the whole machine; Crumple (or Esc) throws the paper into the delivery bay as a ball                                                                                                                                                                                                         |
+| Delivery bay       | A released cartridge drops behind the flap; taking it prints its receipt                                                                                                                                                                                                                                                                                                                                                                                |
 | Serial plate       | `PAWL-GW-01`, Privacy, Terms, ©, and the keypad sound switch (off until switched on)                                                                                                                                                                                                                                                                                                                                                                    |
 
 The machine is sized in one unit, `--u`, taken from the viewport, so it fits a
@@ -234,9 +234,14 @@ page's framing, then goes, and the next page starts there (`#cam=screen` or
 `#cam=printer` carries it, read by a one-line inline script that runs before
 the camera is parsed and marks the page, so the first frame is already the
 hinted one). Every animation runs on the compositor: the camera glides on `transform`, and every keyframe moves only `transform` and `opacity` (a control's hover feedback still repaints, briefly and in place). A receipt
-hangs in front of the machine from the printer's slot; what has been read
-sags as slack between the slot and the edge being read, lower the further one
-reads, and the receipt tears with an uneven serrated edge before it falls.
+prints from the printer's slot, tears off with an uneven serrated edge at both
+ends, and is held up in front of the whole machine while the camera steps
+back; it scrolls freely and nothing hangs. A delivery's receipt says the bay,
+the item, where it goes or comes from, the pass, the holder and when it was
+printed: an app that links away opens ten seconds after the paper is in hand
+(Open now goes at once, Stay here stops the count), and an app with a card
+prints the card's own words. Done, the paper is crumpled into a ball and
+thrown into the delivery bay.
 Every key on the keypad presses, and one with nothing to do changes
 nothing. `paw.` carries sign-in (a code by email, a password, Google or
 GitHub; registering in two steps) and the account (1 Profile, 2 Devices, 3
@@ -250,8 +255,9 @@ radii, with `--spacing` set to the machine unit and one breakpoint, `desk`
 (900px): one accent (cobalt, for action and selection only) and four status
 colours. `pnpm lint:palette` rejects any other colour and `pnpm lint:type` any
 text below 0.68rem, reading Tailwind sizes and machine units at the smallest
-scale. Under reduced motion every sequence still happens, in 40 ms, the camera
-does not move and pages change at once.
+scale. There is one motion path: nothing reads `prefers-reduced-motion`, so every
+viewer gets the same motion and there is one thing to keep under the frame
+budget.
 
 ## The OpenID Connect provider
 
@@ -497,8 +503,9 @@ An app that serves static assets first must let `/.well-known/*` reach its
 Worker (Wrangler's `assets.run_worker_first`).
 
 **Card**, `GET <app origin>/.well-known/pawl/card`, for an app with `card`.
-Taking its bay asks the gateway (`GET /api/apps/<key>/card`), which asks Pawl
-for a token and the app for its card. Before a person has connected the app
+A delivered cartridge asks the gateway (`GET /api/apps/<key>/card`), which asks
+Pawl for a token and the app for its card; taking it prints the card on the
+receipt. Before a person has connected the app
 once, the cabinet offers **Connect**, which consents on `paw.` and comes back.
 The request carries `Authorization: Bearer <token>`: an ES256 token from Pawl's
 keys, `iss` Pawl, `aud` the app's client id, `sub` the person's subject for
@@ -520,7 +527,8 @@ scopes granted; it lasts one minute. Check all of it. Answer `200` with:
 - The body is at most 16 KB and answers within 5 seconds; redirects are not
   followed. Anything else, a single field over its limit included, shows the
   app as not answering, with `--`, never as empty.
-- Pawl writes none of it: the cabinet shows the app's own words.
+- Pawl writes none of it: the receipt prints the app's own words, apart from
+  the facts Pawl prints above them.
 
 ## Security invariants
 

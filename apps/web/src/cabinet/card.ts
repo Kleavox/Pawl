@@ -15,11 +15,6 @@ export type CardState =
   | { kind: "unreadable" }
   | { kind: "expired" };
 
-export type CardStep =
-  | { kind: "leave"; href: string; word: string }
-  | { kind: "retry"; word: string }
-  | { kind: "sign-in"; word: string };
-
 const UNREADABLE: CardState = { kind: "unreadable" };
 
 function isText(value: unknown): value is string {
@@ -68,26 +63,5 @@ export async function readCardFor(key: string): Promise<CardState> {
     return UNREADABLE;
   } catch {
     return UNREADABLE;
-  }
-}
-
-export function cardStep(state: CardState): CardStep | null {
-  switch (state.kind) {
-    case "connect":
-      return { kind: "leave", href: state.href, word: "Connect" };
-    case "shown":
-      return state.card.action === null
-        ? null
-        : {
-            kind: "leave",
-            href: state.card.action.href,
-            word: state.card.action.label,
-          };
-    case "unreadable":
-      return { kind: "retry", word: "Try again" };
-    case "expired":
-      return { kind: "sign-in", word: "Sign in again" };
-    default:
-      return null;
   }
 }

@@ -141,16 +141,50 @@ describe("leaving for sign-in on paw.", () => {
   });
 });
 
-describe("cancelling the bridge", () => {
-  it("returns the cartridge to the tray and leaves it openable", () => {
-    const owner = initialState("owner", CATALOG);
-    const dispensing = reduce(owner, { type: "select", bay: "1" });
-    const ready = reduce(dispensing, { type: "tray-ready" });
-    const bridging = reduce(ready, { type: "activate-tray" });
-    const cancelled = reduce(bridging, { type: "cancel" });
-    expect(cancelled.screenTransfer).toBeNull();
-    expect(cancelled.tray).toBe("1");
-    expect(cancelled.busy).toBe(false);
+describe("taking a delivery", () => {
+  it("takes what is in the tray onto a receipt and empties the tray", () => {
+    const taken = reduce(delivered("3"), { type: "take" });
+    expect(taken).toMatchObject({
+      receipt: "3",
+      tray: null,
+      status: "idle",
+      busy: false,
+    });
+  });
+
+  it("takes a card app's delivery the same way", () => {
+    expect(reduce(delivered("5"), { type: "take" }).receipt).toBe("5");
+  });
+
+  it("takes nothing from an empty tray or mid release", () => {
+    const empty = initialState("visitor", CARDED);
+    expect(reduce(empty, { type: "take" })).toBe(empty);
+    const releasing = { ...delivered("3"), busy: true };
+    expect(reduce(releasing, { type: "take" })).toBe(releasing);
+  });
+
+  it("ignores a pick or a preselect while a receipt is out", () => {
+    const out = reduce(delivered("3"), { type: "take" });
+    expect(reduce(out, { type: "select", bay: "1" })).toBe(out);
+    expect(reduce(out, { type: "preselect", bay: "1" })).toBe(out);
+  });
+
+  it("puts the receipt away on crumple, reset and when the pass is removed", () => {
+    const out = reduce(delivered("5"), { type: "take" });
+    for (const event of [
+      { type: "crumple" },
+      { type: "reset" },
+      { type: "pass-removed" },
+    ] as const) {
+      expect(reduce(out, event).receipt, event.type).toBeNull();
+    }
+  });
+
+  it("keeps the paper in hand when the catalog changes under it", () => {
+    const out = reduce(delivered("5"), { type: "take" });
+    expect(reduce(out, { type: "catalog", catalog: CATALOG }).receipt).toBe(
+      "5",
+    );
   });
 });
 
@@ -182,17 +216,6 @@ describe("CLR before GO", () => {
     expect(reduce(cleared, { type: "preselect", bay: "3" }).selection).toBe(
       "1",
     );
-  });
-});
-
-describe("opening the bridge", () => {
-  it("refuses a second bridge while one is already open", () => {
-    const owner = initialState("owner", CATALOG);
-    const dispensing = reduce(owner, { type: "select", bay: "1" });
-    const ready = reduce(dispensing, { type: "tray-ready" });
-    const bridging = reduce(ready, { type: "activate-tray" });
-    const again = reduce(bridging, { type: "activate-tray" });
-    expect(again).toBe(bridging);
   });
 });
 
@@ -326,40 +349,6 @@ const CARDED = [
 function delivered(bay: string, catalog = CARDED): MachineState {
   return { ...initialState("visitor", catalog), tray: bay };
 }
-
-describe("a card instead of a trip", () => {
-  it("opens the delivered app's card in place of the bridge", () => {
-    const next = reduce(delivered("5"), { type: "open-card" });
-    expect(next.card).toBe("5");
-    expect(next.tray).toBeNull();
-    expect(next.screenTransfer).toBeNull();
-    expect(next.busy).toBe(false);
-  });
-
-  it("opens no card for an app without one, or with nothing delivered", () => {
-    const plain = delivered("3");
-    expect(reduce(plain, { type: "open-card" })).toBe(plain);
-    const empty = initialState("visitor", CARDED);
-    expect(reduce(empty, { type: "open-card" })).toBe(empty);
-  });
-
-  it("goes back to the bays from the card on back, cancel and reset", () => {
-    const open = reduce(delivered("5"), { type: "open-card" });
-    for (const event of [
-      { type: "back" },
-      { type: "cancel" },
-      { type: "close-card" },
-      { type: "reset" },
-    ] as const) {
-      expect(reduce(open, event).card, event.type).toBeNull();
-    }
-  });
-
-  it("forgets the card when the pass is removed", () => {
-    const open = reduce(delivered("5"), { type: "open-card" });
-    expect(reduce(open, { type: "pass-removed" }).card).toBeNull();
-  });
-});
 
 describe("a catalog that arrives after the page", () => {
   it("takes the new bays while the machine is idle", () => {

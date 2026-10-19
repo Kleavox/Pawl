@@ -13,14 +13,6 @@ function screens(): HTMLElement {
   return root.querySelector<HTMLElement>("[data-screen-views]")!;
 }
 
-function reduceMotion(reduced: boolean): void {
-  vi.stubGlobal(
-    "matchMedia",
-    (query: string) =>
-      ({ matches: reduced && query.includes("reduce") }) as MediaQueryList,
-  );
-}
-
 function swap(views: HTMLElement, from: string, to: string): HTMLElement {
   const previous = views.querySelector<HTMLElement>(
     `[data-view-panel='${from}']`,
@@ -33,13 +25,11 @@ function swap(views: HTMLElement, from: string, to: string): HTMLElement {
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.unstubAllGlobals();
   document.body.replaceChildren();
 });
 
 describe("scanWipe", () => {
   it("sweeps a scan line over the change, the old screen kept as an inert ghost until it passes", () => {
-    reduceMotion(false);
     vi.useFakeTimers();
     const views = screens();
     swap(views, "products", "signin");
@@ -64,7 +54,6 @@ describe("scanWipe", () => {
   });
 
   it("scans a screen on from blank when there was none before it", () => {
-    reduceMotion(false);
     vi.useFakeTimers();
     const views = screens();
     scanWipe(views, null);
@@ -75,16 +64,7 @@ describe("scanWipe", () => {
     expect(views.classList.contains("is-wiping")).toBe(false);
   });
 
-  it("swaps at once when motion is reduced", () => {
-    reduceMotion(true);
-    const views = screens();
-    swap(views, "products", "signin");
-    expect(views.classList.contains("is-wiping")).toBe(false);
-    expect(views.querySelector(".screen__ghost")).toBeNull();
-  });
-
   it("keeps one ghost when a second change lands mid sweep", () => {
-    reduceMotion(false);
     vi.useFakeTimers();
     const views = screens();
     swap(views, "products", "signin");

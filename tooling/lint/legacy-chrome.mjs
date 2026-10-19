@@ -3,7 +3,13 @@ import { join, relative } from "node:path";
 
 const ROOTS = ["apps", "packages"];
 const EXTENSIONS = [".ts", ".tsx", ".css", ".html"];
-const BANNED = ["pw-title", "pw-kicker", "pw-product-"];
+const BANNED = [
+  "pw-title",
+  "pw-kicker",
+  "pw-product-",
+  "prefers-reduced-motion",
+  "motion-reduce:",
+];
 
 const offences = [];
 

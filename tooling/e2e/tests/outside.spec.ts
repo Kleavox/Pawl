@@ -47,7 +47,11 @@ async function takeMonitor(page: Page): Promise<void> {
     { timeout: 10_000 },
   );
   await page.locator("[data-tray-action]").click();
-  await expect(page.locator("[data-view-panel='card']")).toBeVisible();
+  await expect(page.locator("[data-receipt-sheet]")).toHaveAttribute(
+    "data-stage",
+    "hand",
+    { timeout: 20_000 },
+  );
 }
 
 test("an admin registers an outside app; a person connects it on the cabinet, reads its card and goes on", async ({
@@ -62,7 +66,7 @@ test("an admin registers an outside app; a person connects it on the cabinet, re
 
     await page.goto(`${CABINET}/`);
     await takeMonitor(page);
-    const card = page.locator("[data-view-panel='card']");
+    const card = page.locator("[data-receipt]");
     await expect(
       card.getByRole("heading", { name: "Monitor needs to know who you are" }),
     ).toBeVisible({ timeout: 20_000 });

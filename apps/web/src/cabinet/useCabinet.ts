@@ -20,6 +20,7 @@ import {
   useState,
   type MouseEvent,
 } from "react";
+import { flushSync } from "react-dom";
 
 import { signOut, silentSignInPath } from "../auth-client";
 import { toMachineModel, type MachineModel } from "../estate-adapter";
@@ -31,7 +32,6 @@ import {
   rememberRequest,
   runDispense,
   runRelease,
-  runScreenTransfer,
 } from "../machine/sequence";
 import {
   initialState,
@@ -42,8 +42,16 @@ import {
   type MachineHost,
   type MachineState,
 } from "../machine/state";
+import { crumpleInto, printOut } from "../receipt";
+import { useCountdown } from "../receipt/countdown";
+import {
+  passLine,
+  type DeliveryBody,
+  type DeliveryFacts,
+} from "../receipt/Delivery";
 import { useSound } from "../sound";
-import { cardStep, readCardFor, type AppCard, type CardState } from "./card";
+import { readCardFor, type AppCard, type CardState } from "./card";
+import type { Delivered } from "./DeliveryReceipt";
 import { signInHref } from "./sign-in";
 
 type GatewaySession = {
@@ -92,6 +100,14 @@ async function readCatalog(): Promise<Catalog | null> {
 
 function sameCatalog(a: Catalog, b: Catalog): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function hostOf(href: string): string {
+  try {
+    return new URL(href, window.location.href).host;
+  } catch {
+    return "--";
+  }
 }
 
 function hold(ms: number): Promise<void> {
@@ -192,20 +208,27 @@ export function useCabinet(input: {
     text: "",
   });
   const [lcd, setLcd] = useState<ScreenCopy | null>(null);
-  const [leaving, setLeaving] = useState<"sign-in" | "manage" | "card" | null>(
-    null,
-  );
+  const [leaving, setLeaving] = useState<"sign-in" | "manage" | null>(null);
   const cardRef = useRef<CardState>({ kind: "closed" });
   const [card, setCardState] = useState<CardState>(cardRef.current);
   const [copied, setCopied] = useState<string | null>(null);
+  const [taken, setTaken] = useState<{
+    key: number;
+    at: Date;
+    href: string;
+  } | null>(null);
+  const asked = useRef<{ bay: BayCode; answer: Promise<CardState> } | null>(
+    null,
+  );
 
   const camera = useRef<HTMLDivElement>(null);
   const machine = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLDivElement>(null);
   const ticker = useRef<HTMLSpanElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
+  const paper = useRef<HTMLDivElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
   const keypad = useRef(createKeypad(site.bays.map((bay) => bay.code)));
-  const bridging = useRef<AbortController | null>(null);
   const retrying = useRef(false);
   const sound = useSound();
 
@@ -264,29 +287,14 @@ export function useCabinet(input: {
     setCardState(next);
   }, []);
 
-  const loadCard = useCallback(
-    async (bay: BayCode): Promise<void> => {
-      const entry = catalogRef.current.find(
-        (candidate) => candidate.code === bay,
-      );
-      if (entry === undefined) return;
-      showCard({ kind: "loading" });
-      const next = await readCardFor(entry.key);
-      if (stateRef.current.card !== bay) return;
-      showCard(next);
-      if (next.kind === "expired") {
-        rememberRequest(bay);
-        navigate(silentSignInPath(window.location));
-      }
-    },
-    [showCard, navigate],
-  );
-
-  const closeCard = useCallback((): void => {
-    dispatch({ type: "close-card" });
-    showCard({ kind: "closed" });
-    setCopied(null);
-  }, [dispatch, showCard]);
+  const askCard = useCallback((bay: BayCode): Promise<CardState> => {
+    const entry = catalogRef.current.find(
+      (candidate) => candidate.code === bay,
+    );
+    return entry === undefined
+      ? Promise.resolve({ kind: "unreadable" })
+      : readCardFor(entry.key);
+  }, []);
 
   const keepRequest = useCallback((): boolean => {
     const wanted = stateRef.current.authRequest;
@@ -357,50 +365,6 @@ export function useCabinet(input: {
     [navigate, comeBack],
   );
 
-  const leaveFromCard = useCallback(
-    (event: MouseEvent<HTMLAnchorElement> | null): void => {
-      const bay = stateRef.current.card;
-      const step = cardStep(cardRef.current);
-      if (bay === null || step?.kind !== "leave") return;
-      if (
-        event !== null &&
-        !shouldAnimateClick(event as unknown as globalThis.MouseEvent)
-      ) {
-        return;
-      }
-      event?.preventDefault();
-      const connecting = cardRef.current.kind === "connect";
-      if (connecting && !rememberRequest(bay)) {
-        say(
-          "This browser cannot hold your bay request. Pick the bay again after connecting.",
-        );
-      }
-      const href = connecting ? withCamHint(step.href, "screen") : step.href;
-      setLeaving("card");
-      setLcd({
-        main: connecting
-          ? "OPENING PAWL"
-          : `OPENING ${productOf(catalogRef.current, bay)}`,
-        sub: "ONE MOMENT",
-      });
-      if (camera.current === null) {
-        navigate(href);
-        return;
-      }
-      void leave(camera.current, "screen", href, {
-        go: navigate,
-        stay: comeBack,
-      });
-    },
-    [navigate, comeBack, say],
-  );
-
-  const signInFromCard = useCallback((): void => {
-    const bay = stateRef.current.card;
-    if (bay !== null) rememberRequest(bay);
-    navigate(silentSignInPath(window.location));
-  }, [navigate]);
-
   const copyField = useCallback(
     (field: AppCard["fields"][number]): void => {
       const failed = (): void =>
@@ -420,15 +384,6 @@ export function useCabinet(input: {
     },
     [say],
   );
-
-  const runCardGo = useCallback((): void => {
-    const step = cardStep(cardRef.current);
-    const bay = stateRef.current.card;
-    if (step === null || bay === null) return;
-    if (step.kind === "leave") leaveFromCard(null);
-    else if (step.kind === "retry") void loadCard(bay);
-    else signInFromCard();
-  }, [leaveFromCard, loadCard, signInFromCard]);
 
   const dispense = useCallback(
     async (bay: BayCode): Promise<void> => {
@@ -513,54 +468,129 @@ export function useCabinet(input: {
     }
   }, [host, raiseFault]);
 
-  const takeDelivery = useCallback(async (): Promise<void> => {
-    if (bridging.current !== null) return;
-    const delivered = stateRef.current.tray;
-    if (
-      delivered !== null &&
-      catalogRef.current.find((entry) => entry.code === delivered)?.card
-    ) {
-      const next = dispatch({ type: "open-card" });
-      if (next.card === delivered) await loadCard(delivered);
-      return;
-    }
-    const controller = new AbortController();
-    bridging.current = controller;
-    try {
-      await runScreenTransfer(
-        dispatch,
-        (bay) =>
-          navigate(
-            machine.current?.querySelector<HTMLElement>(
-              `[data-cartridge="${bay}"]`,
-            )?.dataset.href ??
-              catalogRef.current.find((entry) => entry.code === bay)?.href ??
-              "/",
-          ),
-        controller.signal,
-      );
-    } catch {
-      raiseFault("BRIDGE FAILED, RELEASE IT AGAIN");
-    } finally {
-      if (bridging.current === controller) bridging.current = null;
-    }
-    if (stateRef.current.screenTransfer === null) {
-      machine.current
-        ?.querySelector<HTMLElement>("[data-tray-action]")
-        ?.focus({ preventScroll: true });
-    }
-  }, [dispatch, navigate, loadCard, raiseFault]);
+  const goTo = useCallback(
+    (href: string): void => {
+      try {
+        navigate(href);
+      } catch {
+        raiseFault("OPEN FAILED, RELEASE IT AGAIN");
+      }
+    },
+    [navigate, raiseFault],
+  );
 
-  const cancelBridge = useCallback((): void => {
-    if (bridging.current !== null) {
-      bridging.current.abort();
+  const count = useCountdown(() => goTo(taken?.href ?? "/"));
+  const { arm: armCount, start: startCount, stop: stopCount } = count;
+
+  const takeDelivery = useCallback(async (): Promise<void> => {
+    const now = stateRef.current;
+    const bay = now.tray;
+    if (bay === null || now.busy || now.receipt !== null) return;
+    const entry = catalogRef.current.find(
+      (candidate) => candidate.code === bay,
+    );
+    const kept = asked.current?.bay === bay ? asked.current.answer : null;
+    const answer = entry?.card === true ? (kept ?? askCard(bay)) : null;
+    asked.current = null;
+    const href =
+      machine.current?.querySelector<HTMLElement>(`[data-cartridge="${bay}"]`)
+        ?.dataset.href ??
+      entry?.href ??
+      "/";
+    const at = new Date();
+    setCopied(null);
+    armCount();
+    if (dispatch({ type: "take" }).receipt !== bay) return;
+    const dolly =
+      camera.current === null
+        ? Promise.resolve()
+        : settle(camera.current, "whole", "printer", { moving: "in" });
+    const card = answer === null ? null : await answer;
+    if (stateRef.current.receipt !== bay) return;
+    if (card?.kind === "expired") {
+      rememberRequest(bay);
+      navigate(silentSignInPath(window.location));
       return;
     }
-    dispatch({ type: "cancel" });
-    machine.current
-      ?.querySelector<HTMLElement>("[data-tray-action]")
-      ?.focus({ preventScroll: true });
-  }, [dispatch]);
+    await dolly;
+    if (stateRef.current.receipt !== bay) return;
+    flushSync(() => {
+      showCard(card ?? { kind: "closed" });
+      setTaken((was) => ({ key: (was?.key ?? 0) + 1, at, href }));
+    });
+    const held = sheet.current;
+    if (held === null || stateRef.current.receipt !== bay) return;
+    await printOut(held, camera.current);
+    if (stateRef.current.receipt !== bay) return;
+    paper.current?.focus({ preventScroll: true });
+    if (answer === null && held.dataset.stage === "hand") startCount();
+  }, [dispatch, navigate, askCard, showCard, armCount, startCount]);
+
+  const crumple = useCallback(async (): Promise<void> => {
+    const held = sheet.current;
+    if (held === null || held.dataset.stage !== "hand") return;
+    stopCount();
+    if (!(await crumpleInto(held, machine.current))) return;
+    dispatch({ type: "crumple" });
+    showCard({ kind: "closed" });
+    setCopied(null);
+  }, [stopCount, dispatch, showCard]);
+
+  const openNow = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>): void => {
+      stopCount();
+      if (!shouldAnimateClick(event.nativeEvent)) return;
+      event.preventDefault();
+      goTo(taken?.href ?? "/");
+    },
+    [stopCount, goTo, taken],
+  );
+
+  const leavePaper = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>, href: string): void => {
+      if (!shouldAnimateClick(event.nativeEvent)) return;
+      event.preventDefault();
+      const bay = stateRef.current.receipt;
+      const connecting = cardRef.current.kind === "connect";
+      if (connecting && bay !== null && !rememberRequest(bay)) {
+        say(
+          "This browser cannot hold your bay request. Pick the bay again after connecting.",
+        );
+      }
+      const to = connecting ? withCamHint(href, "screen") : href;
+      if (camera.current === null) {
+        navigate(to);
+        return;
+      }
+      void leave(camera.current, "screen", to, {
+        go: navigate,
+        stay: comeBack,
+      });
+    },
+    [navigate, comeBack, say],
+  );
+
+  const retryCard = useCallback(async (): Promise<void> => {
+    const bay = stateRef.current.receipt;
+    if (bay === null) return;
+    showCard({ kind: "loading" });
+    const card = await askCard(bay);
+    if (stateRef.current.receipt !== bay) return;
+    if (card.kind === "expired") {
+      rememberRequest(bay);
+      navigate(silentSignInPath(window.location));
+      return;
+    }
+    showCard(card);
+  }, [askCard, showCard, navigate]);
+
+  const restored = useCallback((): void => {
+    handBack();
+    stopCount();
+    if (stateRef.current.receipt === null) return;
+    dispatch({ type: "crumple" });
+    showCard({ kind: "closed" });
+  }, [handBack, stopCount, dispatch, showCard]);
 
   const pressKey = useCallback(
     async (key: string): Promise<void> => {
@@ -570,12 +600,7 @@ export function useCabinet(input: {
         if (key === "CLR") dispatch({ type: "back" });
         return;
       }
-      if (now.authStep === "leaving") return;
-      if (now.card !== null) {
-        if (key === "CLR") closeCard();
-        if (key === "GO") runCardGo();
-        return;
-      }
+      if (now.authStep === "leaving" || now.receipt !== null) return;
       const result = keypad.current.press(key);
       if (key === "GO" && result.kind === "ignored" && estateUnread()) {
         await retryEstate();
@@ -593,15 +618,7 @@ export function useCabinet(input: {
         dispatch({ type: "cancel" });
       }
     },
-    [
-      sound,
-      dispatch,
-      estateUnread,
-      retryEstate,
-      dispense,
-      closeCard,
-      runCardGo,
-    ],
+    [sound, dispatch, estateUnread, retryEstate, dispense],
   );
 
   const logout = useCallback((): void => {
@@ -709,9 +726,9 @@ export function useCabinet(input: {
   useEffect(() => {
     const escape = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (stateRef.current.card !== null) {
+      if (stateRef.current.receipt !== null) {
         event.preventDefault();
-        closeCard();
+        void crumple();
         return;
       }
       if (stateRef.current.authStep !== "account") return;
@@ -720,7 +737,26 @@ export function useCabinet(input: {
     };
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
-  }, [dispatch, closeCard]);
+  }, [dispatch, crumple]);
+
+  useEffect(() => {
+    if (state.receipt !== null) return;
+    stopCount();
+    setTaken(null);
+  }, [state.receipt, stopCount]);
+
+  useEffect(() => {
+    const bay = state.tray;
+    if (bay === null) {
+      asked.current = null;
+      return;
+    }
+    const entry = catalogRef.current.find(
+      (candidate) => candidate.code === bay,
+    );
+    if (entry?.card !== true || asked.current?.bay === bay) return;
+    asked.current = { bay, answer: askCard(bay) };
+  }, [state.tray, askCard]);
 
   useEffect(() => {
     const text = ticker.current;
@@ -739,16 +775,33 @@ export function useCabinet(input: {
   }, [model.ticker]);
 
   const view = viewFor(state);
-  const arrived = useCameraArrival(camera, "whole", { onRestore: handBack });
+  const arrived = useCameraArrival(camera, "whole", { onRestore: restored });
   useScanWipe(screen, view, arrived === "screen");
   useFollowFocus(screen, view, returnTo);
-  const lit = litKeys(
-    state,
-    fault ?? model.screen,
-    fault !== null,
-    cardStep(card) !== null,
-  );
+  const lit = litKeys(state, fault ?? model.screen, fault !== null);
   useMachineKeys((key) => void pressKey(key), lit);
+
+  const delivery = useMemo((): Delivered | null => {
+    const bay = state.receipt;
+    if (bay === null || taken === null) return null;
+    const entry = state.catalog.find((candidate) => candidate.code === bay);
+    if (entry === undefined) return null;
+    const carded = entry.card === true;
+    const facts: DeliveryFacts = {
+      bay,
+      item: productOf(state.catalog, bay),
+      place: carded
+        ? { word: "From", host: hostOf(entry.href ?? "") }
+        : { word: "To", host: hostOf(taken.href) },
+      pass: passLine(state.access),
+      holder: state.access === "guest" ? null : model.holder,
+      printed: taken.at,
+    };
+    const body: DeliveryBody = carded
+      ? { kind: "card", title: entry.title, card }
+      : { kind: "link", href: taken.href, left: count.left };
+    return { printKey: taken.key, facts, body };
+  }, [state, taken, model.holder, card, count.left]);
 
   return {
     state,
@@ -758,9 +811,9 @@ export function useCabinet(input: {
     lcd,
     leaving,
     sound,
-    card,
+    delivery,
     copied,
-    refs: { camera, machine, screen, ticker },
+    refs: { camera, machine, screen, ticker, sheet, frame: paper },
     onProductsFocus: (target: HTMLElement) => {
       returnTo.current = target;
     },
@@ -774,15 +827,14 @@ export function useCabinet(input: {
         depart(event, event.currentTarget.href, "screen", "OPENING ACCOUNT"),
       logout,
       take: () => void takeDelivery(),
-      cancelBridge,
-      cardLeave: (event: MouseEvent<HTMLAnchorElement>) => leaveFromCard(event),
-      cardRetry: () => {
-        const bay = stateRef.current.card;
-        if (bay !== null) void loadCard(bay);
+      paper: {
+        open: openNow,
+        stay: stopCount,
+        copy: copyField,
+        retry: () => void retryCard(),
+        leave: leavePaper,
+        crumple: () => void crumple(),
       },
-      cardSignIn: signInFromCard,
-      copy: copyField,
-      closeCard,
     },
   };
 }

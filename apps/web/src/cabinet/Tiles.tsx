@@ -29,7 +29,7 @@ const RINGED =
   "shadow-[inset_0_0_0_--spacing(2)_var(--pw-cobalt-hi),0_0_--spacing(18)_var(--pw-cobalt-glow)]";
 
 const REFUSED =
-  "shadow-[inset_0_0_0_--spacing(1)_var(--pw-screen-edge)] after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_--spacing(2)_var(--pw-danger),0_0_--spacing(18)_rgb(255_77_94/45%)] after:opacity-0 after:pointer-events-none after:animate-[tile-denied_540ms_steps(1,end)_1_both] motion-reduce:after:animate-none motion-reduce:after:opacity-100";
+  "shadow-[inset_0_0_0_--spacing(1)_var(--pw-screen-edge)] after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_--spacing(2)_var(--pw-danger),0_0_--spacing(18)_rgb(255_77_94/45%)] after:opacity-0 after:pointer-events-none after:animate-[tile-denied_540ms_steps(1,end)_1_both]";
 
 const CODE =
   "tile__code [grid-area:code] self-center [font:800_--spacing(14)/1_var(--pw-mono)] tracking-[0.1em] max-desk:[grid-area:art] max-desk:self-start max-desk:justify-self-start";
@@ -55,8 +55,7 @@ const ART_STRIPE: Record<string, string> = {
 const ART_LOCKED =
   "bg-[linear-gradient(180deg,var(--pw-steel-mid),var(--pw-steel-lo))] before:absolute before:top-[42%] before:-right-4 before:-left-4 before:h-8 before:bg-[repeating-linear-gradient(135deg,var(--pw-label)_0_--spacing(5),var(--pw-etch-dim)_--spacing(5)_--spacing(10))]";
 
-const ART_RELEASE =
-  "animate-[art-release_900ms_var(--pw-ease-drop)_1_both] motion-reduce:animate-none";
+const ART_RELEASE = "animate-[art-release_900ms_var(--pw-ease-drop)_1_both]";
 
 const BADGE_BASE =
   "tile__badge [grid-area:badge] justify-self-end self-center inline-flex items-center gap-5 max-w-full h-22 px-6 overflow-hidden rounded-[--spacing(3)] bg-pw-black [font:700_--spacing(14)/1_var(--pw-mono)] tracking-[0.06em] whitespace-nowrap max-desk:justify-self-start max-desk:h-19 max-desk:px-4 max-desk:gap-3 max-desk:tracking-[0.02em]";

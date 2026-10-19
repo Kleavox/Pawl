@@ -83,13 +83,13 @@ describe("CabinetPage", () => {
     expect(sessionStorage.getItem("pawl:machine-request")).toBe("1");
   });
 
-  it("shows only the products, working, account and card views", async () => {
+  it("shows only the products, working, account and receipt views", async () => {
     const { container } = await opened(vi.fn());
     expect(
       [...container.querySelectorAll("[data-view-panel]")].map((view) =>
         view.getAttribute("data-view-panel"),
       ),
-    ).toEqual(["products", "working", "account", "card"]);
+    ).toEqual(["products", "working", "account", "receipt"]);
   });
 
   it("releases an open bay from the keypad: the number, then GO", async () => {
@@ -182,26 +182,6 @@ describe("CabinetPage", () => {
       expect.stringContaining("https://paw.example.test/?returnTo="),
     );
   });
-
-  it("bridges to the address the delivered cartridge carries", async () => {
-    const navigate = vi.fn();
-    const { user, container } = await opened(navigate);
-    const cartridge = container.querySelector<HTMLElement>(
-      "[data-cartridge='3']",
-    )!;
-    cartridge.dataset.href = "#stay";
-    await user.click(cartridge);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
-    });
-    await user.click(
-      container.querySelector<HTMLElement>("[data-tray-action]")!,
-    );
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
-    });
-    expect(navigate).toHaveBeenCalledWith("#stay");
-  });
 });
 
 const DNS_BAY = {
@@ -256,64 +236,298 @@ function routed(card: { status: number; body: unknown }) {
   );
 }
 
-async function cardOpened(navigate: (url: string) => void) {
+const PRINTED_MS = 560 + 540 + 90 + 120;
+const STEPPED_BACK_MS = 620;
+const CRUMPLED_MS = 260 + 450 + 200;
+
+async function advance(ms: number): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+function stageOf(container: HTMLElement): string | undefined {
+  return container.querySelector<HTMLElement>("[data-receipt-sheet]")?.dataset
+    .stage;
+}
+
+async function delivered(
+  navigate: (url: string) => void,
+  bay: string,
+  href?: string,
+) {
   const opened_ = await opened(navigate);
   const { user, container } = opened_;
-  await user.click(
-    container.querySelector<HTMLElement>("[data-cartridge='5']")!,
-  );
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(1500);
-  });
-  await user.click(container.querySelector<HTMLElement>("[data-tray-action]")!);
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(0);
-  });
+  const cartridge = container.querySelector<HTMLElement>(
+    `[data-cartridge='${bay}']`,
+  )!;
+  if (href !== undefined) cartridge.dataset.href = href;
+  await user.click(cartridge);
+  await advance(1500);
   return opened_;
 }
 
-describe("an outside app with a card", () => {
-  it("adds the outside app's bay after the page loads and shows its card on delivery", async () => {
-    routed({ status: 200, body: { card: DNS_CARD } });
-    const { container } = await cardOpened(vi.fn());
-    const card = container.querySelector<HTMLElement>(
-      "[data-view-panel='card']",
-    )!;
-    expect(card.hidden).toBe(false);
-    expect(card.querySelector("h2")!.textContent).toBe("Your DNS address");
-    expect(card.textContent).toContain("0123456789abcdef");
+async function taken(
+  navigate: (url: string) => void,
+  bay = "3",
+  href: string | undefined = "#stay",
+) {
+  const opened_ = await delivered(navigate, bay, href);
+  await opened_.user.click(
+    opened_.container.querySelector<HTMLElement>("[data-tray-action]")!,
+  );
+  return opened_;
+}
+
+async function inHand(container: HTMLElement): Promise<void> {
+  await advance(PRINTED_MS);
+  expect(stageOf(container)).toBe("hand");
+  await advance(STEPPED_BACK_MS);
+}
+
+describe("taking a delivery prints a receipt", () => {
+  it("looks at the printer at once and prints the delivery, without a page load", async () => {
+    const navigate = vi.fn();
+    const { container } = await taken(navigate);
+    const camera = container.querySelector<HTMLElement>("[data-camera]")!;
+    expect(camera.dataset.framing).toBe("printer");
+    expect(container.querySelector("[data-tray]")).toHaveAttribute(
+      "data-tray",
+      "none",
+    );
+    expect(
+      container.querySelector("dialog[data-delivery]"),
+      "the paper comes out in a frame of its own, once the camera is at the printer",
+    ).not.toHaveAttribute("open");
+    expect(stageOf(container)).toBeUndefined();
+    await advance(560);
+    expect(container.querySelector("dialog[data-delivery]")).toHaveAttribute(
+      "open",
+    );
+    await advance(PRINTED_MS - 560);
+    expect(stageOf(container)).toBe("hand");
+    await advance(STEPPED_BACK_MS);
+    expect(camera.dataset.framing).toBe("whole");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "MANUAL" }),
+    ).toBeInTheDocument();
+    expect(document.activeElement).toBe(
+      container.querySelector("[data-receipt-frame]"),
+    );
+    expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("copies a field and says so on its button", async () => {
-    routed({ status: 200, body: { card: DNS_CARD } });
-    const { user } = await cardOpened(vi.fn());
-    const writeText = vi.fn(async () => {});
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-    await user.click(screen.getByRole("button", { name: "Copy Client ID" }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(writeText).toHaveBeenCalledWith("0123456789abcdef");
+  it("opens a link-away app ten seconds after the paper is in hand", async () => {
+    const navigate = vi.fn();
+    const { container } = await taken(navigate);
+    await inHand(container);
+    expect(screen.getByRole("timer")).toHaveTextContent("10");
+    await advance(9_000);
+    expect(navigate).not.toHaveBeenCalled();
+    await advance(1_100);
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("#stay");
+  });
+
+  it("opens it at once on Open now", async () => {
+    const navigate = vi.fn();
+    const { container, user } = await taken(navigate);
+    await inHand(container);
+    await user.click(screen.getByRole("link", { name: /Open now/ }));
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("#stay");
+    await advance(15_000);
+    expect(navigate).toHaveBeenCalledOnce();
+  });
+
+  it("never opens it after Stay here", async () => {
+    const navigate = vi.fn();
+    const { container, user } = await taken(navigate);
+    await inHand(container);
+    await user.click(screen.getByRole("button", { name: "Stay here" }));
+    await advance(20_000);
+    expect(navigate).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("button", { name: "Copied Client ID" }),
+      screen.getByText("Stopped. Open it when you are ready."),
     ).toBeInTheDocument();
   });
 
-  it("follows the app's action on GO, without a camera hint for the app", async () => {
-    routed({ status: 200, body: { card: DNS_CARD } });
-    const go = vi.fn();
-    const { user, container } = await cardOpened(go);
-    await user.click(container.querySelector<HTMLElement>("[data-key='GO']")!);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
-    });
-    expect(go).toHaveBeenCalledWith("https://enroll.elsewhere.test/");
+  it("never opens the app after a crumple made while the paper was still rising", async () => {
+    const navigate = vi.fn();
+    const { container, user } = await taken(navigate);
+    await advance(PRINTED_MS + 100);
+    expect(stageOf(container)).toBe("hand");
+    await user.keyboard("{Escape}");
+    await advance(CRUMPLED_MS + 15_000);
+    expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("connects through Pawl on GO and remembers the bay for the way back", async () => {
+  it("counts from ten while it prints, and holds a Stay here pressed before the count began", async () => {
+    const navigate = vi.fn();
+    const { container, user } = await taken(navigate);
+    await advance(560 + 300);
+    expect(stageOf(container)).toBe("feed");
+    expect(screen.getByRole("timer")).toHaveTextContent("10");
+    expect(screen.queryByText(/Stopped/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Stay here" }));
+    await advance(PRINTED_MS + STEPPED_BACK_MS + 15_000);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Stopped. Open it when you are ready."),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the paper in a frame of its own on a second take from the same page too", async () => {
+    const navigate = vi.fn();
+    const { container, user } = await taken(navigate);
+    await inHand(container);
+    await user.keyboard("{Escape}");
+    await advance(CRUMPLED_MS);
+    const cartridge = container.querySelector<HTMLElement>(
+      "[data-cartridge='3']",
+    )!;
+    await user.click(cartridge);
+    await advance(1500);
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    expect(
+      container.querySelector("dialog[data-delivery]"),
+    ).not.toHaveAttribute("open");
+    expect(stageOf(container)).toBeUndefined();
+    await advance(560);
+    expect(container.querySelector("dialog[data-delivery]")).toHaveAttribute(
+      "open",
+    );
+    await advance(PRINTED_MS - 560 + STEPPED_BACK_MS);
+    expect(screen.getByRole("timer")).toHaveTextContent("10");
+  });
+
+  it.each(["Escape", "Crumple"] as const)(
+    "puts the receipt in the tray on %s, empties it and hands focus back to the bays",
+    async (how) => {
+      const navigate = vi.fn();
+      const { container, user } = await taken(navigate);
+      await inHand(container);
+      if (how === "Escape") await user.keyboard("{Escape}");
+      else {
+        await user.click(
+          screen.getByRole("button", { name: "Crumple the receipt" }),
+        );
+      }
+      expect(stageOf(container)).toBe("crumple");
+      await advance(CRUMPLED_MS);
+      expect(
+        container.querySelector("dialog[data-delivery]"),
+      ).not.toHaveAttribute("open");
+      expect(container.querySelector("[data-tray]")).toHaveAttribute(
+        "data-tray",
+        "none",
+      );
+      expect(
+        container
+          .querySelector("[data-view-panel='products']")!
+          .contains(document.activeElement),
+      ).toBe(true);
+      await advance(15_000);
+      expect(navigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it("shows the whole machine and no receipt when restored from the back/forward cache after the app opened", async () => {
+    const navigate = vi.fn();
+    const { container } = await taken(navigate);
+    await inHand(container);
+    await advance(10_100);
+    expect(navigate).toHaveBeenCalledOnce();
+    await act(async () => {
+      window.dispatchEvent(
+        Object.assign(new Event("pageshow"), { persisted: true }),
+      );
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(
+      container.querySelector("dialog[data-delivery]"),
+    ).not.toHaveAttribute("open");
+    expect(container.querySelector("[data-tray]")).toHaveAttribute(
+      "data-tray",
+      "none",
+    );
+    expect(
+      container.querySelector<HTMLElement>("[data-camera]")!.dataset.framing,
+    ).toBe("whole");
+    await advance(15_000);
+    expect(navigate).toHaveBeenCalledOnce();
+  });
+});
+
+function cardCalls(): string[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map(([input]) => String(input))
+    .filter((path) => path.startsWith("/api/apps/dns/card"));
+}
+
+describe("an outside app's card prints on the receipt", () => {
+  it("asks for the card when the cartridge lands, and prints it on TAKE DELIVERY without asking again", async () => {
+    routed({ status: 200, body: { card: DNS_CARD } });
+    const { container, user } = await delivered(vi.fn(), "5");
+    expect(cardCalls()).toHaveLength(1);
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    await inHand(container);
+    expect(cardCalls()).toHaveLength(1);
+    const paper = container.querySelector("[data-receipt]")!;
+    expect(paper.querySelector("h1")).toHaveTextContent("Your DNS address");
+    expect(paper).toHaveTextContent("0123456789abcdef");
+    expect(paper).toHaveTextContent("From enroll.elsewhere.test");
+    expect(screen.queryByRole("timer")).toBeNull();
+    expect(
+      container.querySelector("[data-view-panel='receipt']"),
+    ).not.toHaveAttribute("hidden");
+  });
+
+  it("keeps the paper in the slot until a slow card answers, and prints -- with Try again when it never does", async () => {
+    routed({ status: 200, body: { card: DNS_CARD } });
+    const answered = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) =>
+      String(input).startsWith("/api/apps/dns/card")
+        ? new Promise<Response>((_, fail) =>
+            setTimeout(() => fail(new Error("timed out")), 10_000),
+          )
+        : answered(input, init),
+    );
+    const { container, user } = await delivered(vi.fn(), "5");
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    await advance(2_000);
+    expect(stageOf(container)).toBeUndefined();
+    await advance(8_000);
+    await inHand(container);
+    expect(container.querySelector("[data-receipt] h1")).toHaveTextContent(
+      "DNS did not answer",
+    );
+    expect(container.querySelector("[data-receipt]")).toHaveTextContent("--");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+  });
+
+  it("signs in again without printing when the card says the session ended", async () => {
+    routed({ status: 401, body: { code: "SESSION_EXPIRED" } });
+    const go = vi.fn();
+    const { container, user } = await delivered(go, "5");
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    await advance(0);
+    expect(sessionStorage.getItem("pawl:machine-request")).toBe("5");
+    expect(go).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/auth\/signin\?returnTo=.*prompt=none$/u),
+    );
+    await advance(PRINTED_MS);
+    expect(stageOf(container)).toBeUndefined();
+  });
+
+  it("connects through Pawl from the paper and remembers the bay", async () => {
     routed({
       status: 409,
       body: {
@@ -322,31 +536,76 @@ describe("an outside app with a card", () => {
       },
     });
     const go = vi.fn();
-    const { user, container } = await cardOpened(go);
+    const { container, user } = await delivered(go, "5");
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    await inHand(container);
     expect(
       screen.getByRole("heading", { name: "DNS needs to know who you are" }),
     ).toBeInTheDocument();
-    await user.click(container.querySelector<HTMLElement>("[data-key='GO']")!);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
-    });
+    await user.click(screen.getByRole("link", { name: /Connect/ }));
+    await advance(700);
     expect(sessionStorage.getItem("pawl:machine-request")).toBe("5");
     expect(go).toHaveBeenCalledWith(
       "https://paw.example.test/oauth/connect?client_id=dns#cam=screen",
     );
   });
 
-  it("goes back to the bays on CLR", async () => {
-    routed({ status: 502, body: { code: "APP_UNREADABLE" } });
-    const { user, container } = await cardOpened(vi.fn());
+  it("says so when this browser cannot hold the bay for the way back from Connect", async () => {
+    routed({
+      status: 409,
+      body: {
+        code: "CONSENT_REQUIRED",
+        connect: "https://paw.example.test/oauth/connect?client_id=dns",
+      },
+    });
+    const { container, user } = await delivered(vi.fn(), "5");
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    await inHand(container);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage is blocked");
+    });
+    await user.click(screen.getByRole("link", { name: /Connect/ }));
     expect(
-      screen.getByRole("heading", { name: "DNS did not answer" }),
+      container.querySelector("[data-view-panel='receipt'] [data-say]"),
+    ).toHaveTextContent("This browser cannot hold your bay request.");
+    vi.mocked(Storage.prototype.setItem).mockRestore();
+  });
+
+  it("follows the app's action from the paper, without a camera hint for the app", async () => {
+    routed({ status: 200, body: { card: DNS_CARD } });
+    const go = vi.fn();
+    const { container, user } = await delivered(go, "5");
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    await inHand(container);
+    await user.click(screen.getByRole("link", { name: "Detail ↗" }));
+    await advance(700);
+    expect(go).toHaveBeenCalledWith("https://enroll.elsewhere.test/");
+  });
+
+  it("copies a card field and says so on its button", async () => {
+    routed({ status: 200, body: { card: DNS_CARD } });
+    const { container, user } = await delivered(vi.fn(), "5");
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    await inHand(container);
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    await user.click(screen.getByRole("button", { name: "Copy Client ID" }));
+    await advance(0);
+    expect(writeText).toHaveBeenCalledWith("0123456789abcdef");
+    expect(
+      screen.getByRole("button", { name: "Copied Client ID" }),
     ).toBeInTheDocument();
-    await user.click(container.querySelector<HTMLElement>("[data-key='CLR']")!);
-    expect(
-      container.querySelector<HTMLElement>("[data-view-panel='products']")!
-        .hidden,
-    ).toBe(false);
   });
 });
 
@@ -388,16 +647,6 @@ describe("a cabinet that keeps up with the pass", () => {
     );
     const { container } = await opened(vi.fn());
     expect(container.querySelector("[data-cartridge='5']")).not.toBeNull();
-  });
-
-  it("signs in again by itself when an open card finds the session ended", async () => {
-    routed({ status: 401, body: { code: "SESSION_EXPIRED" } });
-    const go = vi.fn();
-    await cardOpened(go);
-    expect(sessionStorage.getItem("pawl:machine-request")).toBe("5");
-    expect(go).toHaveBeenCalledWith(
-      expect.stringMatching(/^\/auth\/signin\?returnTo=.*prompt=none$/u),
-    );
   });
 
   it("says a sign-in did not finish and takes the note out of the address", async () => {
