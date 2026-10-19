@@ -1,4 +1,9 @@
-import { displayHandle, errorMessage, type Identity } from "@pawl/core";
+import {
+  ApiError,
+  displayHandle,
+  errorMessage,
+  type Identity,
+} from "@pawl/core";
 import {
   Bar,
   BarLink,
@@ -10,7 +15,13 @@ import {
   Step,
   View,
 } from "@pawl/ui";
-import { createContext, useContext, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  type ReactNode,
+} from "react";
 
 import { departTo } from "../depart";
 import type { PassEvent, PassState, PassView } from "../flow";
@@ -101,7 +112,36 @@ export function begin(pass: Pass): void {
   pass.dispatch({ type: "busy", busy: true });
 }
 
+export const PASS_ENDED = "Your pass ended. Sign in to go on.";
+const SIGN_IN_AGAIN = "Sign in again to change registered apps.";
+
+function followedEnd(pass: Pass, cause: unknown): boolean {
+  if (!(cause instanceof ApiError)) return false;
+  const ended =
+    cause.status === 401 &&
+    (cause.code === "unauthorized" || cause.code === "login_required");
+  if (!ended && cause.code !== "reauth_required") return false;
+  const lead = (): void => {
+    pass.setUser(null);
+    pass.dispatch({
+      type: "expired",
+      text: ended ? PASS_ENDED : SIGN_IN_AGAIN,
+    });
+  };
+  if (ended) lead();
+  else void api("/api/logout", {}).then(lead, lead);
+  return true;
+}
+
+export function useFollowEnd(): (cause: unknown) => boolean {
+  const pass = usePass();
+  const latest = useRef(pass);
+  latest.current = pass;
+  return useCallback((cause) => followedEnd(latest.current, cause), []);
+}
+
 export function failed(pass: Pass, cause: unknown): void {
+  if (followedEnd(pass, cause)) return;
   pass.dispatch({ type: "busy", busy: false });
   pass.dispatch({
     type: "say",

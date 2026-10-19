@@ -21,6 +21,9 @@ export interface Env {
   OIDC_SUB_SECRET?: string;
   AUTHORIZE_RATE_LIMIT?: RateLimit;
   TOKEN_RATE_LIMIT?: RateLimit;
+  SIGNIN_RATE_LIMIT?: RateLimit;
+  SIGNIN_TRY_LIMIT?: RateLimit;
+  SIGNIN_FAILURE_LIMIT?: RateLimit;
   ESTATE_MANIFEST?: string;
   [binding: string]: unknown;
 }

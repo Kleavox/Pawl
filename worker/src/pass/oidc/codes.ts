@@ -11,6 +11,7 @@ export interface CodeInput {
   codeChallenge: string;
   nonce: string | null;
   scopes: string[];
+  sessionId: string | null;
 }
 
 interface CodeRecord {
@@ -21,6 +22,7 @@ interface CodeRecord {
   nonce: string | null;
   scopes: string;
   expires_at: string;
+  session_id: string | null;
 }
 
 export type ConsumedCode =
@@ -29,7 +31,7 @@ export type ConsumedCode =
   | { kind: "unknown" };
 
 const COLUMNS =
-  "client_id, user_id, redirect_uri, code_challenge, nonce, scopes, expires_at";
+  "client_id, user_id, redirect_uri, code_challenge, nonce, scopes, expires_at, session_id";
 
 export async function issueCode(env: Env, input: CodeInput): Promise<string> {
   const raw = randomToken();
@@ -41,8 +43,8 @@ export async function issueCode(env: Env, input: CodeInput): Promise<string> {
     env.DB.prepare(
       `INSERT INTO oauth_codes
        (code_hash, client_id, user_id, redirect_uri, code_challenge, nonce,
-        scopes, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        scopes, expires_at, session_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       await hashToken(raw),
       input.clientId,
@@ -52,6 +54,7 @@ export async function issueCode(env: Env, input: CodeInput): Promise<string> {
       input.nonce,
       JSON.stringify(input.scopes),
       new Date(now + CODE_TTL_MS).toISOString(),
+      input.sessionId,
     ),
   ]);
   return raw;

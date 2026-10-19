@@ -28,6 +28,8 @@ export interface FakePawl {
   outsideApps: unknown[] | null;
   cardTokens: URL[];
   answerCardToken: (url: URL) => Response;
+  renewals: string[];
+  answerRenew: (token: string) => Promise<Response>;
 }
 
 export async function fakePawl(): Promise<FakePawl> {
@@ -50,6 +52,9 @@ export async function fakePawl(): Promise<FakePawl> {
     outsideApps: [],
     cardTokens: [],
     answerCardToken: () => new Response(null, { status: 404 }),
+    renewals: [],
+    answerRenew: async () =>
+      Response.json({ code: "session_ended" }, { status: 401 }),
     async sign(claims, kid = "k1") {
       const input = `${segment({ alg: "ES256", typ: "JWT", kid })}.${segment(claims)}`;
       const signature = await crypto.subtle.sign(
@@ -100,6 +105,11 @@ export async function fakePawl(): Promise<FakePawl> {
       if (url.pathname === "/internal/card-token") {
         pawl.cardTokens.push(url);
         return pawl.answerCardToken(url);
+      }
+      if (url.pathname === "/internal/renew") {
+        const { token } = (await request.json()) as { token: string };
+        pawl.renewals.push(token);
+        return pawl.answerRenew(token);
       }
       if (url.pathname === "/internal/devices") {
         const id = url.searchParams.get("id") ?? "";

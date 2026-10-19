@@ -40,6 +40,34 @@ describe("apiFetch", () => {
     },
   );
 
+  it("gives every request a time limit", async () => {
+    const calls = capture();
+    await apiFetch("/api/session");
+    expect(calls[0]!.init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("says plainly that an answer did not come in time", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.reject(new DOMException("signal timed out", "TimeoutError")),
+    );
+    await expect(apiFetch("/api/session")).rejects.toMatchObject({
+      code: "timeout",
+      message: "No answer in time. Try again.",
+    });
+  });
+
+  it("says plainly that the connection failed", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.reject(new TypeError("Failed to fetch")),
+    );
+    const failure = await apiFetch("/api/session").catch((cause) => cause);
+    expect(failure).toBeInstanceOf(ApiError);
+    expect(failure).toMatchObject({
+      code: "offline",
+      message: "No connection. Try again.",
+    });
+  });
+
   it("leaves a plain read without a content type", async () => {
     const calls = capture();
     await apiFetch("/api/session");

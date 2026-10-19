@@ -15,6 +15,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { CODE_LENGTH } from "../flow";
 import { api } from "../helpers";
 import { OtpVerifyError, startOtp, verifyOtpCode } from "../otp";
+import { useHumanCheck } from "../useChallenge";
 import type { SessionResponse } from "../types";
 import { finish, Frame, SCREEN_FORM, usePass } from "./context";
 
@@ -36,6 +37,7 @@ function messageOf(error: unknown): string {
 export function EmailStep(): ReactNode {
   const pass = usePass();
   const shown = pass.state.view === "email";
+  const human = useHumanCheck(shown);
   const [email, setEmail] = useState(pass.state.email);
   const [last, setLast] = useState(pass.state.email);
   if (pass.state.email !== last) {
@@ -60,7 +62,7 @@ export function EmailStep(): ReactNode {
     pass.dispatch({ type: "say", say: null });
     pass.dispatch({ type: "busy", busy: true });
     try {
-      await startOtp(address);
+      await human.checked(() => startOtp(address));
     } catch (error) {
       pass.dispatch({ type: "busy", busy: false });
       pass.dispatch({
@@ -111,6 +113,7 @@ export function EmailStep(): ReactNode {
           }
         />
       </Form>
+      {human.widget}
     </Frame>
   );
 }
@@ -119,6 +122,7 @@ export function CodeStep(): ReactNode {
   const pass = usePass();
   const { state } = pass;
   const shown = state.view === "code";
+  const human = useHumanCheck(shown);
 
   async function settleLost(): Promise<void> {
     try {
@@ -147,9 +151,11 @@ export function CodeStep(): ReactNode {
     pass.dispatch({ type: "busy", busy: true });
     let verified;
     try {
-      verified = await verifyOtpCode(state.email, state.digits);
+      verified = await human.checked(() =>
+        verifyOtpCode(state.email, state.digits),
+      );
     } catch (error) {
-      if (!(error instanceof ApiError)) {
+      if (!(error instanceof ApiError) || error.status === 0) {
         await settleLost();
         return;
       }
@@ -209,6 +215,7 @@ export function CodeStep(): ReactNode {
           {tries}
         </Note>
       </form>
+      {human.widget}
     </Frame>
   );
 }

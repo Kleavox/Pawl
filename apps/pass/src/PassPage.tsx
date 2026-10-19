@@ -25,6 +25,7 @@ import { api, returnTo } from "./helpers";
 import type { OAuthProviders, SessionResponse } from "./types";
 import {
   handleOf,
+  PASS_ENDED,
   PassContext,
   SCREEN_FORM,
   whoOf,
@@ -182,6 +183,37 @@ export function PassPage(props: {
           needsUsername: false,
         }),
       );
+  }, []);
+
+  const latest = useRef({ user, view: state.view });
+  latest.current = { user, view: state.view };
+  useEffect(() => {
+    const check = (): void => {
+      if (document.visibilityState === "hidden") return;
+      void api<SessionResponse>("/api/session").then(
+        (session) => {
+          const now = session.authenticated ? (session.user ?? null) : null;
+          const { user: was, view } = latest.current;
+          if (was !== null && now === null) {
+            setUser(null);
+            dispatch({ type: "expired", text: PASS_ENDED });
+          } else if (was === null && now !== null && view === "methods") {
+            setUser(now);
+            dispatch({ type: "signed-in", needsUsername: !now.username });
+          }
+        },
+        () => undefined,
+      );
+    };
+    const shown = (event: PageTransitionEvent): void => {
+      if (event.persisted) check();
+    };
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("pageshow", shown);
+    return () => {
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("pageshow", shown);
+    };
   }, []);
 
   const choices = methodChoices(providers);

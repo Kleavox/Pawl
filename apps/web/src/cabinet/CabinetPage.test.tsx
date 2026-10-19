@@ -349,3 +349,63 @@ describe("an outside app with a card", () => {
     ).toBe(false);
   });
 });
+
+describe("a cabinet that keeps up with the pass", () => {
+  it("asks for the pass, the catalog and the estate at once, each with a time limit", async () => {
+    let reply!: (response: Response) => void;
+    const fetching = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("/api/session")
+        ? new Promise<Response>((resolve) => (reply = resolve))
+        : answer({ role: "USER", tools: {}, attention: [] }),
+    );
+    vi.stubGlobal("fetch", fetching);
+    await opened(vi.fn());
+    const asked = fetching.mock.calls.map(([input]) => String(input));
+    expect(asked).toEqual(
+      expect.arrayContaining(["/api/session", "/api/catalog", "/api/estate"]),
+    );
+    for (const call of fetching.mock.calls) {
+      const init = (call as unknown[])[1] as RequestInit | undefined;
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+    await act(async () => {
+      reply(answer({ authenticated: false }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  });
+
+  it("signs in again by itself when an open card finds the session ended", async () => {
+    routed({ status: 401, body: { code: "SESSION_EXPIRED" } });
+    const go = vi.fn();
+    await cardOpened(go);
+    expect(sessionStorage.getItem("pawl:machine-request")).toBe("5");
+    expect(go).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/auth\/signin\?returnTo=.*prompt=none$/u),
+    );
+  });
+
+  it("says a sign-in did not finish and takes the note out of the address", async () => {
+    window.history.replaceState(null, "", "/?signin=failed");
+    await opened(vi.fn());
+    expect(
+      screen.getAllByText("SIGN-IN DID NOT FINISH").length,
+    ).toBeGreaterThan(0);
+    expect(window.location.search).toBe("");
+  });
+
+  it("reads the pass again when the page comes back from the back/forward cache", async () => {
+    const { container } = await opened(vi.fn());
+    expect(screen.getByRole("button", { name: /SIGN IN/ })).toBeVisible();
+    routed({ status: 200, body: { card: DNS_CARD } });
+    await act(async () => {
+      window.dispatchEvent(
+        Object.assign(new Event("pageshow"), { persisted: true }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(
+      container.querySelector("[data-machine]")?.getAttribute("data-access") ??
+        container.querySelector("[data-access]")?.getAttribute("data-access"),
+    ).toBe("visitor");
+  });
+});

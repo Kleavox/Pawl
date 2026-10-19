@@ -212,7 +212,7 @@ pub fn run() -> Result<(), String> {
 
     let d1_id = found_or_created(
         &["d1", "list", "--json"],
-        &["d1", "create", WORKER],
+        &["d1", "create", WORKER, "--location", "apac"],
         "name",
         "uuid",
         "D1 database",

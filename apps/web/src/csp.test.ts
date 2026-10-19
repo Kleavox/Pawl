@@ -5,7 +5,8 @@ import { CAMERA_HINT_HASH } from "@pawl/ui/camera-hint";
 import { headersFile } from "./csp";
 
 function directive(file: string, name: string): string {
-  const policy = file.split("Content-Security-Policy: ")[1] ?? "";
+  const policy =
+    (file.split("Content-Security-Policy: ")[1] ?? "").split("\n")[0] ?? "";
   return (
     policy
       .split(";")
@@ -32,6 +33,14 @@ describe("the cabinet's content security policy", () => {
     );
     expect(directive(file, "default-src")).toBe("default-src 'self'");
     expect(directive(file, "frame-ancestors")).toBe("frame-ancestors 'none'");
+  });
+
+  it("keeps the hashed assets in the browser for good, and nothing else", () => {
+    const file = headersFile("https://paw.product.test");
+    expect(file).toContain(
+      "/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n",
+    );
+    expect(file.match(/Cache-Control/gu)).toHaveLength(1);
   });
 
   it("names both loopback spellings of a local Pawl", () => {

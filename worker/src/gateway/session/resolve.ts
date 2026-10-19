@@ -9,6 +9,7 @@ export const SESSION_COOKIE_NAME = "__Host-session";
 
 export interface SessionEnv {
   ENVIRONMENT?: string;
+  PUBLIC_ORIGIN?: string;
   PASS?: Fetcher;
   OIDC_ISSUER?: string;
   OIDC_CLIENT_ID?: string;

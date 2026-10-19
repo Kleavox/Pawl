@@ -1,7 +1,7 @@
 import { readCookie, SESSION_COOKIE } from "@pawl/auth";
 import type { Identity, SessionIdentity } from "@pawl/core";
 import type { Env } from "../env";
-import { SESSION_TTL_SECONDS } from "./cookies";
+import { SESSION_LIMIT_SECONDS, SESSION_TTL_SECONDS } from "./cookies";
 import { hashToken, randomToken } from "./crypto";
 
 interface StoredSession {
@@ -117,7 +117,13 @@ export async function getSession(
   env: Env,
   token: string,
 ): Promise<SessionIdentity | null> {
-  const sessionId = await hashToken(token);
+  return sessionById(env, await hashToken(token));
+}
+
+export async function sessionById(
+  env: Env,
+  sessionId: string,
+): Promise<SessionIdentity | null> {
   const stored = await env.SESSIONS.get<StoredSession>(
     `session:${sessionId}`,
     "json",
@@ -155,8 +161,43 @@ export async function getSession(
   return {
     identity: account ? { ...identity, role: account.role } : identity,
     sessionId,
-    expiresAt: stored.expiresAt,
+    expiresAt: await slide(env, sessionId, stored),
   };
+}
+
+async function slide(
+  env: Env,
+  sessionId: string,
+  stored: StoredSession,
+): Promise<string> {
+  const now = Date.now();
+  const ends = Date.parse(stored.expiresAt);
+  const next = Math.min(
+    now + SESSION_TTL_SECONDS * 1000,
+    Date.parse(stored.createdAt) + SESSION_LIMIT_SECONDS * 1000,
+  );
+  if (ends - now > SESSION_TTL_SECONDS * 500 || next <= ends) {
+    return stored.expiresAt;
+  }
+  const expiresAt = new Date(next).toISOString();
+  const expirationTtl = Math.max(60, Math.ceil((next - now) / 1000));
+  const deviceKey = `usersession:${stored.identity.id}:${sessionId}`;
+  const device =
+    await env.SESSIONS.getWithMetadata<Record<string, unknown>>(deviceKey);
+  await Promise.all([
+    env.SESSIONS.put(
+      `session:${sessionId}`,
+      JSON.stringify({ ...stored, expiresAt }),
+      { expirationTtl },
+    ),
+    device.value === null
+      ? Promise.resolve()
+      : env.SESSIONS.put(deviceKey, device.value, {
+          expirationTtl,
+          metadata: { ...device.metadata, expiresAt },
+        }),
+  ]);
+  return expiresAt;
 }
 
 export async function sessionStartedAt(

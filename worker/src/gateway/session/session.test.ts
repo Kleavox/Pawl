@@ -116,11 +116,28 @@ describe("the gateway signs people in through Pawl", () => {
     }
   });
 
-  it("refuses a callback this browser did not start", async () => {
+  it("refuses a callback this browser did not start, back on the cabinet", async () => {
     const { pending } = await startSignIn();
     const response = await callback(pending, "code=c&state=forged");
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(`${ROOT}/`);
+    expect(valueOf(response, "__Host-silent")).toBe("1");
+    expect(valueOf(response, "__Host-session")).toBeNull();
     expect(pawl.tokenRequests).toHaveLength(0);
+  });
+
+  it("forgets the signed-in hint when Pawl says nobody is signed in", async () => {
+    const { pending, authorize } = await startSignIn();
+    const response = await callback(
+      pending,
+      `error=login_required&state=${authorize.searchParams.get("state")}`,
+    );
+    expect(setCookie(response, "pawl-signed-in")).toMatch(
+      /^pawl-signed-in=; .*Max-Age=0/u,
+    );
+    expect(setCookie(response, "pawl-signed-in")).toContain(
+      "Domain=.example.test",
+    );
   });
 
   it("returns a person Pawl did not know as a guest, to where they were", async () => {
@@ -176,7 +193,9 @@ describe("the gateway signs people in through Pawl", () => {
       pending,
       `code=c&state=${authorize.searchParams.get("state")}`,
     );
-    expect(response.status).toBe(502);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(`${ROOT}/?signin=failed`);
+    expect(valueOf(response, "__Host-silent")).toBe("1");
     expect(valueOf(response, "__Host-session")).toBeNull();
   });
 });
@@ -276,15 +295,21 @@ describe("arriving at the cabinet", () => {
     );
   }
 
-  it("asks Pawl once, silently, when the visitor has no session here", async () => {
-    const first = await visit();
+  it("asks Pawl once, silently, when Pawl has signed this browser in", async () => {
+    const first = await visit("pawl-signed-in=1");
     expect(first.status).toBe(302);
     expect(first.headers.get("location")).toBe(
       "/auth/signin?returnTo=%2F&prompt=none",
     );
     expect(valueOf(first, "__Host-silent")).toBe("1");
-    const again = await visit("__Host-silent=1");
+    const again = await visit("pawl-signed-in=1; __Host-silent=1");
     expect(await again.text()).toBe("<html>cabinet</html>");
+  });
+
+  it("serves a visitor Pawl never signed in the cabinet without a detour", async () => {
+    const response = await visit();
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("<html>cabinet</html>");
   });
 
   it("serves a link preview or a crawler the cabinet without a detour", async () => {
@@ -308,6 +333,151 @@ describe("arriving at the cabinet", () => {
     const token = await pawl.sign(accessClaims());
     const response = await visit(`__Host-session=${token}`);
     expect(await response.text()).toBe("<html>cabinet</html>");
+  });
+});
+
+describe("keeping the session while Pawl's lasts", () => {
+  function ended(overrides: Record<string, unknown> = {}) {
+    return pawl.sign(
+      accessClaims({
+        exp: Math.floor(Date.now() / 1000) - 5,
+        sid: "pawl-session",
+        ...overrides,
+      }),
+    );
+  }
+
+  function renewWith(claims: Record<string, unknown> = {}) {
+    pawl.answerRenew = async () =>
+      Response.json({
+        access_token: await pawl.sign(
+          accessClaims({ role: "USER", ...claims }),
+        ),
+      });
+  }
+
+  it("renews an ended token in place and keeps the person signed in", async () => {
+    renewWith();
+    const token = await ended();
+    const response = await app.request(
+      `${ROOT}/api/session`,
+      { headers: { cookie: `__Host-session=${token}` } },
+      env,
+    );
+    expect(await response.json()).toMatchObject({
+      authenticated: true,
+      identity: { id: "user-1", role: "USER" },
+    });
+    expect(pawl.renewals).toEqual([token]);
+    const renewed = valueOf(response, "__Host-session");
+    expect(renewed).toBeTruthy();
+    expect(renewed).not.toBe(token);
+    expect(setCookie(response, "__Host-session")).toContain("HttpOnly");
+  });
+
+  it("serves the cabinet without the silent detour once renewed", async () => {
+    renewWith();
+    const response = await app.request(
+      `${ROOT}/`,
+      {
+        headers: {
+          accept: "text/html",
+          "sec-fetch-dest": "document",
+          cookie: `__Host-silent=1; __Host-session=${await ended()}`,
+        },
+      },
+      env,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("<html>cabinet</html>");
+    expect(valueOf(response, "__Host-session")).toBeTruthy();
+  });
+
+  it("leaves a session ended when Pawl's session has ended", async () => {
+    const response = await app.request(
+      `${ROOT}/api/session`,
+      { headers: { cookie: `__Host-session=${await ended()}` } },
+      env,
+    );
+    expect(await response.json()).toEqual({
+      authenticated: false,
+      reason: "expired",
+    });
+    expect(setCookie(response, "__Host-session")).toContain("Max-Age=0");
+  });
+
+  it("asks Pawl only about its own ended tokens", async () => {
+    await session(`__Host-session=${await pawl.sign(accessClaims())}`);
+    await session(`__Host-session=${await ended({ aud: ["desmyx", ISSUER] })}`);
+    await session("");
+    expect(pawl.renewals).toEqual([]);
+  });
+
+  it("does not renew for a static file", async () => {
+    renewWith();
+    await app.request(
+      `${ROOT}/assets/site.js`,
+      { headers: { cookie: `__Host-session=${await ended()}` } },
+      env,
+    );
+    expect(pawl.renewals).toEqual([]);
+  });
+
+  it("asks Pawl whether the session behind a live token still lives when the cabinet reads it", async () => {
+    renewWith({ role: "ADMIN", sid: "pawl-session" });
+    const token = await pawl.sign(
+      accessClaims({ role: "USER", sid: "pawl-session" }),
+    );
+    const response = await app.request(
+      `${ROOT}/api/session`,
+      { headers: { cookie: `__Host-session=${token}` } },
+      env,
+    );
+    expect(await response.json()).toMatchObject({
+      authenticated: true,
+      identity: { id: "user-1", role: "ADMIN" },
+    });
+    expect(pawl.renewals).toEqual([token]);
+    expect(valueOf(response, "__Host-session")).not.toBe(token);
+  });
+
+  it("says the session ended as soon as Pawl's has, and drops it", async () => {
+    const token = await pawl.sign(accessClaims({ sid: "pawl-session" }));
+    const response = await app.request(
+      `${ROOT}/api/session`,
+      { headers: { cookie: `__Host-session=${token}` } },
+      env,
+    );
+    expect(await response.json()).toEqual({
+      authenticated: false,
+      reason: "expired",
+    });
+    expect(setCookie(response, "__Host-session")).toContain("Max-Age=0");
+  });
+
+  it("keeps a live session when Pawl cannot be asked", async () => {
+    pawl.answerRenew = async () => new Response(null, { status: 503 });
+    const token = await pawl.sign(accessClaims({ sid: "pawl-session" }));
+    expect(await session(`__Host-session=${token}`)).toMatchObject({
+      authenticated: true,
+    });
+  });
+
+  it("takes a live token that names no Pawl session as it stands", async () => {
+    expect(
+      await session(`__Host-session=${await pawl.sign(accessClaims())}`),
+    ).toMatchObject({ authenticated: true });
+    expect(pawl.renewals).toEqual([]);
+  });
+
+  it("asks only when the cabinet reads the session, not on every call", async () => {
+    const token = await pawl.sign(accessClaims({ sid: "pawl-session" }));
+    await app.request(
+      `${ROOT}/api/catalog`,
+      { headers: { cookie: `__Host-session=${token}` } },
+      env,
+    );
+    expect(pawl.renewals).toEqual([]);
   });
 });
 
@@ -448,7 +618,13 @@ describe("the person, on the gateway's hops to an app", () => {
     const seen: Request[] = [];
     const response = await app.request(
       `${ROOT}/n_abc`,
-      { headers: { accept: "text/html", "sec-fetch-dest": "document" } },
+      {
+        headers: {
+          accept: "text/html",
+          "sec-fetch-dest": "document",
+          cookie: "pawl-signed-in=1",
+        },
+      },
       withApp(seen),
     );
     expect(response.status).toBe(302);

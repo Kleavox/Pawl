@@ -17,6 +17,7 @@ export {
 
 export const SESSION_COOKIE = "__Secure-pawl_session";
 export const VERIFICATION_COOKIE = "__Secure-pawl_verified";
+export const SIGNED_IN_COOKIE = "pawl-signed-in";
 
 const LOOPBACK_IPV4 = /^127(?:\.\d{1,3}){3}$/u;
 

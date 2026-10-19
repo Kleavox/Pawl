@@ -157,7 +157,9 @@ ships the Worker. **Run workflow** on `Validate` deploys by hand. The job runs
 `pnpm pawl deploy`, which:
 
 1. finds the D1 database `pawl` and the KV namespace `pawl`, creating them when
-   missing, so no id is stored anywhere but Cloudflare;
+   missing, so no id is stored anywhere but Cloudflare. D1 is created in
+   `apac`: its location is fixed at creation, and without a hint it follows
+   the runner to the US;
 2. renders the Worker's config from `ROOT_DOMAIN` and `ESTATE_MANIFEST`;
 3. applies D1 migrations;
 4. makes, once, each secret the Worker does not already hold:
@@ -274,6 +276,13 @@ redirect URIs, and no dynamic registration.
 `SameSite=Lax` session cookie never rides a cross-site POST. It returns to
 `post_logout_redirect_uri` only when that URI's origin is the origin of one of
 the client's registered redirect URIs, and to Pawl's own page otherwise.
+
+A first-party access token also names the Pawl session it was made in (`sid`).
+The gateway renews its own expired token in-process
+(`POST pass.internal/internal/renew`) for as long as that session lives, so the
+cabinet never redirects to stay signed in, and signing out of Pawl, revoking
+the device or changing the password ends the cabinet's session at its next
+renewal.
 
 A client registered `--first-party` skips consent, receives the account id as
 `sub`, gets no refresh token, and finds the person in its access token: `role`,
@@ -524,6 +533,14 @@ scopes granted; it lasts one minute. Check all of it. Answer `200` with:
 - No admin account-deletion or role-promotion endpoint exists.
 - The provider's keys and the cabinet's client secret are made by the deploy,
   stored only as the Worker's secrets, and never printed.
+- Signing in is counted at the edge (`SIGNIN_RATE_LIMIT`, per route per IP and
+  per address), never in KV or D1, so a flood of attempts cannot spend the
+  quota real sign-ins need. A browser that signed an account in before
+  (`__Host-pawl_device`) is never held for that account. An unknown browser
+  whose TLS fingerprint tries too often (`SIGNIN_TRY_LIMIT`) or fails too often
+  (`SIGNIN_FAILURE_LIMIT`, then held for 15 minutes) must pass the human check
+  first; until it does it gets `challenge_required` before any database read
+  or email. paw. runs the check and retries by itself.
 
 ## Why there is no ESLint
 

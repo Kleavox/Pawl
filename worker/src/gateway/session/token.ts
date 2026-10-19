@@ -9,6 +9,7 @@ export interface TokenClaims {
   email?: string;
   preferred_username?: string;
   nonce?: string;
+  sid?: string;
 }
 
 export type Verified =

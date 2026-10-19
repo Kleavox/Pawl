@@ -170,7 +170,28 @@ export function Privacy({
                 <code>__Secure-pawl_session</code>
               </td>
               <td>Your session at {passHost}</td>
-              <td>7 days</td>
+              <td>7 days without use, never more than 30 days</td>
+            </tr>
+            <tr>
+              <td>
+                <code>pawl-signed-in</code>
+              </td>
+              <td>
+                Says only that this browser is signed in at {passHost}, so{" "}
+                {rootHost} asks it only then
+              </td>
+              <td>30 days, or until you sign out</td>
+            </tr>
+            <tr>
+              <td>
+                <code>__Host-pawl_device</code>
+              </td>
+              <td>
+                Remembers up to three accounts that signed in on this browser,
+                so they skip the extra check while someone is trying many
+                passwords
+              </td>
+              <td>1 year</td>
             </tr>
             <tr>
               <td>
@@ -191,7 +212,7 @@ export function Privacy({
                 <code>__Host-session</code>
               </td>
               <td>Your session on {rootHost} and each app</td>
-              <td>7 days</td>
+              <td>As long as your session at {passHost}</td>
             </tr>
             <tr>
               <td>

@@ -20,6 +20,7 @@ export interface AccessTokenClaims {
   email?: string;
   email_verified?: boolean;
   preferred_username?: string;
+  sid?: string;
 }
 
 async function sign(

@@ -179,7 +179,9 @@ describe("leave", () => {
     void leave(cam, "printer", "/a", { reduced: false, go, stay });
     await vi.advanceTimersByTimeAsync(560);
     expect(stay).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(9000);
+    expect(stay).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
     expect(stay).toHaveBeenCalledTimes(1);
     void leave(cam, "printer", "/b", { reduced: false, go });
     await vi.advanceTimersByTimeAsync(560);

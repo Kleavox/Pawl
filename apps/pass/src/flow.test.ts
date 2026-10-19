@@ -273,3 +273,53 @@ describe("passKeys", () => {
     expect(after.page).toBe(0);
   });
 });
+
+describe("a pass that ended", () => {
+  const ENDED = "Your pass ended. Sign in to go on.";
+
+  it("leads to the sign-in, says why, and returns to the section it left", () => {
+    let s = reduceFlow(
+      { ...initialFlow(), view: "devices" },
+      { type: "expired", text: ENDED },
+    );
+    expect(s.view).toBe("methods");
+    expect(s.say).toEqual({ kind: "error", text: ENDED });
+    s = reduceFlow(s, { type: "open", view: "email" });
+    s = reduceFlow(s, { type: "signed-in", needsUsername: false });
+    expect(s.view).toBe("devices");
+    s = reduceFlow(s, { type: "back" });
+    expect(
+      reduceFlow(s, { type: "signed-in", needsUsername: false }).view,
+    ).toBe("account");
+  });
+
+  it("asks for a username first when the account has none, then returns", () => {
+    let s = reduceFlow(
+      { ...initialFlow(), view: "registry-return" },
+      { type: "expired", text: ENDED },
+    );
+    s = reduceFlow(s, { type: "signed-in", needsUsername: true });
+    expect(s.view).toBe("welcome");
+    s = reduceFlow(s, { type: "signed-in", needsUsername: false });
+    expect(s.view).toBe("registry-return");
+  });
+
+  it("returns nowhere in particular when the sign-in itself was on show", () => {
+    let s = reduceFlow(
+      { ...initialFlow(), view: "email" },
+      { type: "expired", text: ENDED },
+    );
+    s = reduceFlow(s, { type: "signed-in", needsUsername: false });
+    expect(s.view).toBe("account");
+  });
+
+  it("forgets the way back when the person signs out", () => {
+    let s = reduceFlow(
+      { ...initialFlow(), view: "devices" },
+      { type: "expired", text: ENDED },
+    );
+    s = reduceFlow(s, { type: "signed-out" });
+    s = reduceFlow(s, { type: "signed-in", needsUsername: false });
+    expect(s.view).toBe("account");
+  });
+});

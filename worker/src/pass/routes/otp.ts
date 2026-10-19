@@ -6,7 +6,6 @@ import { rateLimit } from "../lib/rate-limit";
 import { createSession } from "../lib/session";
 import {
   apiError,
-  clientIp,
   findUserByEmail,
   firstIssue,
   otpStartSchema,
@@ -17,6 +16,7 @@ import {
   toIdentity,
   type PassApp,
 } from "./shared";
+import { guardSignIn, noteFailedSignIn, rememberDevice } from "./guard";
 
 export function registerOtpRoutes(app: PassApp): void {
   app.post("/api/auth/otp/start", async (context) => {
@@ -25,21 +25,16 @@ export function registerOtpRoutes(app: PassApp): void {
       return apiError(context, 400, "invalid_input", firstIssue(body.error));
     }
 
-    const ip = clientIp(context.req.raw);
-    const ipLimit = await rateLimit(context.env, "otp-ip", ip, 10, 900);
-    const emailLimit = await rateLimit(
+    const held = await guardSignIn(context, "otp-start", body.data.email);
+    if (held) return held;
+    const mailbox = await rateLimit(
       context.env,
       "otp-email",
       body.data.email,
       5,
       900,
     );
-    if (!ipLimit.allowed || !emailLimit.allowed) {
-      return rateLimitError(
-        context,
-        Math.max(ipLimit.retryAfter, emailLimit.retryAfter),
-      );
-    }
+    if (!mailbox.allowed) return rateLimitError(context, mailbox.retryAfter);
 
     const code = await issueOtp(context.env, body.data.email);
     try {
@@ -67,27 +62,17 @@ export function registerOtpRoutes(app: PassApp): void {
       return apiError(context, 400, "invalid_input", firstIssue(body.error));
     }
 
-    const ip = clientIp(context.req.raw);
-    const ipLimit = await rateLimit(context.env, "otp-verify-ip", ip, 20, 900);
-    const emailLimit = await rateLimit(
-      context.env,
-      "otp-verify-email",
-      body.data.email,
-      10,
-      900,
-    );
-    if (!ipLimit.allowed || !emailLimit.allowed) {
-      return rateLimitError(
-        context,
-        Math.max(ipLimit.retryAfter, emailLimit.retryAfter),
-      );
-    }
+    const held = await guardSignIn(context, "otp-verify", body.data.email);
+    if (held) return held;
 
     const result = await verifyOtp(
       context.env,
       body.data.email,
       body.data.code,
     );
+    if (result.status !== "ok") {
+      await noteFailedSignIn(context, body.data.email);
+    }
     if (result.status === "wrong") {
       return apiError(context, 401, "invalid_code", "That code is incorrect.", {
         attemptsLeft: result.attemptsLeft,
@@ -173,6 +158,7 @@ export function registerOtpRoutes(app: PassApp): void {
       "Set-Cookie",
       makeSessionCookie(context.req.raw, context.env, created.token),
     );
+    await rememberDevice(context, body.data.email);
 
     return context.json({
       authenticated: true,

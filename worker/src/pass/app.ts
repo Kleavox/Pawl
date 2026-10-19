@@ -1,5 +1,6 @@
-import { INTERNAL_HOSTS } from "@pawl/config";
+import { INTERNAL_HOSTS, SESSION_COOKIE } from "@pawl/config";
 import { localWorkerOrigin } from "@pawl/topology";
+import { signedInHint } from "./lib/cookies";
 import { securityHeaders } from "./lib/http";
 import { Hono } from "hono";
 
@@ -80,6 +81,19 @@ app.onError((cause, context) => {
 });
 
 app.use("*", securityHeaders({ referrerPolicy: "same-origin" }));
+
+app.use("*", async (context, next) => {
+  await next();
+  const session = context.res.headers
+    .getSetCookie()
+    .find((line) => line.startsWith(`${SESSION_COOKIE}=`));
+  if (session === undefined) return;
+  context.res = new Response(context.res.body, context.res);
+  context.res.headers.append(
+    "Set-Cookie",
+    signedInHint(context.req.raw, context.env, !session.includes("Max-Age=0")),
+  );
+});
 
 app.options("/api/auth/otp/:step", (context) =>
   context.body(null, 204, {

@@ -923,6 +923,13 @@ describe("what an access token says about the person", () => {
     expect(claims).not.toHaveProperty("role");
     expect(claims).not.toHaveProperty("email");
     expect(claims).not.toHaveProperty("preferred_username");
+    expect(claims).not.toHaveProperty("sid");
+  });
+
+  it("names the Pawl session a first-party token was made in", async () => {
+    const { sid } = await accessClaims("notes");
+    expect(typeof sid).toBe("string");
+    expect(await env.SESSIONS.get(`session:${String(sid)}`)).not.toBeNull();
   });
 
   it("never puts an unverified address in a first-party access token", async () => {

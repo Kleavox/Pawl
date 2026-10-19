@@ -1,7 +1,12 @@
-import { SESSION_COOKIE, VERIFICATION_COOKIE } from "@pawl/auth";
+import {
+  SESSION_COOKIE,
+  SIGNED_IN_COOKIE,
+  VERIFICATION_COOKIE,
+} from "@pawl/auth";
 import type { Env } from "../env";
 
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+export const SESSION_LIMIT_SECONDS = 60 * 60 * 24 * 30;
 
 export const VERIFICATION_TTL_SECONDS = {
   basic: 60 * 60 * 24,
@@ -18,13 +23,28 @@ export function makeSessionCookie(
     env,
     SESSION_COOKIE,
     token,
-    SESSION_TTL_SECONDS,
+    SESSION_LIMIT_SECONDS,
     false,
   );
 }
 
 export function clearSessionCookie(request: Request, env: Env): string {
   return serializeCookie(request, env, SESSION_COOKIE, "", 0, false);
+}
+
+export function signedInHint(
+  request: Request,
+  env: Env,
+  signedIn: boolean,
+): string {
+  return serializeCookie(
+    request,
+    env,
+    SIGNED_IN_COOKIE,
+    signedIn ? "1" : "",
+    signedIn ? SESSION_LIMIT_SECONDS : 0,
+    true,
+  );
 }
 
 export function makeVerificationCookie(

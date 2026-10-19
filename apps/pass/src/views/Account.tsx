@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { PassView } from "../flow";
 import { api } from "../helpers";
 import type { ConnectedApp, DeviceSession } from "../types";
-import { failed, Frame, usePass } from "./context";
+import { failed, Frame, useFollowEnd, usePass } from "./context";
 import { AppsStep, DevicesStep } from "./Lists";
 import { ProfileKeyStep, ProfileNameStep, ProfileStep } from "./Profile";
 import { RegistrySteps } from "./Registry";
@@ -81,12 +81,15 @@ function useListed<T>(
 } {
   const [items, setItems] = useState<T[]>();
   const [failed, setFailed] = useState<string | null>(null);
+  const follow = useFollowEnd();
   const reload = useCallback((): void => {
     setFailed(null);
     void api<Record<string, T[]>>(path)
       .then((body) => setItems(body[field]))
-      .catch((cause) => setFailed(errorMessage(cause)));
-  }, [path, field]);
+      .catch((cause) => {
+        if (!follow(cause)) setFailed(errorMessage(cause));
+      });
+  }, [path, field, follow]);
   useEffect(reload, [reload]);
   return { items, failed, reload, setItems };
 }

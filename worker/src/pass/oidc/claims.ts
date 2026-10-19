@@ -23,6 +23,18 @@ export function claimsFor(
   return claims;
 }
 
+export function firstPartyClaims(
+  user: ClaimsUser,
+  scopes: string[],
+  sid: string | null,
+): Record<string, string | boolean> {
+  return {
+    ...claimsFor(user, scopes),
+    role: user.role,
+    ...(sid === null ? {} : { sid }),
+  };
+}
+
 export async function findClaimsUser(
   env: Env,
   userId: string,

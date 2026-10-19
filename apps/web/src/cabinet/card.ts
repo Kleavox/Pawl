@@ -1,3 +1,5 @@
+import { REQUEST_TIMEOUT_MS } from "@pawl/core";
+
 export type AppCard = {
   title: string;
   message: string;
@@ -51,6 +53,7 @@ export async function readCardFor(key: string): Promise<CardState> {
   try {
     const response = await fetch(`/api/apps/${encodeURIComponent(key)}/card`, {
       credentials: "include",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const body = (await response.json()) as Record<string, unknown>;
     if (response.status === 401) return { kind: "expired" };

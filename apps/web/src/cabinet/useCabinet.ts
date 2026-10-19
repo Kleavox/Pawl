@@ -1,4 +1,4 @@
-import type { Identity } from "@pawl/core";
+import { REQUEST_TIMEOUT_MS, type Identity } from "@pawl/core";
 import type { PublicView } from "@pawl/registry";
 import {
   arrivalFraming,
@@ -57,10 +57,31 @@ const PASS_WAIT_MS = 4000;
 const TICKER_SPEED = 40;
 const COPIED_MS = 1500;
 const SIGNED_OUT_KEY = "pawl:signed-out";
+const SIGN_IN_UNFINISHED = "SIGN-IN DID NOT FINISH";
+
+function asked(): RequestInit {
+  return {
+    credentials: "include",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  };
+}
+
+function signInUnfinished(): boolean {
+  const query = new URLSearchParams(window.location.search);
+  if (query.get("signin") !== "failed") return false;
+  query.delete("signin");
+  const search = query.toString();
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`,
+  );
+  return true;
+}
 
 async function readCatalog(): Promise<Catalog | null> {
   try {
-    const response = await fetch("/api/catalog", { credentials: "include" });
+    const response = await fetch("/api/catalog", asked());
     if (!response.ok) return null;
     const body = (await response.json()) as { bays?: unknown };
     return Array.isArray(body.bays) ? (body.bays as Catalog) : null;
@@ -84,7 +105,7 @@ function messageOf(error: unknown): string {
 }
 
 async function readSession(): Promise<GatewaySession> {
-  const response = await fetch("/api/session", { credentials: "include" });
+  const response = await fetch("/api/session", asked());
   if (!response.ok) {
     throw new Error(`The pass office answered ${response.status}.`);
   }
@@ -93,7 +114,7 @@ async function readSession(): Promise<GatewaySession> {
 
 async function readEstate(): Promise<Overview | null> {
   try {
-    const response = await fetch("/api/estate", { credentials: "include" });
+    const response = await fetch("/api/estate", asked());
     if (!response.ok) return null;
     return (await response.json()) as Overview;
   } catch {
@@ -251,9 +272,14 @@ export function useCabinet(input: {
       if (entry === undefined) return;
       showCard({ kind: "loading" });
       const next = await readCardFor(entry.key);
-      if (stateRef.current.card === bay) showCard(next);
+      if (stateRef.current.card !== bay) return;
+      showCard(next);
+      if (next.kind === "expired") {
+        rememberRequest(bay);
+        navigate(silentSignInPath(window.location));
+      }
     },
-    [showCard],
+    [showCard, navigate],
   );
 
   const closeCard = useCallback((): void => {
@@ -588,20 +614,21 @@ export function useCabinet(input: {
 
   useEffect(() => {
     let cancelled = false;
+    const unfinished = signInUnfinished();
     void (async () => {
-      const [read, fetched] = await Promise.all([
+      const [read, fetched, estate] = await Promise.all([
         readSession().then(
           (value) => value,
           () => null,
         ),
         readCatalog(),
+        readEstate(),
       ]);
       if (cancelled) return;
       applyCatalog(fetched);
       const unread = read === null;
       const session: GatewaySession = read ?? { authenticated: false };
-      const overview = session.authenticated ? await readEstate() : null;
-      if (cancelled) return;
+      const overview = session.authenticated ? estate : null;
       let next = modelFor(session, overview);
       if (unread) {
         next = {
@@ -621,6 +648,7 @@ export function useCabinet(input: {
         }
         setModel(next);
         passRead.done();
+        if (unfinished) setFault(SIGN_IN_UNFINISHED);
         return;
       }
       signedOutJustNow();
@@ -634,6 +662,33 @@ export function useCabinet(input: {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const recheck = (): void => {
+      if (document.visibilityState === "hidden" || !passRead.settled) return;
+      void readSession().then(
+        (session) => {
+          const ended = !session.authenticated && session.reason === "expired";
+          if (
+            ended ||
+            modelFor(session, null).access !== modelRef.current.access
+          ) {
+            void retryEstate();
+          }
+        },
+        () => undefined,
+      );
+    };
+    const shown = (event: PageTransitionEvent): void => {
+      if (event.persisted) recheck();
+    };
+    document.addEventListener("visibilitychange", recheck);
+    window.addEventListener("pageshow", shown);
+    return () => {
+      document.removeEventListener("visibilitychange", recheck);
+      window.removeEventListener("pageshow", shown);
+    };
+  }, [passRead, modelFor, retryEstate]);
 
   useEffect(() => {
     const plate = machine.current;

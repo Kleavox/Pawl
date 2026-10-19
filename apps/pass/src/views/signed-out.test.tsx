@@ -1,3 +1,4 @@
+import { ApiError } from "@pawl/core";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -78,6 +79,18 @@ describe("signing in on paw.", () => {
     await userEvent.click(screen.getByRole("button", { name: /^GO/ }));
     expect(verifyOtpCode).toHaveBeenCalledWith("a@b.test", "123456");
     expect(departTo).toHaveBeenCalledOnce();
+  });
+
+  it("cannot tell whether a code went through when its answer never came", async () => {
+    vi.mocked(verifyOtpCode).mockRejectedValue(
+      new ApiError("No connection. Try again.", 0, "offline"),
+    );
+    vi.mocked(api).mockResolvedValue({ authenticated: false });
+    renderPass({ view: "code", email: "a@b.test", digits: "123456" });
+    await userEvent.click(screen.getByRole("button", { name: /^GO/ }));
+    expect(
+      await within(view("code")).findByText(/could not tell/),
+    ).toBeVisible();
   });
 
   it("says how many tries are left after a wrong code, and starts the code again", async () => {

@@ -1,5 +1,5 @@
-import { apiFetch } from "@pawl/core";
-import { screen, within } from "@testing-library/react";
+import { ApiError, apiFetch } from "@pawl/core";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -61,6 +61,67 @@ function served(options: {
 beforeEach(() => {
   vi.mocked(api).mockReset();
   vi.mocked(apiFetch).mockReset();
+});
+
+describe("an account whose pass ended", () => {
+  const ENDED = "Your pass ended. Sign in to go on.";
+  const signInFirst = () => new ApiError("Sign in first.", 401, "unauthorized");
+
+  it("goes to the sign-in when a section cannot be read for it", async () => {
+    served({});
+    const serve = vi.mocked(api).getMockImplementation()!;
+    vi.mocked(api).mockImplementation(async (path, body) => {
+      if (path === "/api/sessions") throw signInFirst();
+      return serve(path, body);
+    });
+    renderPass({ view: "devices" }, { user: USER });
+    expect(await screen.findByText(ENDED)).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: /Sign in to Fixture/ }),
+    ).toBeVisible();
+  });
+
+  it("goes to the sign-in when a step is refused for it", async () => {
+    served({ devices: 2 });
+    vi.mocked(apiFetch).mockRejectedValue(signInFirst());
+    renderPass({ view: "devices" }, { user: USER });
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Revoke session 2/ }),
+    );
+    expect(await screen.findByText(ENDED)).toBeVisible();
+  });
+
+  it("notices when the tab comes back after the pass ended elsewhere", async () => {
+    served({});
+    const serve = vi.mocked(api).getMockImplementation()!;
+    vi.mocked(api).mockImplementation(async (path, body) =>
+      path === "/api/session" ? { authenticated: false } : serve(path, body),
+    );
+    renderPass({ view: "account" }, { user: USER });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(await screen.findByText(ENDED)).toBeVisible();
+  });
+
+  it("notices when the tab comes back signed in elsewhere", async () => {
+    served({});
+    const serve = vi.mocked(api).getMockImplementation()!;
+    vi.mocked(api).mockImplementation(async (path, body) =>
+      path === "/api/session"
+        ? { authenticated: true, user: USER }
+        : serve(path, body),
+    );
+    const { container } = renderPass({ view: "methods" }, { user: null });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await waitFor(() =>
+      expect(
+        container.querySelector("[data-view-panel='account']"),
+      ).toBeVisible(),
+    );
+  });
 });
 
 describe("the account on paw.", () => {

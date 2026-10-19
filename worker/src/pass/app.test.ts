@@ -766,10 +766,95 @@ describe("POST /api/auth/otp/verify", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("Set-Cookie")).toContain(
-      "__Secure-pawl_session=",
+    const lines = response.headers.getSetCookie();
+    const session = lines.find((line) =>
+      line.startsWith("__Secure-pawl_session="),
     );
-    expect(response.headers.get("Set-Cookie")).not.toContain("Domain=");
+    expect(session).toBeDefined();
+    expect(session).not.toContain("Domain=");
+    expect(
+      lines.find((line) => line.startsWith("pawl-signed-in=1;")),
+    ).toContain("Domain=.product.test");
+  });
+
+  it("drops the session cookie and the hint when the session is gone", async () => {
+    const response = await app.request(
+      "https://pass.product.test/api/session",
+      { headers: { cookie: "__Secure-pawl_session=gone" } },
+      baseEnv,
+    );
+    expect(await response.json()).toEqual({ authenticated: false });
+    const lines = response.headers.getSetCookie();
+    expect(
+      lines.find((line) => line.startsWith("__Secure-pawl_session=")),
+    ).toContain("Max-Age=0");
+    expect(lines.find((line) => line.startsWith("pawl-signed-in="))).toContain(
+      "Max-Age=0",
+    );
+  });
+
+  it("gives a session made before the hint existed its hint", async () => {
+    const values = new Map<string, string>();
+    const db = migratedDb();
+    seedUser(db, { id: "user-1", email: "a@product.test", username: "a" });
+    const env = {
+      ...baseEnv,
+      DB: db.DB,
+      SESSIONS: {
+        get: async (key: string, type?: string) => {
+          const value = values.get(key) ?? null;
+          return value !== null && type === "json" ? JSON.parse(value) : value;
+        },
+        put: async (key: string, value: string) => void values.set(key, value),
+        delete: async (key: string) => void values.delete(key),
+      },
+    } as unknown as Env;
+    const { token } = await createSession(
+      env,
+      { id: "user-1", email: "a@product.test", username: "a", role: "USER" },
+      1,
+    );
+    const response = await app.request(
+      "https://pass.product.test/api/session",
+      { headers: { cookie: `__Secure-pawl_session=${token}` } },
+      env,
+    );
+    expect(await response.json()).toMatchObject({ authenticated: true });
+    expect(
+      response.headers
+        .getSetCookie()
+        .find((line) => line.startsWith("pawl-signed-in=1;")),
+    ).toContain("Domain=.product.test");
+    const again = await app.request(
+      "https://pass.product.test/api/session",
+      {
+        headers: {
+          cookie: `__Secure-pawl_session=${token}; pawl-signed-in=1`,
+        },
+      },
+      env,
+    );
+    expect(again.headers.getSetCookie()).toEqual([]);
+  });
+
+  it("drops the signed-in hint with the session", async () => {
+    const response = await app.request(
+      "https://pass.product.test/api/logout",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://pass.product.test",
+        },
+        body: "{}",
+      },
+      baseEnv,
+    );
+    const hint = response.headers
+      .getSetCookie()
+      .find((line) => line.startsWith("pawl-signed-in="));
+    expect(hint).toContain("Max-Age=0");
+    expect(hint).toContain("Domain=.product.test");
   });
 
   it("cannot scope the session cookie at all when it is handed an internal hostname", async () => {
@@ -807,21 +892,16 @@ describe("POST /api/auth/otp/verify", () => {
   });
 
   it("rate limits verification per email, not only per IP", async () => {
-    const store = new Map<string, string>();
     const email = "hammered@example.com";
-    const windowSeconds = 900;
-    const bucket = Math.floor(Date.now() / (windowSeconds * 1000));
-    store.set(
-      `rate:otp-verify-email:${await hashToken(email)}:${bucket}`,
-      "10",
-    );
+    const hammered = `email:otp-verify:${await hashToken(email)}`;
     const env = {
       ...baseEnv,
       DB: otpDb(vi.fn()),
-      SESSIONS: {
-        get: async (k: string) => store.get(k) ?? null,
-        put: async (k: string, v: string) => void store.set(k, v),
-        delete: async (k: string) => void store.delete(k),
+      SESSIONS: kvStore(),
+      SIGNIN_RATE_LIMIT: {
+        limit: async ({ key }: { key: string }) => ({
+          success: key !== hammered,
+        }),
       },
     } as unknown as Env;
 

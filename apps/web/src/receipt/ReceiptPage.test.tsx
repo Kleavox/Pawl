@@ -60,7 +60,7 @@ describe("ReceiptPage", () => {
         main.querySelector(".receipt__head a.receipt__tear-top[data-tear]"),
       ).not.toBeNull();
       expect(container.querySelector("header, footer")).toBeNull();
-      expect(main).toHaveTextContent("12 October 2026");
+      expect(main).toHaveTextContent("19 October 2026");
       expect(
         main.querySelector("a[href='mailto:privacy@example.test']"),
       ).not.toBeNull();
@@ -237,8 +237,11 @@ describe("the privacy policy says what the code does", () => {
     "__Host-session",
     "__Host-signin",
     "__Host-silent",
+    "pawl-signed-in",
+    "__Host-pawl_device",
+    "1 year",
     "pawl:sound",
-    "7 days",
+    "7 days without use",
     "10 minutes",
     "30 minutes",
     "15 minutes",

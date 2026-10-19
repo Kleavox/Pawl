@@ -1,4 +1,4 @@
-import { ApiError, apiFetch, errorMessage } from "@pawl/core";
+import { apiFetch, errorMessage } from "@pawl/core";
 import {
   Actions,
   Back,
@@ -26,7 +26,7 @@ import {
   failed,
   Frame,
   SCREEN_FORM,
-  signOutVia,
+  useFollowEnd,
   usePass,
   type Pass,
 } from "./context";
@@ -385,13 +385,11 @@ function ReturnStep(props: {
 }): ReactNode {
   const pass = usePass();
   const shown = pass.state.view === "registry-return";
-  const [reauth, setReauth] = useState(false);
   const { draft } = props;
 
   async function create(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (pass.state.busy) return;
-    setReauth(false);
     begin(pass);
     try {
       const created = await apiFetch<{ app: OutsideApp; secret: string }>(
@@ -411,7 +409,6 @@ function ReturnStep(props: {
       pass.dispatch({ type: "busy", busy: false });
       props.onCreated(created.app, created.secret);
     } catch (cause) {
-      setReauth(cause instanceof ApiError && cause.code === "reauth_required");
       failed(pass, cause);
     }
   }
@@ -461,14 +458,6 @@ function ReturnStep(props: {
       <Note aside>
         Change the return address only for an app behind Cloudflare Access.
       </Note>
-      {reauth && (
-        <ViewButton
-          disabled={pass.state.busy}
-          onClick={() => void signOutVia(pass, "/api/logout")}
-        >
-          Sign in again
-        </ViewButton>
-      )}
     </Frame>
   );
 }
@@ -602,12 +591,15 @@ export function RegistrySteps(): ReactNode {
   } | null>(null);
   const [removing, setRemoving] = useState<OutsideApp | null>(null);
 
+  const follow = useFollowEnd();
   const reload = useCallback((): void => {
     setLoadFailed(null);
     void api<{ apps: OutsideApp[] }>("/api/admin/apps")
       .then((body) => setApps(body.apps))
-      .catch((cause) => setLoadFailed(errorMessage(cause)));
-  }, []);
+      .catch((cause) => {
+        if (!follow(cause)) setLoadFailed(errorMessage(cause));
+      });
+  }, [follow]);
   useEffect(reload, [reload]);
 
   return (

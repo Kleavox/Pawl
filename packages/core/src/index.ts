@@ -1,4 +1,9 @@
-export { ApiError, apiFetch, readApiResponse } from "./api.js";
+export {
+  ApiError,
+  apiFetch,
+  readApiResponse,
+  REQUEST_TIMEOUT_MS,
+} from "./api.js";
 export { escapeHtml } from "./escape.js";
 export { errorMessage } from "./errors.js";
 
