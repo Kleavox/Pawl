@@ -1,15 +1,5 @@
 export const WIPE_MS = 220;
 
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-
-function reducedMotion(): boolean {
-  try {
-    return globalThis.matchMedia(REDUCED_MOTION_QUERY).matches;
-  } catch {
-    return false;
-  }
-}
-
 const PANE =
   "screen__window absolute inset-0 z-1 overflow-hidden pointer-events-none animate-[wipe-window_220ms_linear_1_both]";
 
@@ -59,7 +49,6 @@ export function scanWipe(
   views: HTMLElement,
   previous: HTMLElement | null,
 ): void {
-  if (reducedMotion()) return;
   const running = sweeps.get(views);
   if (running !== undefined) clearTimeout(running);
   for (const old of views.querySelectorAll(".screen__window")) old.remove();

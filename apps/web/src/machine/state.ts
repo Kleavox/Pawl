@@ -14,15 +14,14 @@ export type MachineState = {
   busy: boolean;
   authStep: "closed" | "leaving" | "account";
   authRequest: BayCode | null;
-  screenTransfer: BayCode | null;
-  card: BayCode | null;
+  receipt: BayCode | null;
   catalog: Catalog;
 };
 
 export type MachineEvent =
   | { type: "catalog"; catalog: Catalog }
-  | { type: "open-card" }
-  | { type: "close-card" }
+  | { type: "take" }
+  | { type: "crumple" }
   | { type: "select"; bay: BayCode }
   | { type: "preselect"; bay: BayCode }
   | { type: "sign-in" }
@@ -31,7 +30,6 @@ export type MachineEvent =
   | { type: "pass-issued"; access: AccessRole }
   | { type: "pass-removed" }
   | { type: "tray-ready" }
-  | { type: "activate-tray" }
   | { type: "cancel" }
   | { type: "back" }
   | { type: "reset" };
@@ -68,8 +66,7 @@ export function initialState(
     busy: false,
     authStep: "closed",
     authRequest: null,
-    screenTransfer: null,
-    card: null,
+    receipt: null,
     catalog,
   };
 }
@@ -90,7 +87,6 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         catalog: event.catalog,
         selection,
         tray: stocked(event.catalog, state.tray),
-        card: stocked(event.catalog, state.card),
         authRequest: stocked(event.catalog, state.authRequest),
         status:
           state.selection !== null && selection === null
@@ -99,27 +95,18 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
       };
     }
 
-    case "open-card": {
-      const bay = state.tray;
-      if (bay === null || state.busy) return state;
-      const entry = state.catalog.find((candidate) => candidate.code === bay);
-      if (!entry?.card) return state;
-      return {
-        ...state,
-        card: bay,
-        tray: null,
-        status: "idle",
-        screenTransfer: null,
-      };
+    case "take": {
+      if (state.tray === null || state.busy) return state;
+      return { ...state, receipt: state.tray, tray: null, status: "idle" };
     }
 
-    case "close-card": {
-      if (state.card === null) return state;
-      return { ...state, card: null };
+    case "crumple": {
+      if (state.receipt === null) return state;
+      return { ...state, receipt: null };
     }
 
     case "select": {
-      if (state.busy) return state;
+      if (state.busy || state.receipt !== null) return state;
       if (permits(state.access, event.bay, state.catalog)) {
         return {
           ...state,
@@ -139,7 +126,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
     }
 
     case "preselect": {
-      if (state.busy) return state;
+      if (state.busy || state.receipt !== null) return state;
       return { ...state, selection: event.bay, status: "selected" };
     }
 
@@ -200,11 +187,6 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
       };
     }
 
-    case "activate-tray": {
-      if (!state.tray || state.busy) return state;
-      return { ...state, screenTransfer: state.tray, busy: true };
-    }
-
     case "cancel": {
       if (state.status === "dispensing" || state.authStep === "leaving")
         return state;
@@ -214,8 +196,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         selection: putBack ? null : state.selection,
         status: putBack ? "idle" : state.status,
         authRequest: state.status === "denied" ? null : state.authRequest,
-        screenTransfer: null,
-        card: null,
+        receipt: null,
         authStep: "closed",
         busy: false,
       };
@@ -223,7 +204,6 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
 
     case "back": {
       if (state.authStep === "account") return { ...state, authStep: "closed" };
-      if (state.card !== null) return { ...state, card: null };
       return state;
     }
 
@@ -235,8 +215,7 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
         tray: null,
         busy: false,
         authStep: "closed",
-        screenTransfer: null,
-        card: null,
+        receipt: null,
       };
     }
   }

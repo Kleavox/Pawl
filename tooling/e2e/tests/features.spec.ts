@@ -488,15 +488,19 @@ test("the account origin is the same machine, seen close up", async () => {
 test("pass: the screen keeps its size across every view it shows", async ({
   browser,
 }) => {
-  const size = (target: Page) =>
-    target
+  const size = async (target: Page) => {
+    await expect(target.locator("[data-camera]")).not.toHaveAttribute(
+      "data-moving",
+      /./,
+    );
+    return target
       .locator(".display")
       .evaluate(
         (node: HTMLElement) => `${node.offsetWidth}x${node.offsetHeight}`,
       );
+  };
   const seen = new Map<string, string>();
   const own = await context.newPage();
-  await own.emulateMedia({ reducedMotion: "reduce" });
   await own.setViewportSize({ width: 1440, height: 900 });
   await own.goto(`${PASS}/`);
   for (const section of ["Profile", "Devices", "Apps", "Security"] as const) {
@@ -508,7 +512,6 @@ test("pass: the screen keeps its size across every view it shows", async ({
   await own.close();
   const guest = await browser.newPage({
     viewport: { width: 1440, height: 900 },
-    reducedMotion: "reduce",
   });
   await guest.goto(`${PASS}/`);
   seen.set("sign in", await size(guest));
@@ -521,40 +524,21 @@ test("pass: the screen keeps its size across every view it shows", async ({
   expect(new Set(seen.values()).size, [...seen].join(" | ")).toBe(1);
 });
 
-test("pass: under reduced motion the camera does not move", async ({
-  browser,
-}) => {
-  const still = await browser.newPage({ reducedMotion: "reduce" });
-  await still.goto(`${PASS}/`);
-  await expect(still.locator("[data-camera]")).toBeVisible();
-  expect(
-    await still.locator("[data-camera]").evaluate((node) => ({
-      animation: getComputedStyle(node).animationName,
-      transition: getComputedStyle(node).transitionProperty,
-      running: node.getAnimations().length,
-      framing: (node as HTMLElement).dataset.framing,
-    })),
-  ).toEqual({
-    animation: "none",
-    transition: "none",
-    running: 0,
-    framing: "screen",
-  });
-  await still.close();
-});
-
 test("pass: a control reached by Tab is clear of the screen's fade", async ({
   browser,
 }) => {
   const guest = await browser.newPage({
     viewport: { width: 390, height: 844 },
-    reducedMotion: "reduce",
   });
   await guest.goto(`${PASS}/?mode=register`);
   const back = view(guest, "register").getByRole("button", {
     name: "‹ Other ways to sign in",
   });
   await expect(back).toBeVisible();
+  await expect(guest.locator("[data-camera]")).not.toHaveAttribute(
+    "data-moving",
+    /./,
+  );
   await back.focus();
   const gap = await back.evaluate((node) => {
     const panel = node.closest("[data-view-panel]")!.getBoundingClientRect();

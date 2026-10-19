@@ -34,10 +34,13 @@ import {
   type ScreenCopy,
 } from "../machine/copy";
 import type { BayCode, MachineState } from "../machine/state";
-import { cardStep, type AppCard, type CardState } from "./card";
-import { CardView } from "./CardView";
+import { Printed } from "../receipt/Printed";
+import {
+  DeliveryReceipt,
+  type PaperActions,
+  type Delivered,
+} from "./DeliveryReceipt";
 import { Tiles } from "./Tiles";
-import { Transfer } from "./Transfer";
 import { TrayBay } from "./TrayBay";
 
 export type CabinetViewProps = {
@@ -48,9 +51,9 @@ export type CabinetViewProps = {
   fault: string | null;
   said: string;
   lcd: ScreenCopy | null;
-  leaving: "sign-in" | "manage" | "card" | null;
+  leaving: "sign-in" | "manage" | null;
   sound: { on: boolean; toggle: () => void };
-  card: CardState;
+  delivery: Delivered | null;
   copied: string | null;
   on: {
     key: (key: string) => void;
@@ -61,12 +64,7 @@ export type CabinetViewProps = {
     manage: (event: MouseEvent<HTMLAnchorElement>) => void;
     logout: () => void;
     take: () => void;
-    cancelBridge: () => void;
-    cardLeave: (event: MouseEvent<HTMLAnchorElement>) => void;
-    cardRetry: () => void;
-    cardSignIn: () => void;
-    copy: (field: AppCard["fields"][number]) => void;
-    closeCard: () => void;
+    paper: PaperActions;
   };
   refs?: {
     camera?: Ref<HTMLDivElement>;
@@ -74,6 +72,8 @@ export type CabinetViewProps = {
     screen?: Ref<HTMLDivElement>;
     ticker?: Ref<HTMLSpanElement>;
     products?: (node: HTMLElement | null) => void;
+    sheet?: Ref<HTMLDivElement>;
+    frame?: Ref<HTMLDivElement>;
   };
   onProductsFocus?: (target: HTMLElement) => void;
 };
@@ -91,10 +91,6 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
   const copy = props.lcd ?? screenCopy(state, shown);
   const guest = state.access === "guest";
   const said = (name: string): string => (view === name ? props.said : "");
-  const carded =
-    state.card === null
-      ? null
-      : (state.catalog.find((bay) => bay.code === state.card) ?? null);
   return (
     <>
       <Machine
@@ -106,12 +102,7 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
         lcd={copy}
         keypad={{
           mode: "machine",
-          lit: litKeys(
-            state,
-            shown.screen,
-            props.fault !== null,
-            cardStep(props.card) !== null,
-          ),
+          lit: litKeys(state, shown.screen, props.fault !== null),
           onPress: on.key,
         }}
         headingBrand
@@ -235,25 +226,18 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
                 }
               />
             </View>
-            <CardView
-              hidden={view !== "card"}
-              bay={carded}
-              state={props.card}
-              said={said("card")}
-              copied={props.copied}
-              leaving={props.leaving === "card"}
-              on={{
-                leave: on.cardLeave,
-                retry: on.cardRetry,
-                signIn: on.cardSignIn,
-                copy: on.copy,
-                back: on.closeCard,
-              }}
-            />
+            <Printed hidden={view !== "receipt"} said={said("receipt")} />
           </Screen>
         }
       />
-      <Transfer state={state} onCancel={on.cancelBridge} />
+      <DeliveryReceipt
+        delivery={props.delivery}
+        siteName={props.siteName}
+        copied={props.copied}
+        sheetRef={props.refs?.sheet}
+        frameRef={props.refs?.frame}
+        on={on.paper}
+      />
     </>
   );
 }

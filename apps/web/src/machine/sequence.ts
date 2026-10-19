@@ -2,23 +2,12 @@ import type { BayCode, MachineEvent, MachineHost, MachineState } from "./state";
 
 export type Dispatch = (event: MachineEvent) => MachineState;
 
-export const RELEASE_SEQUENCE_MS = 1400;
+const RELEASE_SEQUENCE_MS = 1400;
 export const DENIED_BLINK_MS = 540;
-const REDUCED_MOTION_MS = 40;
 
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 const REQUEST_KEY = "pawl:machine-request";
 
-function prefersReducedMotion(): boolean {
-  try {
-    return globalThis.matchMedia(REDUCED_MOTION_QUERY).matches;
-  } catch {
-    return false;
-  }
-}
-
 export function motionDelay(ms: number, signal?: AbortSignal): Promise<void> {
-  const wait = prefersReducedMotion() ? Math.min(ms, REDUCED_MOTION_MS) : ms;
   return new Promise((resolve) => {
     if (signal?.aborted === true) {
       resolve();
@@ -32,7 +21,7 @@ export function motionDelay(ms: number, signal?: AbortSignal): Promise<void> {
     timer = setTimeout(() => {
       signal?.removeEventListener("abort", stop);
       resolve();
-    }, wait);
+    }, ms);
     signal?.addEventListener("abort", stop, { once: true });
   });
 }
@@ -86,20 +75,4 @@ export async function runRelease(machine: MachineHost): Promise<void> {
   if (machine.read().status !== "dispensing") return;
   await motionDelay(RELEASE_SEQUENCE_MS);
   machine.dispatch({ type: "tray-ready" });
-}
-
-export async function runScreenTransfer(
-  dispatch: Dispatch,
-  navigate: (bay: BayCode) => void,
-  signal?: AbortSignal,
-): Promise<void> {
-  const bridging = dispatch({ type: "activate-tray" });
-  const bay = bridging.screenTransfer;
-  if (bay === null) return;
-  await motionDelay(RELEASE_SEQUENCE_MS, signal);
-  if (signal?.aborted === true) {
-    dispatch({ type: "cancel" });
-    return;
-  }
-  navigate(bay);
 }

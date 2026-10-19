@@ -130,10 +130,7 @@ describe("leave", () => {
     vi.useFakeTimers();
     const cam = camera();
     const go = vi.fn();
-    const done = leave(cam, "printer", "/privacy.html#cam=printer", {
-      reduced: false,
-      go,
-    });
+    const done = leave(cam, "printer", "/privacy.html#cam=printer", { go });
     expect(cam.dataset.framing).toBe("printer");
     expect(cam.dataset.moving).toBe("in");
     expect(go).not.toHaveBeenCalled();
@@ -146,8 +143,8 @@ describe("leave", () => {
     vi.useFakeTimers();
     const cam = camera();
     const go = vi.fn();
-    const first = leave(cam, "printer", "/a", { reduced: false, go });
-    const second = leave(cam, "screen", "/b", { reduced: false, go });
+    const first = leave(cam, "printer", "/a", { go });
+    const second = leave(cam, "screen", "/b", { go });
     await vi.advanceTimersByTimeAsync(600);
     await Promise.all([first, second]);
     expect(go).toHaveBeenCalledTimes(1);
@@ -155,35 +152,19 @@ describe("leave", () => {
     expect(cam.dataset.framing).toBe("printer");
   });
 
-  it("goes at once under reduced motion, without moving the camera", async () => {
-    const cam = camera();
-    const go = vi.fn();
-    await leave(cam, "printer", "/a", { reduced: true, go });
-    expect(go).toHaveBeenCalledTimes(1);
-    expect(cam.dataset.framing).toBeUndefined();
-  });
-
-  it("goes once under reduced motion however often it is asked", async () => {
-    const cam = camera();
-    const go = vi.fn();
-    await leave(cam, "printer", "/a", { reduced: true, go });
-    await leave(cam, "printer", "/a", { reduced: true, go });
-    expect(go).toHaveBeenCalledTimes(1);
-  });
-
   it("frees the camera and says so when the page is still here long after it went", async () => {
     vi.useFakeTimers();
     const cam = camera();
     const go = vi.fn();
     const stay = vi.fn();
-    void leave(cam, "printer", "/a", { reduced: false, go, stay });
+    void leave(cam, "printer", "/a", { go, stay });
     await vi.advanceTimersByTimeAsync(560);
     expect(stay).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(9000);
     expect(stay).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1000);
     expect(stay).toHaveBeenCalledTimes(1);
-    void leave(cam, "printer", "/b", { reduced: false, go });
+    void leave(cam, "printer", "/b", { go });
     await vi.advanceTimersByTimeAsync(560);
     expect(go).toHaveBeenLastCalledWith("/b");
   });
@@ -191,11 +172,7 @@ describe("leave", () => {
   it("never waits longer than 600 ms before going", async () => {
     vi.useFakeTimers();
     const go = vi.fn();
-    void leave(camera(), "screen", "/a", {
-      reduced: false,
-      go,
-      durationMs: 5000,
-    });
+    void leave(camera(), "screen", "/a", { go, durationMs: 5000 });
     await vi.advanceTimersByTimeAsync(600);
     expect(go).toHaveBeenCalledTimes(1);
   });
@@ -205,14 +182,14 @@ describe("settle", () => {
   it("takes the framing over from the page's hint", async () => {
     document.documentElement.dataset.camHint = "printer";
     const cam = camera();
-    await settle(cam, "printer", "whole", { reduced: true });
+    await settle(cam, "whole", "whole");
     expect(document.documentElement.dataset.camHint).toBeUndefined();
   });
 
   it("starts in the arriving framing and pulls back to where the page lives", async () => {
     vi.useFakeTimers();
     const cam = camera();
-    const done = settle(cam, "printer", "whole", { reduced: false });
+    const done = settle(cam, "printer", "whole");
     expect(cam.dataset.framing).toBe("whole");
     expect(cam.dataset.moving).toBe("out");
     await vi.advanceTimersByTimeAsync(620);
@@ -223,10 +200,7 @@ describe("settle", () => {
   it("dollies in with the dolly's own motion when asked, as an establishing shot", async () => {
     vi.useFakeTimers();
     const cam = camera();
-    const done = settle(cam, "whole", "screen", {
-      reduced: false,
-      moving: "in",
-    });
+    const done = settle(cam, "whole", "screen", { moving: "in" });
     expect(cam.dataset.moving).toBe("in");
     expect(cam.dataset.framing).toBe("screen");
     await vi.advanceTimersByTimeAsync(560);
@@ -234,21 +208,16 @@ describe("settle", () => {
     expect(cam.dataset.moving).toBeUndefined();
   });
 
-  it("jumps straight to where the page lives under reduced motion", async () => {
-    const cam = camera();
-    await settle(cam, "printer", "whole", { reduced: true });
-    expect(cam.dataset.framing).toBe("whole");
-    expect(cam.dataset.moving).toBeUndefined();
-  });
-
   it("lets a page restored from the back/forward cache leave again", async () => {
     vi.useFakeTimers();
     const cam = camera();
     const go = vi.fn();
-    void leave(cam, "printer", "/a", { reduced: false, go });
+    void leave(cam, "printer", "/a", { go });
     await vi.advanceTimersByTimeAsync(560);
-    await settle(cam, "printer", "whole", { reduced: true });
-    void leave(cam, "printer", "/a", { reduced: false, go });
+    const back = settle(cam, "printer", "whole");
+    await vi.advanceTimersByTimeAsync(620);
+    await back;
+    void leave(cam, "printer", "/a", { go });
     await vi.advanceTimersByTimeAsync(560);
     expect(go).toHaveBeenCalledTimes(2);
   });

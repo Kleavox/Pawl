@@ -4,7 +4,7 @@ import type { MachineModel } from "../estate-adapter";
 import { permits } from "./state";
 import type { AccessRole, BayCode, Catalog, MachineState } from "./state";
 
-export type ScreenView = "products" | "working" | "account" | "card";
+export type ScreenView = "products" | "working" | "account" | "receipt";
 
 export type ScreenCopy = { main: string; sub: string };
 
@@ -51,7 +51,7 @@ export const ROLE_LINE: Record<AccessRole, string> = {
 export function viewFor(state: MachineState): ScreenView {
   if (state.authStep === "leaving") return "working";
   if (state.authStep === "account") return "account";
-  if (state.card !== null) return "card";
+  if (state.receipt !== null) return "receipt";
   return "products";
 }
 
@@ -84,10 +84,10 @@ export function screenCopy(
   if (state.authStep === "account") {
     return { main: "YOUR ACCOUNT", sub: "MANAGE OR SIGN OUT" };
   }
-  if (state.card !== null) {
+  if (state.receipt !== null) {
     return {
-      main: `${state.card} ${productOf(state.catalog, state.card)}`,
-      sub: "CLR TAKES YOU BACK",
+      main: "RECEIPT PRINTED",
+      sub: `${state.receipt} ${productOf(state.catalog, state.receipt)}`,
     };
   }
   if (state.status === "denied") {
@@ -197,7 +197,7 @@ export function machineAttributes(
     "data-busy": String(
       state.status === "dispensing" ||
         state.authStep === "leaving" ||
-        state.screenTransfer !== null,
+        state.receipt !== null,
     ),
   };
 }
@@ -206,12 +206,11 @@ export function litKeys(
   state: MachineState,
   screen: string,
   faulted: boolean,
-  cardGo = false,
 ): ReadonlySet<string> {
   const view = viewFor(state);
   if (view === "working") return new Set();
   if (view === "account") return new Set(["CLR"]);
-  if (view === "card") return new Set(cardGo ? ["CLR", "GO"] : ["CLR"]);
+  if (view === "receipt") return new Set();
   if (state.busy) return new Set();
   const lit = new Set(state.catalog.map((bay) => bay.code));
   const pending = state.status === "selected";

@@ -339,17 +339,6 @@
     outline-offset: 2px;
     box-shadow: 0 0 0 4px var(--pw-room);
   }
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 40ms !important;
-      animation-delay: 0ms !important;
-      transition-duration: 40ms !important;
-      scroll-behavior: auto !important;
-    }
-  }
-
   @media print {
     body {
       background: var(--pw-white);
@@ -566,34 +555,6 @@
   }
 }
 
-@keyframes cartridge-to-screen {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 30%) scale(0.4);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-@keyframes transfer-grid {
-  from {
-    opacity: 0;
-    transform: perspective(600px) rotateX(58deg) translateY(-40px);
-  }
-  to {
-    opacity: 0.6;
-    transform: perspective(600px) rotateX(58deg) translateY(0);
-  }
-}
-
-@keyframes transfer-rail {
-  to {
-    opacity: 1;
-  }
-}
-
 @keyframes receipt-feed {
   from {
     transform: translateY(-70svh);
@@ -622,52 +583,54 @@
   }
 }
 
-@keyframes receipt-rip {
+@keyframes receipt-crumple {
   0% {
-    transform: translateY(calc(6 * var(--u)));
+    transform: none;
+    opacity: 1;
+  }
+  35% {
+    transform: scale(0.86, 0.62) rotate(-3deg);
+  }
+  65% {
+    transform: scale(0.52, 0.4) rotate(5deg);
+    opacity: 1;
   }
   100% {
-    transform: translateY(calc(6 * var(--u))) rotate(2deg);
+    transform: scale(0.16, 0.14) rotate(-9deg);
+    opacity: 0;
   }
 }
 
-@keyframes receipt-settle {
+@keyframes ball-across {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateX(var(--ball-x));
+  }
+}
+
+@keyframes ball-drop {
   0% {
-    transform: translateY(0);
-  }
-  30% {
-    transform: translateY(calc(4 * var(--u)));
-  }
-  60% {
-    transform: translateY(calc(-1.5 * var(--u)));
+    transform: none;
+    opacity: 1;
   }
   85% {
-    transform: translateY(calc(0.5 * var(--u)));
+    opacity: 1;
   }
   100% {
-    transform: translateY(0);
+    transform: translateY(var(--ball-y)) rotate(420deg) scale(0.7);
+    opacity: 0;
   }
 }
 
-@keyframes receipt-fall {
-  0% {
-    transform: perspective(900px) translateY(calc(6 * var(--u))) rotate(2deg)
-      rotateX(0deg);
-    opacity: 1;
-  }
-  22% {
-    transform: perspective(900px) translateY(18svh) rotate(-2deg) rotateX(14deg);
+@keyframes flap-swallow {
+  0%,
+  100% {
+    transform: none;
   }
   45% {
-    transform: perspective(900px) translateY(42svh) rotate(5deg) rotateX(-10deg);
-  }
-  70% {
-    transform: perspective(900px) translateY(72svh) rotate(-1deg) rotateX(8deg);
-    opacity: 1;
-  }
-  100% {
-    transform: perspective(900px) translateY(115svh) rotate(8deg) rotateX(-6deg);
-    opacity: 0;
+    transform: perspective(calc(420 * var(--u))) rotateX(-30deg);
   }
 }
 

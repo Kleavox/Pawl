@@ -13,17 +13,8 @@ const DOLLY_MS = 560;
 const PULL_BACK_MS = 620;
 const LONGEST_LEAVE_MS = 600;
 const STILL_HERE_MS = 10_000;
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 const leaving = new WeakMap<HTMLElement, Promise<void>>();
-
-function reducedMotion(): boolean {
-  try {
-    return globalThis.matchMedia(REDUCED_MOTION_QUERY).matches;
-  } catch {
-    return false;
-  }
-}
 
 function wait(ms: number): Promise<void> {
   return new Promise((done) => setTimeout(done, ms));
@@ -67,7 +58,6 @@ export function leave(
   url: string,
   options: {
     durationMs?: number;
-    reduced?: boolean;
     go?: (url: string) => void;
     stay?: () => void;
   } = {},
@@ -83,18 +73,11 @@ export function leave(
       options.stay?.();
     }, STILL_HERE_MS);
   };
-  let trip: Promise<void>;
-  if (options.reduced ?? reducedMotion()) {
-    trip = Promise.resolve();
-    leaving.set(camera, trip);
-    depart();
-    return trip;
-  }
   camera.dataset.moving = "in";
   camera.dataset.framing = to;
-  trip = wait(Math.min(options.durationMs ?? DOLLY_MS, LONGEST_LEAVE_MS)).then(
-    depart,
-  );
+  const trip = wait(
+    Math.min(options.durationMs ?? DOLLY_MS, LONGEST_LEAVE_MS),
+  ).then(depart);
   leaving.set(camera, trip);
   return trip;
 }
@@ -103,10 +86,10 @@ export async function settle(
   camera: HTMLElement,
   from: Framing,
   to: Framing,
-  options: { reduced?: boolean; moving?: "in" | "out" } = {},
+  options: { moving?: "in" | "out" } = {},
 ): Promise<void> {
   leaving.delete(camera);
-  if (from === to || (options.reduced ?? reducedMotion())) {
+  if (from === to) {
     delete camera.dataset.moving;
     camera.dataset.framing = to;
     delete document.documentElement.dataset.camHint;

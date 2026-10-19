@@ -217,29 +217,6 @@ test("the machine fits the screen without scrolling on the laptops and phones it
     await page.close();
   }
 });
-test("under reduced motion the camera never moves and a receipt opens at once", async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
-  const camera = page.locator("[data-camera]");
-  expect(
-    await camera.evaluate((node) => ({
-      transition: getComputedStyle(node).transitionProperty,
-      running: node.getAnimations().length,
-    })),
-  ).toEqual({ transition: "none", running: 0 });
-  const started = Date.now();
-  await page.locator(".plate a[href$='/privacy.html']").click();
-  await expect(page).toHaveURL(/\/privacy(\.html)?$/);
-  expect(Date.now() - started).toBeLessThan(2000);
-  expect(
-    await page
-      .locator("[data-receipt]")
-      .evaluate((node) => getComputedStyle(node).animationName),
-  ).toBe("none");
-});
 test("pressing a bay twice still leaves the product in the tray", async ({
   page,
 }) => {
@@ -473,7 +450,6 @@ test("nothing on the machine animates forever", async ({ page }) => {
     const machine = document.querySelector<HTMLElement>("[data-machine]")!;
     const tray = document.querySelector<HTMLElement>("[data-tray]")!;
     const falling = document.querySelector<HTMLElement>("[data-falling]")!;
-    const transfer = document.querySelector<HTMLElement>("[data-transfer]")!;
     const offenders: string[] = [];
     const sweep = (): void => {
       for (const node of document.querySelectorAll("*")) {
@@ -499,8 +475,7 @@ test("nothing on the machine animates forever", async ({ page }) => {
     tray.dataset.trayShape = "tall";
     falling.dataset.falling = "2";
     falling.dataset.fallingShape = "tall";
-    transfer.dataset.transfer = "2";
-    transfer.dataset.transferShape = "tall";
+    machine.dataset.swallow = "";
     sweep();
     machine.dataset.status = "denied";
     document.querySelector<HTMLElement>("[data-tile='2']")!.dataset.state =
@@ -529,115 +504,6 @@ test("there is no pass card, card reader or card words on any page of the machin
     );
   }
 });
-test("the bridge stays out of the way until a cartridge is taken", async ({
-  page,
-}) => {
-  await openBooted(page);
-  const cancel = page.locator("[data-transfer-cancel]");
-  await expect(page.locator("[data-transfer]")).toBeHidden();
-  await expect(cancel).toBeHidden();
-
-  await page.evaluate(() => {
-    const transfer = document.querySelector<HTMLElement>("[data-transfer]")!;
-    transfer.dataset.transfer = "7";
-    transfer.dataset.transferShape = "wide";
-  });
-  await expect(page.locator("[data-transfer]")).toBeVisible();
-  await expect(cancel).toBeVisible();
-  const box = await cancel.boundingBox();
-  expect(box!.height).toBeGreaterThanOrEqual(44);
-
-  const painted = await page.evaluate(() => {
-    const overlay = document.querySelector<HTMLElement>("[data-transfer]")!;
-    const card = document.querySelector<HTMLElement>(
-      ".screen-transfer__cartridge",
-    )!;
-    return {
-      overlay: getComputedStyle(overlay).backgroundColor,
-      cardFill: getComputedStyle(card).backgroundColor,
-      cardRim: getComputedStyle(card).borderTopColor,
-      name: overlay.getAttribute("aria-label"),
-    };
-  });
-  expect(painted.overlay).not.toBe("rgba(0, 0, 0, 0)");
-  expect(painted.cardFill).not.toBe("rgba(0, 0, 0, 0)");
-  expect(painted.cardRim).not.toBe("rgba(0, 0, 0, 0)");
-  expect(painted.name).toBe("Opening the selected application");
-});
-
-async function openTheBridge(
-  browser: import("@playwright/test").Browser,
-  reduced: boolean,
-): Promise<{
-  visible: string;
-  slowest: number;
-  opacity: string;
-  hits: string;
-  height: number;
-}> {
-  const context = await browser.newContext(
-    reduced ? { reducedMotion: "reduce" } : {},
-  );
-  const page = await context.newPage();
-  await openBooted(page);
-  const seen = await page.evaluate(async () => {
-    const overlay = document.querySelector<HTMLElement>("[data-transfer]")!;
-    overlay.dataset.transfer = "2";
-    overlay.dataset.transferShape = "tall";
-    await new Promise((settled) => {
-      requestAnimationFrame(() => requestAnimationFrame(settled));
-    });
-    let slowest = 0;
-    for (const node of [overlay, ...overlay.querySelectorAll("*")]) {
-      for (const pseudo of [null, "::before", "::after"]) {
-        const style = getComputedStyle(node, pseudo);
-        if (style.animationName === "none") continue;
-        const delays = style.animationDelay.split(",");
-        const durations = style.animationDuration.split(",");
-        for (const [index, delay] of delays.entries()) {
-          const ends =
-            (Number.parseFloat(delay) +
-              Number.parseFloat(
-                durations[index % durations.length] ?? durations[0] ?? "0",
-              )) *
-            1000;
-          if (ends > slowest) slowest = ends;
-        }
-      }
-    }
-    const cancel = document.querySelector<HTMLElement>(
-      "[data-transfer-cancel]",
-    )!;
-    const style = getComputedStyle(cancel);
-    return {
-      visible: getComputedStyle(overlay).visibility,
-      slowest,
-      opacity: style.opacity,
-      hits: style.pointerEvents,
-      height: cancel.getBoundingClientRect().height,
-    };
-  });
-  await context.close();
-  return seen;
-}
-
-test("reduced motion shortens the bridge, it does not skip it", async ({
-  browser,
-}) => {
-  const full = await openTheBridge(browser, false);
-  const reduced = await openTheBridge(browser, true);
-
-  expect(full.visible).toBe("visible");
-  expect(reduced.visible).toBe("visible");
-
-  expect(full.slowest).toBeGreaterThan(600);
-  expect(reduced.slowest).toBeLessThanOrEqual(40);
-
-  expect(reduced.opacity).toBe("1");
-  expect(reduced.hits).toBe("auto");
-  expect(reduced.height).toBeGreaterThanOrEqual(44);
-});
-
 test("a full tray stays inside the delivery bay it is bolted to", async ({
   page,
 }) => {
@@ -781,8 +647,8 @@ test("the receipts print from the machine's printer, whole and without a header"
     await expect(page.locator("[data-receipt]")).toBeVisible();
     await expect(page.locator("header, footer")).toHaveCount(0);
     await expect(
-      page.getByRole("link", { name: "Tear off and return to the machine" }),
-    ).toHaveAttribute("href", "/");
+      page.getByRole("button", { name: "Crumple the receipt" }),
+    ).toHaveCount(1);
   }
   await page.goto("/privacy.html");
   await expect(page.locator("[data-receipt]")).toContainText(
@@ -814,10 +680,8 @@ const PROBE_BAY = {
 };
 
 const LONGEST_CARD = {
-  title: "Wide words make the longest card title on it".slice(0, 40),
-  message: "Wide words wrap over several lines of the display. "
-    .repeat(4)
-    .slice(0, 90),
+  title: "W".repeat(40),
+  message: `Use ${"M".repeat(86)}`,
   fields: [
     { label: "The longest label ok", value: "W".repeat(70), copy: true },
     { label: "Another label at 20!", value: "M".repeat(70), copy: true },
@@ -849,8 +713,8 @@ async function cardOn(page: Page, screen: string): Promise<void> {
 }
 
 async function hardwareOn(page: Page, screen: string): Promise<string> {
-  const card = screen === "card" || screen === "card-connect";
-  if (card) await cardOn(page, screen);
+  const card = screen === "receipt";
+  if (card) await cardOn(page, "card");
   if (screen === "owner" || screen === "account" || card) {
     await page.route("**/api/session", (route) =>
       route.fulfill({ json: OWNER_SESSION }),
@@ -874,9 +738,11 @@ async function hardwareOn(page: Page, screen: string): Promise<string> {
     await page.locator("[data-cartridge='5']").click();
     await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "5");
     await page.locator("[data-tray-action]").click();
-    await expect(
-      page.locator("[data-view-panel='card'] [data-card-go]"),
-    ).toBeVisible();
+    await expect(page.locator("[data-receipt-sheet]")).toHaveAttribute(
+      "data-stage",
+      "hand",
+      { timeout: 10_000 },
+    );
   }
   return page.evaluate(() =>
     [
@@ -896,7 +762,7 @@ async function hardwareOn(page: Page, screen: string): Promise<string> {
   );
 }
 
-const SCREENS = ["products", "owner", "account", "card", "card-connect"];
+const SCREENS = ["products", "owner", "account", "receipt"];
 
 test("the machine keeps its size whatever the screen shows", async ({
   browser,
@@ -1275,57 +1141,6 @@ test("the keypad keys dispense the same way the physical keys do", async ({
   await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
 });
 
-test("taking the delivery opens a real modal bridge that escape can leave", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.locator("[data-cartridge='7']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
-
-  await page.locator("[data-tray-action]").click();
-  const bridge = page.locator("[data-transfer]");
-  await expect(bridge).toHaveAttribute("data-transfer", "7");
-  const sealed = await page.evaluate(() => {
-    const overlay = document.querySelector<HTMLElement>("[data-transfer]")!;
-    const cartridge = document.querySelector<HTMLElement>(
-      "[data-cartridge='7']",
-    )!;
-    cartridge.focus();
-    return {
-      modal: overlay.matches("dialog:modal"),
-      reachedBehind: document.activeElement === cartridge,
-      focusInside: overlay.contains(document.activeElement),
-    };
-  });
-  expect(sealed.modal).toBe(true);
-  expect(sealed.reachedBehind).toBe(false);
-  expect(sealed.focusInside).toBe(true);
-
-  await page.keyboard.press("Escape");
-  await expect(bridge).toHaveAttribute("data-transfer", "none");
-  await expect(page.locator("[data-tray-action]")).toBeFocused();
-  await expect(page).toHaveURL(/:\d+\/$/);
-});
-
-test("the cancel button leaves the bridge the same way escape does", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.locator("[data-cartridge='7']").click();
-  await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
-  await page.locator("[data-tray-action]").click();
-  await expect(page.locator("[data-transfer]")).toHaveAttribute(
-    "data-transfer",
-    "7",
-  );
-  await page.locator("[data-transfer-cancel]").click();
-  await expect(page.locator("[data-transfer]")).toHaveAttribute(
-    "data-transfer",
-    "none",
-  );
-  await expect(page.locator("[data-tray-action]")).toBeFocused();
-});
-
 test("a blocked sessionStorage says so instead of forgetting in silence", async ({
   page,
 }) => {
@@ -1655,6 +1470,7 @@ test("a fault holds the screen until the next touch, then the estate line comes 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(GATEWAY);
   await expect(page.locator("[data-screen]")).toHaveText("PICK A BAY");
+  await page.waitForLoadState("networkidle");
 
   await page.evaluate(() => {
     document.querySelector<HTMLElement>("[data-cartridge='7']")!.dataset.href =
@@ -1663,14 +1479,15 @@ test("a fault holds the screen until the next touch, then the estate line comes 
   await page.locator("[data-cartridge='7']").click();
   await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
   await page.locator("[data-tray-action]").click();
+  await paperInHand(page);
 
   await expect(page.locator("[data-screen]")).toHaveText(
-    "BRIDGE FAILED, RELEASE IT AGAIN",
+    "OPEN FAILED, RELEASE IT AGAIN",
     { timeout: 15_000 },
   );
-  await expect(page.locator("[data-transfer]")).toHaveAttribute(
-    "data-transfer",
-    "none",
+  await expect(page.locator("dialog[data-delivery]")).not.toHaveAttribute(
+    "open",
+    /.*/,
   );
 
   await page.locator("[data-key='CLR']").click();
@@ -1680,27 +1497,158 @@ test("a fault holds the screen until the next touch, then the estate line comes 
   ).toHaveText("PICK A BAY");
 });
 
-test("cancel still leaves the bridge after the transfer has resolved", async ({
-  page,
-}) => {
+async function takeSeven(page: Page): Promise<void> {
   await page.goto(GATEWAY);
   await expect(page.locator("[data-screen]")).toHaveText("PICK A BAY");
+  await page.waitForLoadState("networkidle");
   await page.evaluate(() => {
     document.querySelector<HTMLElement>("[data-cartridge='7']")!.dataset.href =
       "#stay";
   });
-
   await page.locator("[data-cartridge='7']").click();
   await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
   await page.locator("[data-tray-action]").click();
-  const bridge = page.locator("[data-transfer]");
-  await expect(bridge).toHaveAttribute("data-transfer", "7");
+}
 
-  await expect(page).toHaveURL(/#stay$/, { timeout: 10_000 });
+async function paperInHand(page: Page): Promise<void> {
+  await expect(page.locator("[data-receipt-sheet]")).toHaveAttribute(
+    "data-stage",
+    "hand",
+    { timeout: 10_000 },
+  );
+  await expect(page.locator("[data-camera]")).not.toHaveAttribute(
+    "data-moving",
+    /./,
+  );
+}
 
-  await page.locator("[data-transfer-cancel]").click();
-  await expect(bridge).toHaveAttribute("data-transfer", "none");
-  await expect(page.locator("[data-tray-action]")).toBeFocused();
+test("taking the delivery prints a receipt in a real modal, read in front of the whole machine", async ({
+  page,
+}) => {
+  await takeSeven(page);
+  await expect(page.locator("[data-camera]")).toHaveAttribute(
+    "data-framing",
+    "printer",
+  );
+  await paperInHand(page);
+  await expect(page.locator("[data-camera]")).toHaveAttribute(
+    "data-framing",
+    "whole",
+  );
+  const sealed = await page.evaluate(() => {
+    const dialog = document.querySelector<HTMLDialogElement>(
+      "dialog[data-delivery]",
+    )!;
+    const cartridge = document.querySelector<HTMLElement>(
+      "[data-cartridge='7']",
+    )!;
+    cartridge.focus();
+    return {
+      modal: dialog.matches("dialog:modal"),
+      reachedBehind: document.activeElement === cartridge,
+    };
+  });
+  expect(sealed).toEqual({ modal: true, reachedBehind: false });
+  await expect(page.locator("[data-receipt] h1")).toBeVisible();
+  await expect(page.locator("[data-receipt]")).toContainText("Bay");
+  await expect(page).toHaveURL(/:\d+\/$/);
+});
+
+test("a link-away receipt opens the app ten seconds after it is in hand", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await takeSeven(page);
+  await paperInHand(page);
+  const inHand = Date.now();
+  await expect(page).toHaveURL(/#stay$/, { timeout: 15_000 });
+  const waited = Date.now() - inHand;
+  expect(waited).toBeGreaterThanOrEqual(9_000);
+  expect(waited).toBeLessThanOrEqual(12_500);
+});
+
+test("Stay here stops the count; Open now goes at once", async ({ page }) => {
+  test.setTimeout(60_000);
+  await takeSeven(page);
+  await paperInHand(page);
+  await page.getByRole("button", { name: "Stay here" }).click();
+  await expect(
+    page.getByText("Stopped. Open it when you are ready."),
+  ).toBeVisible();
+  await page.waitForTimeout(12_000);
+  await expect(page).not.toHaveURL(/#stay$/);
+  await page.getByRole("link", { name: /Open now/ }).click();
+  await expect(page).toHaveURL(/#stay$/);
+});
+
+test("Escape and Crumple put the receipt in the tray", async ({ page }) => {
+  for (const how of ["Escape", "Crumple"] as const) {
+    await takeSeven(page);
+    await paperInHand(page);
+    if (how === "Escape") await page.keyboard.press("Escape");
+    else {
+      await page.getByRole("button", { name: "Crumple the receipt" }).click();
+    }
+    await expect(
+      page.locator("dialog[data-delivery]"),
+      how,
+    ).not.toHaveAttribute("open", /.*/);
+    await expect(page.locator("[data-tray]"), how).toHaveAttribute(
+      "data-tray",
+      "none",
+    );
+    expect(
+      await page.evaluate(() =>
+        document
+          .querySelector("[data-view-panel='products']")!
+          .contains(document.activeElement),
+      ),
+      how,
+    ).toBe(true);
+    await expect(page, how).not.toHaveURL(/#stay$/);
+  }
+});
+
+test("the longest card prints on the paper without spilling past it, on a 360 px phone", async ({
+  browser,
+}) => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 740 } });
+  await page.addInitScript((css) => {
+    document.addEventListener("DOMContentLoaded", () => {
+      const style = document.createElement("style");
+      style.textContent = css;
+      document.head.append(style);
+    });
+  }, WIDE_TYPE);
+  await hardwareOn(page, "receipt");
+  const seen = await page.evaluate(() => {
+    const frame = document.querySelector<HTMLElement>("[data-receipt-frame]")!;
+    const paper = document.querySelector<HTMLElement>("[data-receipt]")!;
+    const crumple = document
+      .querySelector<HTMLElement>("[data-receipt-crumple]")!
+      .getBoundingClientRect();
+    return {
+      values: [
+        ...document.querySelectorAll<HTMLElement>("[data-card-value]"),
+      ].map((value) => value.scrollWidth - value.clientWidth),
+      paper: paper.scrollWidth - paper.clientWidth,
+      frame: frame.scrollWidth - frame.clientWidth,
+      page:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+      crumpleAbove: crumple.bottom <= frame.getBoundingClientRect().top + 0.5,
+      crumpleInside: crumple.left >= 0 && crumple.right <= window.innerWidth,
+    };
+  });
+  expect(seen).toEqual({
+    values: [0, 0],
+    paper: 0,
+    frame: 0,
+    page: 0,
+    crumpleAbove: true,
+    crumpleInside: true,
+  });
+  await page.close();
 });
 
 test.describe("with a visitor pass in the machine", () => {

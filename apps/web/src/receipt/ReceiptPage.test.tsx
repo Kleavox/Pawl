@@ -1,9 +1,18 @@
 import type { PublicView } from "@pawl/registry";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CATALOG } from "../machine/catalog.testkit";
+import {
+  CRUMPLE_MS,
+  FEED_MS,
+  STEP_BACK_MS,
+  SWALLOW_MS,
+  TEAR_JERK_MS,
+  TEAR_RIP_MS,
+  THROW_MS,
+} from "../receipt";
 import { ReceiptPage } from "./ReceiptPage";
 
 const SITE: PublicView = {
@@ -12,6 +21,8 @@ const SITE: PublicView = {
   bays: CATALOG,
   footer: [],
 };
+
+const IN_HAND_MS = FEED_MS + TEAR_JERK_MS + TEAR_RIP_MS + STEP_BACK_MS;
 
 const HOSTS = { rootHost: "example.test", passHost: "paw.example.test" };
 
@@ -32,7 +43,7 @@ afterEach(() => {
 
 describe("ReceiptPage", () => {
   it.each(["privacy", "terms"] as const)(
-    "hangs the %s receipt from the machine's printer, with no header or footer",
+    "prints the %s receipt from the machine's printer, with no header or footer",
     (kind) => {
       const { container } = render(
         <ReceiptPage site={SITE} kind={kind} hosts={HOSTS} />,
@@ -46,19 +57,17 @@ describe("ReceiptPage", () => {
       );
       expect(machine.querySelector("script")).toBeNull();
       const main = screen.getByRole("main");
-      expect(main).toHaveClass("receipt-feed");
+      expect(main).toHaveAttribute("data-receipt-sheet");
       expect(main).toHaveAttribute("aria-labelledby", "receipt-title");
       expect(main.querySelector("article[data-receipt]")).not.toBeNull();
-      const tears = [
-        ...main.querySelectorAll<HTMLAnchorElement>("a[data-tear]"),
-      ];
-      expect(tears.map((link) => link.getAttribute("href"))).toEqual([
-        "/",
-        "/",
-      ]);
+      expect(main.querySelector("a[data-tear]")).toBeNull();
+      expect(main).not.toHaveTextContent("Tear off");
       expect(
-        main.querySelector(".receipt__head a.receipt__tear-top[data-tear]"),
-      ).not.toBeNull();
+        screen.getAllByRole("button", {
+          name: "Crumple the receipt",
+          hidden: true,
+        }),
+      ).toHaveLength(1);
       expect(container.querySelector("header, footer")).toBeNull();
       expect(main).toHaveTextContent("19 October 2026");
       expect(
@@ -76,7 +85,6 @@ describe("ReceiptPage", () => {
     expect(frame).toHaveClass("overflow-y-auto");
     expect(frame).toHaveAttribute("tabindex", "0");
     expect(frame.className).toContain("[scrollbar-width:none]");
-    expect(frame.className).not.toContain("scrollbar-width:thin");
     expect(
       screen
         .getByRole("main")
@@ -86,133 +94,118 @@ describe("ReceiptPage", () => {
     ).toBe(true);
   });
 
-  it("hangs the paper from the slot line down, in front of the machine", () => {
+  it("has no slack and nothing that hangs", () => {
     const { container } = render(
       <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
     );
-    const feed = container.querySelector("main")!;
-    expect(feed.className).not.toContain("--slot-line:");
-    expect(feed.className).toContain("top-(--slot-line)");
-    expect(feed.className).not.toContain("inset-y-0");
-    expect(
-      container.querySelector("[data-receipt-frame]")!.className,
-    ).not.toContain("pt-(--slot-line)");
-    expect(container.querySelector("[data-receipt-shadow]")).not.toBeNull();
+    expect(container.querySelector("[data-receipt-slack]")).toBeNull();
+    expect(container.innerHTML).not.toContain("sag-max");
   });
 
-  it("hangs what has been read as slack between the slot and the held edge, deeper the further one reads", async () => {
+  it("prerenders the paper fed at the printer, so it reads without JavaScript", () => {
+    const html = renderToStaticMarkup(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    expect(html).toContain('data-stage="feed"');
+    expect(html).toContain('data-framing="printer"');
+  });
+
+  it("prints from the printer on arrival, tears and comes to hand as the camera steps back", async () => {
+    vi.useFakeTimers();
     const { container } = render(
       <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
     );
-    const feed = container.querySelector<HTMLElement>("main")!;
-    const frame = container.querySelector<HTMLElement>("[data-receipt-frame]")!;
-    const slack = container.querySelector<HTMLElement>("[data-receipt-slack]")!;
-    expect(slack).toHaveAttribute("aria-hidden", "true");
-    expect(slack.style.transform).toBe("scaleY(0)");
-    expect(feed.contains(slack)).toBe(false);
-    Object.defineProperty(frame, "scrollHeight", { value: 1100 });
-    Object.defineProperty(frame, "clientHeight", { value: 100 });
-    Object.defineProperty(slack, "offsetHeight", { value: 200 });
-    frame.scrollTop = 250;
-    await act(async () => {
-      frame.dispatchEvent(new Event("scroll"));
-    });
-    expect(slack.style.transform).toBe("scaleY(0.5)");
-    expect(feed.style.transform).toBe("translateY(100px)");
-    expect(frame.className).toContain("pb-(--sag-max)");
-    expect(frame.className).toContain("scroll-pb-(--sag-max)");
-  });
-
-  it("feeds out of the slot, which the frame's own edge clips, then settles once", () => {
-    const { container } = render(
-      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
-    );
-    const feed = container.querySelector("main")!;
-    expect(feed).not.toHaveAttribute("data-feeding");
-    expect(feed.className).not.toContain("clip-path");
-    expect(container.querySelector("[data-receipt-hang]")!.className).toMatch(
-      /animate-\[receipt-settle_900ms_ease-out_1_both\]/,
-    );
-  });
-
-  it("tears with an uneven serrated edge, and its end carries one too", () => {
-    const { container } = render(
-      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
-    );
-    const paper = container.querySelector("[data-receipt]")!.className;
-    expect(paper).toContain("receipt-edge");
-    expect(paper).toContain("[[data-torn=rip]_&]:receipt-torn");
-    expect(paper).toContain("[[data-torn=fall]_&]:receipt-torn");
-    expect(paper).not.toContain("[[data-torn]_&]:receipt-torn");
-  });
-
-  it("never feeds or settles again when a torn receipt is put back", () => {
-    const { container } = render(
-      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
-    );
-    for (const node of [
-      container.querySelector("[data-receipt]")!,
-      container.querySelector("[data-receipt-hang]")!,
-    ]) {
-      expect(node.className).not.toContain("[[data-torn]_&]:animate-none");
-    }
-  });
-
-  it("prints the receipt flat, without the slack or its sag", () => {
-    const { container } = render(
-      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
-    );
-    expect(container.querySelector("main")!.className).toContain(
-      "print:[transform:none]!",
-    );
-    expect(
-      container.querySelector("[data-receipt-slack]")!.className,
-    ).toContain("print:hidden");
-    expect(
-      container.querySelector("[data-receipt-frame]")!.className,
-    ).toContain("print:pb-0");
-  });
-
-  it("rings the paper, not the whole screen, when the receipt has keyboard focus", () => {
-    const { container } = render(
-      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
-    );
-    expect(
-      container.querySelector("[data-receipt-frame]")!.className,
-    ).toContain("focus-visible:[outline:none]");
-    expect(container.querySelector("[data-receipt-hang]")!.className).toContain(
-      "[[data-receipt-frame]:focus-visible_&]:",
-    );
-  });
-
-  it("tears on the frame with transform and opacity only, never on the whole paper", () => {
-    const { container } = render(
-      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
-    );
-    const frame = container.querySelector("[data-receipt-frame]")!;
-    expect(frame.className).toMatch(
-      /data-\[torn=fall\]:animate-\[receipt-fall_560ms/,
-    );
-    expect(frame.className).toMatch(
-      /data-\[torn=rip\]:animate-\[receipt-rip_120ms/,
-    );
-    expect(frame.className).toMatch(/data-\[torn\]:will-change-transform/);
-    expect(container.querySelector("[data-receipt]")!.className).not.toMatch(
-      /data-\[torn/,
-    );
-  });
-
-  it("rests on the printer from its first frame when visited directly, without a glide", () => {
-    window.history.replaceState(null, "", "/privacy.html");
-    const { container } = render(
-      <ReceiptPage site={SITE} kind="terms" hosts={HOSTS} />,
-    );
+    const sheet = container.querySelector<HTMLElement>("[data-receipt-sheet]")!;
     const camera = container.querySelector<HTMLElement>("[data-camera]")!;
-    expect(camera.dataset.framing).toBe("printer");
-    expect(camera.dataset.moving).toBeUndefined();
+    expect(sheet.dataset.stage).toBe("feed");
+    await act(() =>
+      vi.advanceTimersByTimeAsync(FEED_MS + TEAR_JERK_MS + TEAR_RIP_MS),
+    );
+    expect(sheet.dataset.stage).toBe("hand");
+    expect(camera.dataset.framing).toBe("whole");
+    await act(() => vi.advanceTimersByTimeAsync(STEP_BACK_MS));
+    expect(document.activeElement).toBe(
+      container.querySelector("[data-receipt-frame]"),
+    );
   });
 
-  it("names the receipt on the printer's LCD", () => {
+  it.each([
+    ["its button", "button"],
+    ["Escape", "escape"],
+  ] as const)(
+    "crumples on %s and goes to the cabinet, with no camera hint, once the ball has landed",
+    async (_, how) => {
+      vi.useFakeTimers();
+      const navigate = vi.fn();
+      const { container } = render(
+        <ReceiptPage
+          site={SITE}
+          kind="terms"
+          hosts={HOSTS}
+          navigate={navigate}
+        />,
+      );
+      await act(() => vi.advanceTimersByTimeAsync(IN_HAND_MS));
+      if (how === "button") {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Crumple the receipt" }),
+        );
+      } else {
+        fireEvent.keyDown(document, { key: "Escape" });
+      }
+      const sheet = container.querySelector<HTMLElement>(
+        "[data-receipt-sheet]",
+      )!;
+      expect(sheet.dataset.stage).toBe("crumple");
+      await act(() =>
+        vi.advanceTimersByTimeAsync(CRUMPLE_MS + THROW_MS + SWALLOW_MS - 1),
+      );
+      expect(navigate).not.toHaveBeenCalled();
+      await act(() => vi.advanceTimersByTimeAsync(1));
+      expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+    },
+  );
+
+  it("does not crumple while it is still printing", async () => {
+    vi.useFakeTimers();
+    const navigate = vi.fn();
+    const { container } = render(
+      <ReceiptPage
+        site={SITE}
+        kind="terms"
+        hosts={HOSTS}
+        navigate={navigate}
+      />,
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    await act(() => vi.advanceTimersByTimeAsync(IN_HAND_MS + 2000));
+    expect(
+      container.querySelector<HTMLElement>("[data-receipt-sheet]")!.dataset
+        .stage,
+    ).toBe("hand");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("holds the paper in hand when restored from the back/forward cache", async () => {
+    vi.useFakeTimers();
+    const { container } = render(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    await act(() => vi.advanceTimersByTimeAsync(IN_HAND_MS));
+    const sheet = container.querySelector<HTMLElement>("[data-receipt-sheet]")!;
+    const camera = container.querySelector<HTMLElement>("[data-camera]")!;
+    sheet.dataset.stage = "gone";
+    await act(async () => {
+      window.dispatchEvent(
+        new PageTransitionEvent("pageshow", { persisted: true }),
+      );
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(sheet.dataset.stage).toBe("hand");
+    expect(camera.dataset.framing).toBe("whole");
+  });
+
+  it("names the receipt on the printer's LCD and says it is in your hand", () => {
     const { container } = render(
       <ReceiptPage site={SITE} kind="terms" hosts={HOSTS} />,
     );
@@ -222,6 +215,9 @@ describe("ReceiptPage", () => {
     expect(container.querySelector("[data-screen-sub]")).toHaveTextContent(
       "TERMS OF SERVICE",
     );
+    expect(
+      container.querySelector("[data-view-panel='receipt']"),
+    ).toHaveTextContent("Your receipt is in your hand");
   });
 });
 

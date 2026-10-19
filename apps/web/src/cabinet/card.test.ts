@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { cardStep, readCardFor } from "./card";
+import { readCardFor } from "./card";
 
 const CARD = {
   title: "Your DNS address",
@@ -68,33 +68,5 @@ describe("reading a card through the cabinet's own origin", () => {
     const fetch = answering(200, { card: CARD });
     await readCardFor("a/b");
     expect(fetch.mock.calls[0]?.[0]).toBe("/api/apps/a%2Fb/card");
-  });
-});
-
-describe("what GO does on a card", () => {
-  it("connects, follows the app's action, retries or signs in again", () => {
-    expect(cardStep({ kind: "connect", href: "https://paw.test/c" })).toEqual({
-      kind: "leave",
-      href: "https://paw.test/c",
-      word: "Connect",
-    });
-    expect(cardStep({ kind: "shown", card: CARD })).toEqual({
-      kind: "leave",
-      href: CARD.action.href,
-      word: "Detail",
-    });
-    expect(
-      cardStep({ kind: "shown", card: { ...CARD, action: null } }),
-    ).toBeNull();
-    expect(cardStep({ kind: "unreadable" })).toEqual({
-      kind: "retry",
-      word: "Try again",
-    });
-    expect(cardStep({ kind: "expired" })).toEqual({
-      kind: "sign-in",
-      word: "Sign in again",
-    });
-    expect(cardStep({ kind: "loading" })).toBeNull();
-    expect(cardStep({ kind: "closed" })).toBeNull();
   });
 });

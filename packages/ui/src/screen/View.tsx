@@ -6,7 +6,7 @@ import type {
 } from "react";
 
 const SCREEN =
-  "screen absolute inset-0 overflow-hidden text-pw-ink font-pw-ui [--bar:--spacing(38)] [--foot:--spacing(34)] [--pad:--spacing(18)] max-desk:[--bar:--spacing(34)] max-desk:[--foot:--spacing(30)] max-desk:[--pad:--spacing(10)] [&.is-wiping]:after:absolute [&.is-wiping]:after:z-2 [&.is-wiping]:after:inset-0 [&.is-wiping]:after:bg-[linear-gradient(to_top,var(--pw-ice)_0_--spacing(2),rgb(47_107_255/45%)_--spacing(2),transparent_--spacing(18))] [&.is-wiping]:after:pointer-events-none [&.is-wiping]:after:animate-[wipe-line_220ms_linear_1_both] [&.is-scanning-off]:before:absolute [&.is-scanning-off]:before:inset-0 [&.is-scanning-off]:before:z-3 [&.is-scanning-off]:before:bg-(image:--pw-lcd) [&.is-scanning-off]:before:animate-[pass-scan-off_150ms_linear_1_both] motion-reduce:[&.is-scanning-off]:before:hidden";
+  "screen absolute inset-0 overflow-hidden text-pw-ink font-pw-ui [--bar:--spacing(38)] [--foot:--spacing(34)] [--pad:--spacing(18)] max-desk:[--bar:--spacing(34)] max-desk:[--foot:--spacing(30)] max-desk:[--pad:--spacing(10)] [&.is-wiping]:after:absolute [&.is-wiping]:after:z-2 [&.is-wiping]:after:inset-0 [&.is-wiping]:after:bg-[linear-gradient(to_top,var(--pw-ice)_0_--spacing(2),rgb(47_107_255/45%)_--spacing(2),transparent_--spacing(18))] [&.is-wiping]:after:pointer-events-none [&.is-wiping]:after:animate-[wipe-line_220ms_linear_1_both] [&.is-scanning-off]:before:absolute [&.is-scanning-off]:before:inset-0 [&.is-scanning-off]:before:z-3 [&.is-scanning-off]:before:bg-(image:--pw-lcd) [&.is-scanning-off]:before:animate-[pass-scan-off_150ms_linear_1_both]";
 
 const VIEW =
   "view absolute inset-0 grid grid-rows-[var(--bar)_minmax(0,1fr)_var(--foot)] [background:inherit] [&[hidden]]:hidden [&&:focus]:[outline:none] focus-visible:shadow-[inset_0_0_0_--spacing(2)_var(--pw-cobalt-hi)]";
@@ -116,7 +116,7 @@ const CELL: Record<"empty" | "next" | "filled", string> = {
 };
 
 const DOT =
-  "size-10 rounded-full bg-pw-cobalt-hi shadow-[0_0_--spacing(8)_var(--pw-cobalt)] animate-[loader-dot_8100ms_ease-in-out_1_both] motion-reduce:animate-none";
+  "size-10 rounded-full bg-pw-cobalt-hi shadow-[0_0_--spacing(8)_var(--pw-cobalt)] animate-[loader-dot_8100ms_ease-in-out_1_both]";
 
 export function Screen(props: {
   children: ReactNode;

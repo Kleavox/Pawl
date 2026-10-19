@@ -172,92 +172,150 @@ test("a hint the machine does not know frames the whole machine and leaves the a
   }
 });
 
-test("the receipt's paper feeds from the slot without the slot ever changing size", async ({
-  page,
-}) => {
-  await page.goto(`${GATEWAY}/privacy.html`);
-  const before = await boxOf(page, ".printer__slot");
-  await page.waitForTimeout(1700);
-  const after = await boxOf(page, ".printer__slot");
-  const paper = await boxOf(page, "[data-receipt]");
-  expectSameBox(after, before, "slot after the feed");
-  const unit = await page.evaluate(() => {
-    const root = getComputedStyle(document.documentElement);
-    return (
-      parseFloat(root.getPropertyValue("--u")) *
-      parseFloat(
-        getComputedStyle(document.querySelector(".camera")!).getPropertyValue(
-          "--cam-s",
-        ),
-      )
-    );
+type Seen = {
+  stage: string;
+  framing: string;
+  unit: number;
+  slot: Box;
+  frame: Box;
+  paper: Box;
+};
+
+function watchStages(): void {
+  const seen: Seen[] = [];
+  (window as unknown as { stages: Seen[] }).stages = seen;
+  const box = (node: Element): Box => {
+    const rect = node.getBoundingClientRect();
+    return {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+    };
+  };
+  const record = (): void => {
+    const sheet = document.querySelector<HTMLElement>("[data-receipt-sheet]");
+    const camera = document.querySelector<HTMLElement>("[data-camera]");
+    const slot = document.querySelector(".printer__slot");
+    const frame = document.querySelector("[data-receipt-frame]");
+    const paper = document.querySelector("[data-receipt]");
+    if (!sheet || !camera || !slot || !frame || !paper) return;
+    seen.push({
+      stage: sheet.dataset.stage ?? "",
+      framing: camera.dataset.framing ?? "",
+      unit:
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--u"),
+        ) * parseFloat(getComputedStyle(camera).getPropertyValue("--cam-s")),
+      slot: box(slot),
+      frame: box(frame),
+      paper: box(paper),
+    });
+  };
+  new MutationObserver(record).observe(document, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["data-stage"],
   });
-  expect(paper.width).toBeLessThanOrEqual(before.width);
-  expect(Math.abs(before.width - paper.width - 12 * unit)).toBeLessThanOrEqual(
-    1,
+  document.addEventListener("DOMContentLoaded", record);
+}
+
+async function inHand(page: Page): Promise<void> {
+  await expect(page.locator("[data-receipt-sheet]")).toHaveAttribute(
+    "data-stage",
+    "hand",
+    { timeout: 5_000 },
   );
-  expect(Math.abs(paper.left - before.left - 6 * unit)).toBeLessThanOrEqual(1);
+  await expect(page.locator("[data-camera]")).not.toHaveAttribute(
+    "data-moving",
+    /./,
+  );
+  await page.waitForTimeout(700);
+}
+
+test("the receipt's paper feeds from the slot without the slot ever changing size, then is held up in front of the whole machine", async ({
+  page,
+}) => {
+  await page.addInitScript(watchStages);
+  await page.goto(`${GATEWAY}/privacy.html`);
+  await inHand(page);
+  const seen = await page.evaluate(
+    () => (window as unknown as { stages: Seen[] }).stages,
+  );
+  const fed = seen.find((entry) => entry.stage === "feed")!;
+  const ripped = seen.find((entry) => entry.stage === "rip")!;
+  expect(fed.framing).toBe("printer");
+  expectSameBox(ripped.slot, fed.slot, "slot until the tear");
   expect(
-    Math.abs(paper.top - (before.top + before.height / 2)),
+    Math.abs(fed.frame.top - (fed.slot.top + fed.slot.height / 2)),
+    "the paper comes out of the slot",
   ).toBeLessThanOrEqual(1);
-});
-
-test("what has been read hangs between the slot and the held edge, lower the further one reads, never over the machine", async ({
-  page,
-}) => {
-  await page.goto(`${GATEWAY}/privacy.html`);
-  await page.waitForTimeout(1700);
-  const slot = await boxOf(page, ".printer__slot");
-  const frame = page.locator("[data-receipt-frame]");
-  const sag = () =>
-    page
-      .locator("[data-receipt-slack]")
-      .evaluate((node) => node.getBoundingClientRect().height);
-  const held = () =>
-    page
-      .locator("main.receipt-feed")
-      .evaluate((node) => node.getBoundingClientRect().top);
-  const settle = () => page.waitForTimeout(150);
-  expect(await sag()).toBe(0);
-  const atRest = await held();
-
-  await frame.evaluate(
-    (node) => (node.scrollTop = (node.scrollHeight - node.clientHeight) * 0.2),
-  );
-  await settle();
-  const some = await sag();
-  expect(some).toBeGreaterThan(0);
-  expect(Math.abs((await held()) - atRest - some)).toBeLessThanOrEqual(1);
   expect(
-    await page.evaluate(
-      ([x, y]) =>
-        document.elementFromPoint(x!, y!)?.closest("[data-receipt]") != null,
-      [slot.left + slot.width / 2, slot.top - 60],
+    Math.abs(fed.slot.width - fed.paper.width - 12 * fed.unit),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(fed.paper.left - fed.slot.left - 6 * fed.unit),
+  ).toBeLessThanOrEqual(1);
+
+  const held = await boxOf(page, "[data-receipt-frame]");
+  const paper = await boxOf(page, "[data-receipt]");
+  const margin = await page.evaluate(() =>
+    parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue("--margin"),
     ),
-    "nothing of the paper rises above the slot",
-  ).toBe(false);
-
-  await frame.evaluate((node) => (node.scrollTop = node.scrollHeight));
-  await settle();
-  expect(await sag()).toBeGreaterThan(some);
-  await expect(
-    page.getByRole("link", { name: "Tear off and return to the machine" }),
-  ).toBeInViewport();
-
-  await frame.evaluate((node) => (node.scrollTop = 0));
-  await settle();
-  expect(await sag()).toBe(0);
-  expect(await held()).toBe(atRest);
+  );
+  expect(Math.abs(held.top - (margin + 52))).toBeLessThanOrEqual(1);
+  expect(Math.abs(paper.width - fed.paper.width)).toBeLessThanOrEqual(1);
+  await expect(page.locator("[data-camera]")).toHaveAttribute(
+    "data-framing",
+    "whole",
+  );
 });
 
-test("tearing a receipt off returns to the machine, which pulls back to the whole", async ({
-  page,
-}) => {
+test("the paper in hand scrolls freely and nothing hangs", async ({ page }) => {
   await page.goto(`${GATEWAY}/privacy.html`);
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await inHand(page);
+  await expect(page.locator("[data-receipt-slack]")).toHaveCount(0);
+  const frame = page.locator("[data-receipt-frame]");
+  const atRest = await boxOf(page, "[data-receipt-held]");
+  for (const share of [0.2, 1]) {
+    await frame.evaluate(
+      (node, part) =>
+        (node.scrollTop = (node.scrollHeight - node.clientHeight) * part),
+      share,
+    );
+    expectSameBox(
+      await boxOf(page, "[data-receipt-held]"),
+      atRest,
+      `held at ${share}`,
+      0.5,
+    );
+  }
+  expect(await frame.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+  await expect(
+    page.getByRole("link", { name: "Terms of service" }).last(),
+  ).toBeInViewport();
+});
+
+test("without JavaScript the receipt still reads to its end", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto(`${GATEWAY}/privacy.html`);
   await page
-    .getByRole("link", { name: "Tear off and return to the machine" })
-    .click();
+    .locator("[data-receipt-frame]")
+    .evaluate((node) => (node.scrollTop = node.scrollHeight));
+  await expect(
+    page.getByRole("link", { name: "Terms of service" }).last(),
+  ).toBeInViewport();
+  await context.close();
+});
+
+test("crumpling a receipt returns to the cabinet, whole", async ({ page }) => {
+  await page.goto(`${GATEWAY}/privacy.html`);
+  await inHand(page);
+  await page.getByRole("button", { name: "Crumple the receipt" }).click();
   await expect(page).toHaveURL(`${GATEWAY}/`, { timeout: 5_000 });
   const camera = page.locator("[data-camera]");
   await expect(camera).toHaveAttribute("data-framing", "whole");
@@ -266,13 +324,17 @@ test("tearing a receipt off returns to the machine, which pulls back to the whol
   });
 });
 
-test("the receipt can be torn off at the slot without reading to its end", async ({
+test("a receipt can be crumpled at any point of it, by Escape too", async ({
   page,
 }) => {
   await page.goto(`${GATEWAY}/terms.html`);
-  const top = page.locator(".receipt__head a[data-tear]");
-  await expect(top).toBeInViewport();
-  await top.click();
+  await inHand(page);
+  await page
+    .locator("[data-receipt-frame]")
+    .evaluate(
+      (node) => (node.scrollTop = (node.scrollHeight - node.clientHeight) / 2),
+    );
+  await page.keyboard.press("Escape");
   await expect(page).toHaveURL(`${GATEWAY}/`, { timeout: 5_000 });
 });
 
@@ -304,14 +366,19 @@ test("a page restored from the back/forward cache pulls back instead of sitting 
   );
 
   await page.goto(`${GATEWAY}/privacy.html`);
+  await inHand(page);
   await page.evaluate(() => {
-    document.querySelector<HTMLElement>("[data-receipt-frame]")!.dataset.torn =
-      "fall";
+    document.querySelector<HTMLElement>("[data-receipt-sheet]")!.dataset.stage =
+      "gone";
   });
   await restore();
-  await expect(page.locator("[data-receipt-frame]")).not.toHaveAttribute(
-    "data-torn",
-    /./,
+  await expect(page.locator("[data-receipt-sheet]")).toHaveAttribute(
+    "data-stage",
+    "hand",
+  );
+  await expect(page.locator("[data-camera]")).toHaveAttribute(
+    "data-framing",
+    "whole",
   );
 
   await page.goto(`${PASS}/#cam=screen`);
