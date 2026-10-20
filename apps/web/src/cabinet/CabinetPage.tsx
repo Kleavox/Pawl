@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { CabinetView } from "./CabinetView";
 import { useCabinet } from "./useCabinet";
+import { LuckyCredit, useEggs } from "./useEggs";
 
 function assign(url: string): void {
   window.location.assign(url);
@@ -18,6 +19,8 @@ export function CabinetPage(props: {
     passHref: props.passHref,
     navigate: props.navigate ?? assign,
   });
+  const paperOut = cabinet.state.receipt !== null;
+  const eggs = useEggs({ machine: cabinet.refs.machine, paperOut });
   return (
     <CabinetView
       siteName={props.site.site.name}
@@ -31,6 +34,19 @@ export function CabinetPage(props: {
       sound={cabinet.sound}
       delivery={cabinet.delivery}
       copied={cabinet.copied}
+      notice={eggs.notice}
+      rocking={eggs.rocking}
+      service={cabinet.service}
+      lampTest={cabinet.lampTest}
+      credit={
+        <LuckyCredit
+          tray={cabinet.state.tray}
+          denied={cabinet.state.status === "denied"}
+          paperOut={paperOut}
+          override={cabinet.service?.credit ?? eggs.credit}
+          onLucky={eggs.lucky}
+        />
+      }
       on={cabinet.on}
       refs={cabinet.refs}
       onProductsFocus={cabinet.onProductsFocus}

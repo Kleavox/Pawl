@@ -2,6 +2,7 @@ import { SERIAL } from "@pawl/ui";
 import type { ReactNode } from "react";
 
 import { EFFECTIVE } from "../legal-facts";
+import { ReceiptEnd } from "./Barcode";
 
 export type ReceiptFacts = {
   siteName: string;
@@ -327,18 +328,11 @@ export function Privacy({
           the top of this receipt changes with it.
         </p>
       </section>
-      <div className="receipt__end grid justify-items-center gap-[14px] mt-[34px] pt-[22px] [border-top:2px_dashed_var(--pw-paper-rule)] text-center">
-        <p className="receipt__keep m-0 font-pw-mono text-rem-small font-extrabold tracking-[0.2em]">
-          — KEEP THIS RECEIPT —
-        </p>
-        <span
-          className="receipt__barcode w-[min(280px,80%)] h-[46px] [background:repeating-linear-gradient(90deg,var(--pw-paper-ink)_0_2px,transparent_2px_4px,var(--pw-paper-ink)_4px_5px,transparent_5px_8px,var(--pw-paper-ink)_8px_11px,transparent_11px_13px)] opacity-85"
-          aria-hidden="true"
-        />
+      <ReceiptEnd data="PRIVACY">
         <p className="receipt__other text-rem-small">
           Also printed: <a href="/terms.html">Terms of service</a>
         </p>
-      </div>
+      </ReceiptEnd>
     </>
   );
 }

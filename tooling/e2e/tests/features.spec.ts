@@ -481,7 +481,7 @@ test("the account origin is the same machine, seen close up", async () => {
     "data-framing",
     "screen",
   );
-  await expect(page.locator("[data-part]")).toHaveCount(16);
+  await expect(page.locator("[data-part]")).toHaveCount(17);
   await expect(page.locator(".pawl-card, [data-reader]")).toHaveCount(0);
 });
 

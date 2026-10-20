@@ -1,7 +1,7 @@
 import type { Indicator } from "@pawl/ui";
 
 import type { MachineModel } from "../estate-adapter";
-import { permits } from "./state";
+import { AUDIT, permits } from "./state";
 import type { AccessRole, BayCode, Catalog, MachineState } from "./state";
 
 export type ScreenView = "products" | "working" | "account";
@@ -82,6 +82,9 @@ export function screenCopy(
   }
   if (state.authStep === "account") {
     return { main: "YOUR ACCOUNT", sub: "MANAGE OR SIGN OUT" };
+  }
+  if (state.receipt === AUDIT) {
+    return { main: "AUDIT PRINTED", sub: "DEX/UCS" };
   }
   if (state.receipt !== null) {
     return {
@@ -201,11 +204,23 @@ export function machineAttributes(
   };
 }
 
+const SERVICE_KEYS: ReadonlySet<string> = new Set([
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "CLR",
+  "GO",
+]);
+
 export function litKeys(
   state: MachineState,
   screen: string,
   faulted: boolean,
+  service = false,
 ): ReadonlySet<string> {
+  if (service) return SERVICE_KEYS;
   const view = viewFor(state);
   if (view === "working") return new Set();
   if (view === "account") return new Set(["CLR"]);

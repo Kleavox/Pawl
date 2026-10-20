@@ -65,7 +65,7 @@ test("every page draws the same machine: each part keeps its size on the cabinet
 }) => {
   await page.goto(`${GATEWAY}/`);
   const cabinet = await partSizes(page);
-  expect(Object.keys(cabinet)).toHaveLength(16);
+  expect(Object.keys(cabinet)).toHaveLength(17);
   for (const url of [
     `${GATEWAY}/privacy.html`,
     `${GATEWAY}/terms.html`,

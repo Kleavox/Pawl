@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
 
+import { Audit, type AuditFacts } from "../receipt/Audit";
 import {
   Delivery,
   type DeliveryActions,
@@ -8,11 +9,9 @@ import {
 } from "../receipt/Delivery";
 import { Sheet } from "../receipt/Sheet";
 
-export type Delivered = {
-  printKey: number;
-  facts: DeliveryFacts;
-  body: DeliveryBody;
-};
+export type Delivered =
+  | { printKey: number; facts: DeliveryFacts; body: DeliveryBody }
+  | { printKey: number; audit: AuditFacts };
 
 export type PaperActions = DeliveryActions & { crumple: () => void };
 
@@ -56,13 +55,17 @@ export function DeliveryReceipt(props: {
           paperRef={props.paperRef ?? null}
           onCrumple={props.on.crumple}
         >
-          <Delivery
-            siteName={props.siteName}
-            facts={props.delivery.facts}
-            body={props.delivery.body}
-            copied={props.copied}
-            on={props.on}
-          />
+          {"audit" in props.delivery ? (
+            <Audit facts={props.delivery.audit} />
+          ) : (
+            <Delivery
+              siteName={props.siteName}
+              facts={props.delivery.facts}
+              body={props.delivery.body}
+              copied={props.copied}
+              on={props.on}
+            />
+          )}
         </Sheet>
       )}
     </dialog>

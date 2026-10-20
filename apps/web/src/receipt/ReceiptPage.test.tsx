@@ -228,6 +228,26 @@ describe("ReceiptPage", () => {
   });
 });
 
+describe("a legal receipt's barcode", () => {
+  it.each([
+    ["privacy", "PRIVACY"],
+    ["terms", "TERMS"],
+  ] as const)(
+    "on the %s receipt holds its name, in real Code 39",
+    (kind, data) => {
+      const html = renderToStaticMarkup(
+        <ReceiptPage site={SITE} kind={kind} hosts={HOSTS} />,
+      );
+      expect(html).toContain(`data-barcode="${data}"`);
+      expect(html).toContain(`*${data}*`);
+      expect(html).not.toContain(
+        "repeating-linear-gradient(90deg,var(--pw-paper-ink)",
+      );
+      expect(html.match(/<rect /g)?.length).toBe((data.length + 2) * 5);
+    },
+  );
+});
+
 describe("the privacy policy says what the code does", () => {
   const privacy = text("privacy");
 

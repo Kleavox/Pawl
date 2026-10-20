@@ -69,7 +69,9 @@ describe("Gateway public namespace", () => {
     }
     expect(body).not.toMatch(/<script/);
     expect(body).toContain("NOTHING IN THIS BAY");
-    expect(body).toMatch(/href="\/#cam=screen"[^>]*>GO<\/a>/);
+    expect(body).toMatch(
+      /href="\/#cam=screen"[^>]*>GO<span[^>]*data-tactile="circle"[^>]*><\/span><\/a>/,
+    );
   });
 });
 

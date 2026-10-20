@@ -19,6 +19,7 @@ export type MachineProps = {
   sign?: string;
   sound?: ReactNode;
   tray?: ReactNode;
+  credit?: ReactNode;
   machine?: Record<`data-${string}`, string>;
   main?: boolean;
   settled?: boolean;
@@ -36,10 +37,13 @@ const CAMERA =
   "camera absolute top-0 left-0 w-[calc(var(--mw)_*_var(--u))] [transform:translate(var(--cam-x),var(--cam-y))_scale(var(--cam-s))] origin-top-left transition-[transform] data-moving:will-change-transform duration-[560ms] ease-dolly data-[moving=out]:duration-[620ms] data-[moving=out]:ease-pull data-[moving=in]:data-[framing=printer]:delay-[120ms] data-[moving=in]:data-[framing=printer]:duration-[440ms] data-[moving=in]:data-[framing=screen]:delay-[80ms] data-[moving=in]:data-[framing=screen]:duration-[480ms] data-[framing=whole]:camera-whole data-[framing=screen]:camera-screen data-[framing=printer]:camera-printer [html[data-cam-hint=screen]_&]:camera-screen [html[data-cam-hint=printer]_&]:camera-printer";
 
 const MACHINE =
-  "machine group/machine relative grid grid-rows-[--spacing(60)_--spacing(544)_--spacing(100)] gap-10 w-[calc(var(--mw)_*_var(--u))] px-10 pt-10 pb-0 border-[length:--spacing(1)] border-solid border-pw-trim rounded-[--spacing(22)_--spacing(22)_--spacing(8)_--spacing(8)] bg-(image:--pw-brushed) shadow-[0_--spacing(34)_--spacing(70)_var(--pw-shade),0_0_0_--spacing(1)_rgb(0_0_0/45%),inset_0_--spacing(1)_0_var(--pw-highlight)] text-pw-ink [&_:focus-visible]:[outline:--spacing(2)_solid_var(--pw-cobalt-hi)] [&_:focus-visible]:[outline-offset:--spacing(2)] max-desk:grid-rows-[--spacing(40)_--spacing(380)_--spacing(303)_--spacing(28)] max-desk:gap-8 max-desk:p-8 max-desk:rounded-[--spacing(10)_--spacing(10)_--spacing(4)_--spacing(4)]";
+  "machine group/machine relative grid data-rocking:origin-bottom data-rocking:animate-[machine-rock_600ms_var(--pw-ease-mech)_1_both] grid-rows-[--spacing(60)_--spacing(544)_--spacing(100)] gap-10 w-[calc(var(--mw)_*_var(--u))] px-10 pt-10 pb-0 border-[length:--spacing(1)] border-solid border-pw-trim rounded-[--spacing(22)_--spacing(22)_--spacing(8)_--spacing(8)] bg-(image:--pw-brushed) shadow-[0_--spacing(34)_--spacing(70)_var(--pw-shade),0_0_0_--spacing(1)_rgb(0_0_0/45%),inset_0_--spacing(1)_0_var(--pw-highlight)] text-pw-ink [&_:focus-visible]:[outline:--spacing(2)_solid_var(--pw-cobalt-hi)] [&_:focus-visible]:[outline-offset:--spacing(2)] max-desk:grid-rows-[--spacing(40)_--spacing(380)_--spacing(303)_--spacing(28)] max-desk:gap-8 max-desk:p-8 max-desk:rounded-[--spacing(10)_--spacing(10)_--spacing(4)_--spacing(4)]";
 
 const MARQUEE =
   "marquee relative grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-16 px-16 overflow-hidden border-[length:--spacing(1)] border-solid border-pw-black rounded-[--spacing(12)] bg-[radial-gradient(70%_140%_at_22%_50%,var(--pw-cobalt-wash)_0%,transparent_70%),linear-gradient(180deg,var(--pw-graphite)_0%,var(--pw-black)_100%)] shadow-[inset_0_--spacing(2)_--spacing(10)_var(--pw-cobalt-glow),0_--spacing(1)_0_var(--pw-highlight)] max-desk:row-[1] max-desk:grid-cols-[minmax(0,1fr)_auto] max-desk:gap-8 max-desk:px-10 max-desk:rounded-[--spacing(8)]";
+
+const TUBE =
+  "marquee__tube absolute inset-0 z-1 rounded-[inherit] bg-pw-black opacity-0 pointer-events-none group-data-[lamp-test]/machine:animate-[tube-start_1200ms_steps(1,end)_1_both]";
 
 const BOLT =
   "marquee__bolt size-8 rounded-full bg-[radial-gradient(circle_at_35%_35%,var(--pw-steel-hi),var(--pw-steel-lo)_70%)] max-desk:hidden";
@@ -83,6 +87,9 @@ const LOCK =
 const LOCK_HOLE =
   "w-6 h-12 rounded-[--spacing(3)_--spacing(3)_--spacing(1)_--spacing(1)] bg-pw-etch";
 
+const HINGE =
+  "machine__hinge absolute -left-6 z-2 w-10 h-40 rounded-[--spacing(4)] bg-(image:--pw-brushed) shadow-[0_--spacing(1)_0_rgb(0_0_0/40%),inset_0_--spacing(1)_0_var(--pw-highlight)] [transform:translateY(-50%)] before:absolute before:inset-x-0 before:top-1/2 before:h-1 before:bg-pw-trim max-desk:hidden";
+
 const READY = new Set(["idle", "selected", "granted"]);
 
 function lights(machine: MachineProps["machine"]): {
@@ -91,10 +98,11 @@ function lights(machine: MachineProps["machine"]): {
   denied: boolean;
 } {
   const status = machine?.["data-status"];
+  const test = machine?.["data-lamp-test"] !== undefined;
   return {
-    ready: status === undefined || READY.has(status),
-    busy: machine?.["data-busy"] === "true",
-    denied: status === "denied",
+    ready: test || status === undefined || READY.has(status),
+    busy: test || machine?.["data-busy"] === "true",
+    denied: test || status === "denied",
   };
 }
 
@@ -121,6 +129,7 @@ export function Machine(props: MachineProps): ReactNode {
           {...props.machine}
         >
           <div className={MARQUEE} data-part="marquee">
+            <span className={TUBE} data-tube aria-hidden="true" />
             <span className={BOLT} aria-hidden="true" />
             <Brand className={BRAND}>{props.siteName.toUpperCase()}</Brand>
             <div className={TICKER} data-part="ticker" aria-hidden="true">
@@ -169,6 +178,16 @@ export function Machine(props: MachineProps): ReactNode {
                   {props.sign}
                 </span>
               )}
+              <span
+                className={`${HINGE} top-[22%]`}
+                data-hinge
+                aria-hidden="true"
+              />
+              <span
+                className={`${HINGE} top-[78%]`}
+                data-hinge
+                aria-hidden="true"
+              />
               <span className={LOCK} data-part="lock" aria-hidden="true">
                 <i className={LOCK_HOLE} />
               </span>
@@ -177,6 +196,7 @@ export function Machine(props: MachineProps): ReactNode {
               lcd={props.lcd}
               keypad={props.keypad}
               lit={lights(props.machine)}
+              credit={props.credit}
             />
           </div>
           <Base

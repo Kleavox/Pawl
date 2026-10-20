@@ -25,6 +25,24 @@ describe("Keypad", () => {
     expect(pressed).toEqual(["1"]);
   });
 
+  it("tells a listener of every touch, dark keys too, without pressing a dark key", async () => {
+    const pressed: string[] = [];
+    const touched: string[] = [];
+    render(
+      <Keypad
+        mode="machine"
+        lit={new Set(["1"])}
+        onPress={(key) => pressed.push(key)}
+        onTouch={(key) => touched.push(key)}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^4/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^1/ }));
+    await userEvent.click(screen.getByRole("button", { name: "CLR" }));
+    expect(touched).toEqual(["4", "1", "CLR"]);
+    expect(pressed).toEqual(["1"]);
+  });
+
   it("lights a service keypad's digits when the page asks for them", async () => {
     const pressed: string[] = [];
     render(
@@ -93,6 +111,44 @@ describe("Keypad", () => {
     rerender(page(new Set(["GO"])));
     await userEvent.click(go);
     expect(submitted).toEqual(["go"]);
+  });
+
+  it("carries the ADA's raised marks on every keypad: a bar on 5, a ring on GO, a left arrow on CLR", () => {
+    const keypads = [
+      <Keypad key="machine" mode="machine" lit={new Set()} />,
+      <Keypad
+        key="page"
+        mode="service"
+        lit={new Set()}
+        onPress={() => undefined}
+        clr={{ kind: "button" }}
+        go={{ kind: "submit", form: "screen-form" }}
+      />,
+      <Keypad
+        key="link"
+        mode="service"
+        lit={new Set()}
+        go={{ kind: "link", href: "/" }}
+      />,
+      <Keypad key="static" mode="service" lit={new Set()} />,
+    ];
+    for (const keypad of keypads) {
+      const { container, unmount } = render(keypad);
+      const marks = [
+        ...container.querySelectorAll<HTMLElement>("[data-tactile]"),
+      ].map((mark) => [
+        mark.closest(".pw-key")!.firstChild!.textContent,
+        mark.dataset.tactile,
+        mark.getAttribute("aria-hidden"),
+      ]);
+      expect(marks, String(keypad.key)).toEqual([
+        ["5", "bar", "true"],
+        ["CLR", "arrow", "true"],
+        ["GO", "circle", "true"],
+      ]);
+      expect(container.querySelectorAll("[data-braille]")).toHaveLength(10);
+      unmount();
+    }
   });
 
   it("names the cabinet's keypad for the one thing it does, selecting a bay", () => {

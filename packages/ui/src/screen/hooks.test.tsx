@@ -94,11 +94,13 @@ describe("useFollowFocus", () => {
 function Keys({
   lit,
   onKey,
+  onTouch,
 }: {
   lit: ReadonlySet<string>;
   onKey: (key: string) => void;
+  onTouch?: (key: string) => void;
 }): ReactNode {
-  useMachineKeys(onKey, lit);
+  useMachineKeys(onKey, lit, onTouch);
   const [typed, setTyped] = useState("");
   return (
     <input
@@ -124,6 +126,23 @@ describe("useMachineKeys", () => {
     fireEvent.keyDown(screen.getByLabelText("field"), { key: "3" });
     fireEvent.keyDown(document, { key: "3", ctrlKey: true });
     expect(keys).toEqual(["GO", "CLR"]);
+  });
+
+  it("tells a listener of every key typed, dark ones too, but not inside a field", () => {
+    const keys: string[] = [];
+    const touched: string[] = [];
+    render(
+      <Keys
+        lit={new Set(["3"])}
+        onKey={(key) => keys.push(key)}
+        onTouch={(key) => touched.push(key)}
+      />,
+    );
+    fireEvent.keyDown(document, { key: "4" });
+    fireEvent.keyDown(document, { key: "3" });
+    fireEvent.keyDown(screen.getByLabelText("field"), { key: "2" });
+    expect(touched).toEqual(["4", "3"]);
+    expect(keys).toEqual(["3"]);
   });
 
   it("presses a lit digit typed outside a field", () => {

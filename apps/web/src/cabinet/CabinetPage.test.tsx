@@ -700,3 +700,167 @@ describe("a cabinet that keeps up with the pass", () => {
     ).toBe("visitor");
   });
 });
+
+describe("the 4-2-3-1 service menu", () => {
+  async function press(
+    user: Awaited<ReturnType<typeof opened>>["user"],
+    container: HTMLElement,
+    ...keys: string[]
+  ): Promise<void> {
+    for (const key of keys) {
+      await user.click(
+        container.querySelector<HTMLElement>(`[data-key='${key}']`)!,
+      );
+    }
+  }
+
+  function lcd(container: HTMLElement): [string, string] {
+    return [
+      container.querySelector("[data-screen]")!.textContent ?? "",
+      container.querySelector("[data-screen-sub]")!.textContent ?? "",
+    ];
+  }
+
+  function credit(container: HTMLElement): string | undefined {
+    return container.querySelector<HTMLElement>("[data-part='credit']")!.dataset
+      .credit;
+  }
+
+  it("opens on 4, 2, 3, 1 pressed on dark and lit keys alike, keeping the picked bay as it was", async () => {
+    const { user, container } = await opened(vi.fn());
+    await press(user, container, "4", "2", "3", "1");
+    expect(container.querySelector("[data-cabinet-word]")).toHaveTextContent(
+      "SERVICE MODE",
+    );
+    expect(
+      container.querySelector("[data-view-panel='products']"),
+    ).toHaveAttribute("inert");
+    expect(lcd(container)).toEqual(["SERVICE 1 ERROR", "NONE"]);
+    expect(credit(container)).toBe("SEr1");
+    expect(
+      container.querySelector("[data-tile='3']")!.getAttribute("data-state"),
+    ).toBe("selected");
+  });
+
+  it("hands the machine back exactly as it was on CLR, so GO releases the bay picked before", async () => {
+    const { user, container } = await opened(vi.fn());
+    await press(user, container, "4", "2", "3", "1", "CLR");
+    expect(lcd(container)).toEqual([
+      "3 SELECTED, MANUAL",
+      "PRESS GO TO RELEASE IT",
+    ]);
+    await press(user, container, "GO");
+    await advance(1500);
+    expect(
+      container.querySelector("[data-tray]")!.getAttribute("data-tray"),
+    ).toBe("3");
+  });
+
+  it("leaves service mode when the delivery is taken, so the paper is read like any other", async () => {
+    const { user, container } = await delivered(vi.fn(), "3");
+    await press(user, container, "4", "2", "3", "1");
+    expect(container.querySelector("[data-cabinet-word]")).toHaveTextContent(
+      "SERVICE MODE",
+    );
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    expect(
+      container.querySelector("[data-cabinet-word]"),
+    ).not.toHaveTextContent("SERVICE MODE");
+    await advance(560);
+    await inHand(container);
+    expect(lcd(container)[0]).toBe("RECEIPT PRINTED");
+    await user.keyboard("{Escape}");
+    await advance(CRUMPLED_MS);
+    expect(stageOf(container)).toBeUndefined();
+  });
+
+  it("names a session that could not be read as the last error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string) => {
+        if (String(input).startsWith("/api/session")) {
+          throw new TypeError("offline");
+        }
+        return answer({});
+      }),
+    );
+    const { user, container } = await opened(vi.fn());
+    expect(lcd(container)[0]).toBe("SESSION UNREADABLE");
+    await press(user, container, "4", "2", "3", "1");
+    expect(lcd(container)).toEqual(["SERVICE 1 ERROR", "SESSION UNREADABLE"]);
+  });
+
+  it("counts what was vended this page under SALE, and says CASH is free", async () => {
+    const { user, container } = await delivered(vi.fn(), "3");
+    await press(user, container, "4", "2", "3", "1", "2");
+    expect(lcd(container)).toEqual(["SERVICE 2 SALE", "1 VENDED THIS PAGE"]);
+    await press(user, container, "3");
+    expect(lcd(container)).toEqual(["SERVICE 3 CASH", "0.00 · FREE VEND"]);
+    expect(credit(container)).toBe("SEr3");
+  });
+
+  it("runs the lamp test on 4 then GO", async () => {
+    const { user, container } = await opened(vi.fn());
+    await press(user, container, "4", "2", "3", "1", "4", "GO");
+    const machine = container.querySelector("[data-machine]")!;
+    expect(machine).toHaveAttribute("data-lamp-test");
+    expect(credit(container)).toBe("8888");
+    await advance(1200);
+    expect(machine).not.toHaveAttribute("data-lamp-test");
+    expect(credit(container)).toBe("SEr4");
+  });
+
+  it("prints a DEX audit on 5 then GO, held and crumpled like any paper", async () => {
+    const { user, container } = await opened(vi.fn());
+    await press(user, container, "4", "2", "3", "1", "5", "GO");
+    await advance(560);
+    await inHand(container);
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Machine audit" }),
+    ).toBeInTheDocument();
+    const dex = container.querySelector("pre[data-dex]")!.textContent ?? "";
+    expect(dex).toMatch(/^DXS\*PAWL-GW-01\*VA\*V1\/1\*1\n/);
+    expect(dex).toMatch(/\nEA3\*1\nG85\*[0-9A-F]{4}\n/);
+    expect(lcd(container)).toEqual(["AUDIT PRINTED", "DEX/UCS"]);
+    expect(
+      container.querySelector("[data-cabinet-word]"),
+    ).not.toHaveTextContent("SERVICE MODE");
+    await user.keyboard("{Escape}");
+    await advance(CRUMPLED_MS);
+    expect(stageOf(container)).toBeUndefined();
+  });
+
+  it("hands the bays back on CLR, and 1 then picks bay 1 again", async () => {
+    const { user, container } = await opened(vi.fn());
+    await press(user, container, "4", "2", "3", "1");
+    expect(container.querySelector("[data-cabinet-word]")).toHaveTextContent(
+      "SERVICE MODE",
+    );
+    await press(user, container, "CLR");
+    expect(container.querySelector("[data-cabinet-word]")).toHaveTextContent(
+      "GUEST MODE",
+    );
+    expect(
+      container.querySelector("[data-view-panel='products']"),
+    ).not.toHaveAttribute("inert");
+    expect(credit(container)).toBe("FrEE");
+    await press(user, container, "1");
+    expect(
+      container.querySelector("[data-tile='1']")!.getAttribute("data-state"),
+    ).toBe("selected");
+  });
+
+  it("leaves on Escape too", async () => {
+    const { user, container } = await opened(vi.fn());
+    await press(user, container, "4", "2", "3", "1");
+    expect(container.querySelector("[data-cabinet-word]")).toHaveTextContent(
+      "SERVICE MODE",
+    );
+    await user.keyboard("{Escape}");
+    expect(container.querySelector("[data-cabinet-word]")).toHaveTextContent(
+      "GUEST MODE",
+    );
+  });
+});

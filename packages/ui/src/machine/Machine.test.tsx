@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { CAMERA_HINT_HASH, CAMERA_HINT_SCRIPT } from "./camera-hint";
+import { Credit } from "./Credit";
 import { Machine, type MachineProps } from "./Machine";
 import { MACHINE_PARTS } from "./parts";
 
@@ -38,6 +39,59 @@ describe("Machine", () => {
     expect(camera.querySelector("[data-machine]")).not.toBeNull();
     expect(root.innerHTML).not.toMatch(
       /<header\b|<footer\b|pawl-card|data-reader|INSERT PASS|EJECT PASS/,
+    );
+  });
+
+  it("reads FrEE on its credit display unless told otherwise, as a free-vend machine does", () => {
+    const root = drawn();
+    const credit = root.querySelector("[data-part='credit']")!;
+    expect(credit).toHaveAttribute("data-credit", "FrEE");
+    expect(credit).toHaveAttribute("aria-hidden", "true");
+    expect(credit.closest("[aria-label='Service panel']")).not.toBeNull();
+    expect(credit.querySelectorAll("svg")).toHaveLength(4);
+    expect(credit.querySelectorAll("[data-seg][data-on]")).toHaveLength(
+      4 + 2 + 5 + 5,
+    );
+    const shown = drawn({ credit: <Credit text="1234" /> });
+    expect(shown.querySelector("[data-part='credit']")).toHaveAttribute(
+      "data-credit",
+      "1234",
+    );
+  });
+
+  it("hangs the display's door on two hinges opposite its lock, and warns on the bay not to rock it", () => {
+    const root = drawn();
+    const hinges = root.querySelectorAll("[data-part='bezel'] > [data-hinge]");
+    expect(hinges).toHaveLength(2);
+    for (const hinge of hinges) {
+      expect(hinge).toHaveAttribute("aria-hidden", "true");
+      expect(hinge.className).toContain("max-desk:hidden");
+    }
+    const sticker = root.querySelector(
+      "[data-part='tray'] > [data-sticker='tilt']",
+    )!;
+    expect(sticker).toHaveTextContent("NEVER ROCK OR TILT");
+    expect(sticker).toHaveAttribute("aria-hidden", "true");
+    expect(sticker.className).toContain("max-desk:hidden");
+  });
+
+  it("lights every lamp for the lamp test, and restarts the marquee's tube once", () => {
+    const tested = drawn({ machine: { "data-lamp-test": "" } });
+    for (const which of ["ready", "busy", "denied"]) {
+      expect(
+        tested.querySelector(`.led--${which}`)!.className,
+        which,
+      ).toContain(
+        "shadow-[0_0_0_--spacing(2)_var(--pw-steel-hi),0_0_0_--spacing(3)_var(--pw-steel-lo),0_0_--spacing(10)",
+      );
+    }
+    const tube = tested.querySelector("[data-part='marquee'] > [data-tube]")!;
+    expect(tube).toHaveAttribute("aria-hidden", "true");
+    expect(tube.className).toContain(
+      "group-data-[lamp-test]/machine:animate-[tube-start",
+    );
+    expect(drawn().querySelector(".led--denied")!.className).not.toContain(
+      ",0_0_--spacing(10)_var(--pw-danger)]",
     );
   });
 

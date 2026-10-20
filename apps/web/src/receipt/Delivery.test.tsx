@@ -224,11 +224,13 @@ describe("a delivery receipt", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
-  it("prints nothing invented: no receipt number, no barcode", () => {
+  it("prints nothing invented: its barcode holds the bay and the time printed", () => {
     const { container } = printed(LINK);
-    expect(
-      container.querySelector("[data-barcode], .receipt__barcode"),
-    ).toBeNull();
+    const barcodes = container.querySelectorAll("[data-barcode]");
+    expect(barcodes).toHaveLength(1);
+    expect(barcodes[0]).toHaveAttribute("data-barcode", "7-1403");
+    expect(barcodes[0]).toHaveTextContent("*7-1403*");
+    expect(container).toHaveTextContent("— KEEP THIS RECEIPT —");
     expect(container.textContent).not.toMatch(/No\.|#\d/);
   });
 });

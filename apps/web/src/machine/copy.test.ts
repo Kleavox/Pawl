@@ -331,3 +331,22 @@ describe("a key is lit only when it does something on this screen", () => {
     });
   });
 });
+
+describe("the service menu on the keys and the LCD", () => {
+  it("lights 1 to 5, CLR and GO in service mode, whatever the bays", () => {
+    expect(
+      [
+        ...litKeys(initialState("guest", CATALOG), "PICK A BAY", false, true),
+      ].sort(),
+    ).toEqual(["1", "2", "3", "4", "5", "CLR", "GO"]);
+  });
+
+  it("names an audit paper on the LCD and lights nothing while it is out", () => {
+    const held = reduce(initialState("guest", CATALOG), { type: "audit" });
+    expect(screenCopy(held, model)).toEqual({
+      main: "AUDIT PRINTED",
+      sub: "DEX/UCS",
+    });
+    expect(keys(held)).toEqual([]);
+  });
+});

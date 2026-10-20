@@ -2,6 +2,8 @@ import type { BayView } from "@pawl/registry";
 
 export type BayCode = string;
 
+export const AUDIT = "audit";
+
 export type Catalog = BayView[];
 
 export type AccessRole = "guest" | "visitor" | "owner";
@@ -22,6 +24,7 @@ export type MachineEvent =
   | { type: "catalog"; catalog: Catalog }
   | { type: "take" }
   | { type: "crumple" }
+  | { type: "audit" }
   | { type: "select"; bay: BayCode }
   | { type: "preselect"; bay: BayCode }
   | { type: "sign-in" }
@@ -103,6 +106,12 @@ export function reduce(state: MachineState, event: MachineEvent): MachineState {
     case "crumple": {
       if (state.receipt === null) return state;
       return { ...state, receipt: null };
+    }
+
+    case "audit": {
+      if (state.receipt !== null || state.busy) return state;
+      if (state.authStep !== "closed") return state;
+      return { ...state, receipt: AUDIT };
     }
 
     case "select": {

@@ -214,3 +214,67 @@ describe("stated identity", () => {
     expect(files.asked[0]?.headers.get("x-pawl-user")).toBe("u1");
   });
 });
+
+describe("the clacks", () => {
+  it("sends GNU Terry Pratchett up and down the line on every answer", async () => {
+    const target = env({
+      ASSETS: assets({ "/pass/": "<!doctype html>", "/robots.txt": "ok" }),
+    });
+    for (const url of [
+      "https://example.com/health",
+      "https://paw.example.com/health",
+      "https://paw.example.com/",
+      "https://example.com/robots.txt",
+      "https://example.com/no/such/thing",
+    ]) {
+      const response = await handle(new Request(url), target, ctx);
+      expect(response.headers.get("x-clacks-overhead"), url).toBe(
+        "GNU Terry Pratchett",
+      );
+    }
+  });
+
+  it("keeps the answer's status and body", async () => {
+    const response = await handle(
+      new Request("https://example.com/health"),
+      env(),
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      service: "gateway",
+      status: "ok",
+    });
+  });
+});
+
+describe("finger coke", () => {
+  it("is answered on the provider's host too, by the gateway, which knows the bays", async () => {
+    const response = await handle(
+      new Request(
+        "https://paw.example.com/.well-known/webfinger?resource=acct:coke@paw.example.com",
+      ),
+      env(),
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/jrd+json");
+    const body = (await response.json()) as { subject: string };
+    expect(body.subject).toBe("acct:coke@paw.example.com");
+  });
+});
+
+describe("WebFinger on an app's own host", () => {
+  it("is left to the app: only Pawl's own hosts are answered", async () => {
+    const response = await handle(
+      new Request(
+        "https://notes.example.com/.well-known/webfinger?resource=acct:coke@notes.example.com",
+      ),
+      env(),
+      ctx,
+    );
+    expect(response.headers.get("content-type")).not.toBe(
+      "application/jrd+json",
+    );
+  });
+});

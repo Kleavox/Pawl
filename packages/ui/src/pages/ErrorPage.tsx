@@ -92,6 +92,7 @@ export function renderErrorPage(options: ErrorPageOptions): string {
     keys: { go: { kind: "link", href: home } },
     caption: "GO · TO THE MACHINE",
     sign: broken ? "OUT OF ORDER" : undefined,
+    credit: code !== undefined && /^\d{1,4}$/u.test(code) ? code : "----",
     siteName: service,
     children: (
       <>

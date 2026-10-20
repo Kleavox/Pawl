@@ -86,7 +86,7 @@ describe("the machine's design tokens", () => {
     const colours = [
       ...theme.matchAll(/--pw-[a-z0-9-]+:\s*#[0-9a-fA-F]{3,8}\s*;/g),
     ];
-    expect(colours).toHaveLength(39);
+    expect(colours).toHaveLength(40);
   });
 
   it("keeps one accent: cobalt is the only colour named for action", () => {

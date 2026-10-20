@@ -6,11 +6,15 @@ import { createElement, type ReactNode } from "react";
 
 import { useSound } from "./sound";
 
-const seen: { click: () => void } = { click: () => undefined };
+const seen: { click: () => void; key: (label: string) => void } = {
+  click: () => undefined,
+  key: () => undefined,
+};
 
 function Probe(): ReactNode {
   const sound = useSound();
   seen.click = sound.click;
+  seen.key = sound.key;
   return createElement(SoundSwitch, {
     pressed: sound.on,
     onToggle: sound.toggle,
@@ -21,8 +25,8 @@ function plate(): HTMLElement {
   return render(createElement(Probe)).container;
 }
 
-function contexts(): { made: number } {
-  const counter = { made: 0 };
+function contexts(): { made: number; tones: number[][] } {
+  const counter = { made: 0, tones: [] as number[][] };
   class FakeContext {
     currentTime = 0;
     destination = {};
@@ -30,9 +34,15 @@ function contexts(): { made: number } {
       counter.made += 1;
     }
     createOscillator() {
+      const made: number[] = [];
+      counter.tones.push(made);
       return {
         type: "",
-        frequency: { value: 0 },
+        frequency: {
+          set value(hz: number) {
+            made.push(hz);
+          },
+        },
         connect: (node: unknown) => node,
         start: () => undefined,
         stop: () => undefined,
@@ -78,6 +88,40 @@ describe("the sound switch", () => {
     expect(localStorage.getItem("pawl:sound")).toBe("on");
     seen.click();
     expect(counter.made).toBe(1);
+  });
+
+  it("plays a key's telephone tone pair, the keypad being the telephone layout", () => {
+    const counter = contexts();
+    const root = plate();
+    fireEvent.click(root.querySelector<HTMLButtonElement>("[data-sound]")!);
+    counter.tones.length = 0;
+    seen.key("1");
+    seen.key("5");
+    seen.key("0");
+    seen.key("CLR");
+    seen.key("GO");
+    expect(counter.tones).toEqual([
+      [697],
+      [1209],
+      [770],
+      [1336],
+      [941],
+      [1336],
+      [941],
+      [1209],
+      [941],
+      [1477],
+    ]);
+    counter.tones.length = 0;
+    seen.click();
+    expect(counter.tones).toEqual([[1800]]);
+  });
+
+  it("plays no tone while the sound is off", () => {
+    const counter = contexts();
+    plate();
+    seen.key("1");
+    expect(counter.made).toBe(0);
   });
 
   it("comes back on when the browser remembered it", () => {

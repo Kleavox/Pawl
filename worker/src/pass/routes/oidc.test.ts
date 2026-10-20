@@ -430,7 +430,9 @@ describe("consent", () => {
       ["CLR", "key--fn", "deny"],
     ] as const) {
       const button =
-        new RegExp(`<button[^>]*>${label}</button>`).exec(body)?.[0] ?? "";
+        new RegExp(
+          `<button[^>]*>${label}(?:<(?:span|svg)[^>]*data-tactile[\\s\\S]*?)?</button>`,
+        ).exec(body)?.[0] ?? "";
       expect(button, label).toContain(key);
       expect(button, label).toContain('type="submit"');
       expect(button, label).toContain('form="consent"');

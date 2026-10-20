@@ -18,6 +18,7 @@ import {
 import { Hono, type Context } from "hono";
 
 import { askCard } from "./cards";
+import { webfinger } from "./webfinger";
 import { hostRedirect } from "./hosts";
 import { IdentityUnavailable } from "./session/keys";
 import {
@@ -120,6 +121,31 @@ app.onError((error, context) => {
 app.get("/health", (context) =>
   context.json({ service: "gateway", status: "ok" }),
 );
+
+app.use("/.well-known/webfinger", async (context, next) => {
+  const request = context.req.raw;
+  const url = new URL(request.url);
+  const viewer = viewerOrigins(request, context.env);
+  const issuer = context.env.OIDC_ISSUER ?? viewer.pass;
+  const root =
+    url.host === new URL(issuer).host
+      ? new URL(context.env.PUBLIC_ORIGIN).origin
+      : viewer.root;
+  const hosts = [new URL(root).hostname, new URL(issuer).hostname];
+  if (request.method !== "GET" || !hosts.includes(url.hostname)) {
+    await next();
+    return;
+  }
+  return webfinger({
+    url,
+    hosts,
+    root,
+    issuer,
+    bays: async () =>
+      catalogView(request, context.env, (await outsideApps(context.env)) ?? [])
+        .bays,
+  });
+});
 
 app.use("*", async (context, next) => {
   const path = context.req.path;

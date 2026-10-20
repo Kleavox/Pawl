@@ -4,6 +4,8 @@ import type { MouseEvent, ReactNode } from "react";
 import type { AppCard, CardState } from "../cabinet/card";
 import { PASS_KIND } from "../machine/copy";
 import type { AccessRole } from "../machine/state";
+import { ReceiptEnd } from "./Barcode";
+import { deliveryCode } from "./code39";
 
 type Field = AppCard["fields"][number];
 
@@ -28,25 +30,25 @@ export type DeliveryActions = {
   leave: (event: MouseEvent<HTMLAnchorElement>, href: string) => void;
 };
 
-const PRINTED_AT = new Intl.DateTimeFormat("en-GB", {
+export const PRINTED_AT = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
   timeStyle: "short",
   hourCycle: "h23",
 });
 
-const HEAD =
+export const HEAD =
   "receipt__head grid justify-items-center gap-[10px] pb-[18px] [border-bottom:2px_dashed_var(--pw-paper-rule)] text-center";
 
-const SERIAL_LINE =
+export const SERIAL_LINE =
   "receipt__serial m-0 text-pw-paper-dim font-pw-mono text-rem-label font-bold tracking-[0.18em]";
 
 const EYEBROW =
   "m-0 text-pw-cobalt-lo font-pw-mono text-rem-label font-bold tracking-[0.18em] uppercase";
 
-const FACTS =
+export const FACTS =
   "receipt__facts grid grid-cols-[auto_minmax(0,1fr)] gap-x-[14px] gap-y-[4px] w-full m-0 mt-[6px] font-pw-mono text-rem-label text-left [&_dt]:text-pw-paper-dim [&_dt]:font-bold [&_dt]:tracking-[0.1em] [&_dt]:uppercase [&_dd]:m-0 [&_dd]:text-right [&_dd]:[overflow-wrap:anywhere]";
 
-const BODY = "receipt__body grid gap-[12px] pt-[18px]";
+export const BODY = "receipt__body grid gap-[12px] pt-[18px]";
 
 const FROM =
   "m-0 pb-[6px] [border-bottom:1px_solid_var(--pw-paper-rule)] text-pw-paper-dim font-pw-mono text-rem-label font-bold tracking-[0.12em] uppercase [overflow-wrap:anywhere]";
@@ -289,6 +291,7 @@ export function Delivery(props: {
           />
         )}
       </section>
+      <ReceiptEnd data={deliveryCode(facts.bay, facts.printed)} />
     </>
   );
 }

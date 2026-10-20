@@ -326,3 +326,52 @@ describe("CabinetView", () => {
     );
   });
 });
+
+describe("the eggs on the cabinet", () => {
+  it("lays a notice over the LCD, a whole one or only its second line", () => {
+    const state = initialState("guest", CATALOG);
+    const whole = drawn(state, model, {
+      notice: { main: "+30 LIVES", sub: "NOT THAT YOU NEED THEM" },
+    });
+    expect(whole.querySelector("[data-screen]")).toHaveTextContent("+30 LIVES");
+    expect(whole.querySelector("[data-screen-sub]")).toHaveTextContent(
+      "NOT THAT YOU NEED THEM",
+    );
+    const line = drawn(state, model, {
+      notice: { sub: "LUCKY 7777, ONE MORE ON US" },
+    });
+    expect(line.querySelector("[data-screen]")).toHaveTextContent("PICK A BAY");
+    expect(line.querySelector("[data-screen-sub]")).toHaveTextContent(
+      "LUCKY 7777, ONE MORE ON US",
+    );
+  });
+
+  it("lets a leaving message win over a notice", () => {
+    const root = drawn(initialState("guest", CATALOG), model, {
+      lcd: { main: "OPENING ACCOUNT", sub: "ONE MOMENT" },
+      notice: { main: "+30 LIVES", sub: "NOT THAT YOU NEED THEM" },
+    });
+    expect(root.querySelector("[data-screen]")).toHaveTextContent(
+      "OPENING ACCOUNT",
+    );
+  });
+
+  it("rocks the machine and shows the credit it is given", () => {
+    const root = drawn(initialState("guest", CATALOG), model, {
+      rocking: true,
+      credit: <span data-part="credit" data-credit="1234" />,
+    });
+    expect(root.querySelector("[data-machine]")).toHaveAttribute(
+      "data-rocking",
+    );
+    expect(root.querySelector("[data-part='credit']")).toHaveAttribute(
+      "data-credit",
+      "1234",
+    );
+    expect(
+      drawn(initialState("guest", CATALOG), model).querySelector(
+        "[data-machine]",
+      ),
+    ).not.toHaveAttribute("data-rocking");
+  });
+});

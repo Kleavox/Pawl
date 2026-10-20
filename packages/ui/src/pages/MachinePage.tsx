@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { MachineKey } from "../machine/Keypad";
+import { Credit } from "../machine/Credit";
 import { Machine } from "../machine/Machine";
 import { PAGE_CSS } from "../page-css";
 
@@ -54,6 +55,7 @@ export type MachinePageProps = {
   keys?: { clr?: MachineKey; go?: MachineKey };
   caption?: string;
   sign?: string;
+  credit?: string;
   siteName?: string;
   rootOrigin?: string;
   children: ReactNode;
@@ -88,6 +90,7 @@ function MachinePage(props: MachinePageProps): ReactNode {
           }}
           headingBrand={false}
           sign={props.sign}
+          credit={<Credit text={props.credit ?? "FrEE"} />}
           settled
           machine={{ "data-view": "service" }}
           display={

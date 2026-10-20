@@ -13,6 +13,7 @@ export const MACHINE_PARTS = [
   "placard",
   "keypad",
   "lenses",
+  "credit",
   "printer",
   "printer-slot",
   "tray",
@@ -20,6 +21,12 @@ export const MACHINE_PARTS = [
 ] as const;
 
 export const SERIAL = "PAWL-GW-01";
+
+export const TACTILE: Readonly<Record<string, "bar" | "circle" | "arrow">> = {
+  "5": "bar",
+  GO: "circle",
+  CLR: "arrow",
+};
 
 export const DIGIT_ROWS = [
   "1",

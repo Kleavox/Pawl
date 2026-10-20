@@ -3,6 +3,7 @@ import type { PublicView } from "@pawl/registry";
 import {
   arrivalFraming,
   leave,
+  SERIAL,
   settle,
   shouldAnimateClick,
   useCameraArrival,
@@ -24,6 +25,7 @@ import { flushSync } from "react-dom";
 
 import { signOut, silentSignInPath } from "../auth-client";
 import { toMachineModel, type MachineModel } from "../estate-adapter";
+import { auditLines } from "../machine/audit";
 import { litKeys, productOf, viewFor, type ScreenCopy } from "../machine/copy";
 import { createKeypad } from "../machine/keypad";
 import {
@@ -34,6 +36,14 @@ import {
   runRelease,
 } from "../machine/sequence";
 import {
+  LAMP_TEST_MS,
+  secretStep,
+  serviceCopy,
+  serviceCredit,
+  type Heard,
+} from "../machine/service";
+import {
+  AUDIT,
   initialState,
   reduce,
   type BayCode,
@@ -231,6 +241,13 @@ export function useCabinet(input: {
   const keypad = useRef(createKeypad(site.bays.map((bay) => bay.code)));
   const retrying = useRef(false);
   const sound = useSound();
+  const serviceRef = useRef<number | null>(null);
+  const [service, setServiceState] = useState<number | null>(null);
+  const [lampTest, setLampTest] = useState(false);
+  const secret = useRef<Heard[]>([]);
+  const vends = useRef(new Map<BayCode, number>());
+  const reads = useRef(0);
+  const lastFault = useRef<string | null>(null);
 
   const [passRead] = useState(deferred);
 
@@ -241,7 +258,13 @@ export function useCabinet(input: {
 
   const setFault = useCallback((next: string | null): void => {
     faultRef.current = next;
+    if (next !== null) lastFault.current = next;
     setFaultState(next);
+  }, []);
+
+  const setService = useCallback((next: number | null): void => {
+    serviceRef.current = next;
+    setServiceState(next);
   }, []);
 
   const dispatch = useCallback(
@@ -249,6 +272,10 @@ export function useCabinet(input: {
       setFault(null);
       stateRef.current = reduce(stateRef.current, event);
       setState(stateRef.current);
+      const landed = stateRef.current.tray;
+      if (event.type === "tray-ready" && landed !== null) {
+        vends.current.set(landed, (vends.current.get(landed) ?? 0) + 1);
+      }
       return stateRef.current;
     },
     [setFault],
@@ -483,6 +510,8 @@ export function useCabinet(input: {
   const { arm: armCount, start: startCount, stop: stopCount } = count;
 
   const takeDelivery = useCallback(async (): Promise<void> => {
+    setService(null);
+    setLampTest(false);
     const now = stateRef.current;
     const bay = now.tray;
     if (bay === null || now.busy || now.receipt !== null) return;
@@ -524,7 +553,7 @@ export function useCabinet(input: {
     if (stateRef.current.receipt !== bay) return;
     paper.current?.focus({ preventScroll: true });
     if (answer === null && held.dataset.stage === "hand") startCount();
-  }, [dispatch, navigate, askCard, showCard, armCount, startCount]);
+  }, [dispatch, navigate, askCard, showCard, armCount, startCount, setService]);
 
   const crumple = useCallback(async (): Promise<void> => {
     const held = sheet.current;
@@ -592,9 +621,69 @@ export function useCabinet(input: {
     showCard({ kind: "closed" });
   }, [handBack, stopCount, dispatch, showCard]);
 
+  const printAudit = useCallback(async (): Promise<void> => {
+    setService(null);
+    setLampTest(false);
+    if (dispatch({ type: "audit" }).receipt !== AUDIT) return;
+    reads.current += 1;
+    const at = new Date();
+    if (camera.current !== null) {
+      await settle(camera.current, "whole", "printer", { moving: "in" });
+    }
+    if (stateRef.current.receipt !== AUDIT) return;
+    flushSync(() =>
+      setTaken((was) => ({ key: (was?.key ?? 0) + 1, at, href: "" })),
+    );
+    const held = sheet.current;
+    if (held === null || stateRef.current.receipt !== AUDIT) return;
+    await printOut(held, camera.current);
+    if (stateRef.current.receipt !== AUDIT) return;
+    paper.current?.focus({ preventScroll: true });
+  }, [dispatch, setService]);
+
+  const serviceKey = useCallback(
+    (key: string): void => {
+      if (key === "CLR") {
+        setService(null);
+        setLampTest(false);
+        return;
+      }
+      if (/^[1-5]$/u.test(key)) {
+        setService(Number(key));
+        return;
+      }
+      if (key !== "GO") return;
+      if (serviceRef.current === 4) {
+        setLampTest(true);
+        setTimeout(() => setLampTest(false), LAMP_TEST_MS);
+      }
+      if (serviceRef.current === 5) void printAudit();
+    },
+    [setService, printAudit],
+  );
+
+  const touch = useCallback(
+    (key: string): void => {
+      if (serviceRef.current !== null) return;
+      const heard = secretStep(secret.current, key, Date.now());
+      secret.current = heard.seen;
+      if (!heard.open) return;
+      const now = stateRef.current;
+      if (viewFor(now) !== "products" || now.receipt !== null || now.busy) {
+        return;
+      }
+      setService(1);
+    },
+    [setService],
+  );
+
   const pressKey = useCallback(
     async (key: string): Promise<void> => {
-      sound.click();
+      sound.key(key);
+      if (serviceRef.current !== null) {
+        serviceKey(key);
+        return;
+      }
       const now = stateRef.current;
       if (now.authStep === "account") {
         if (key === "CLR") dispatch({ type: "back" });
@@ -618,7 +707,7 @@ export function useCabinet(input: {
         dispatch({ type: "cancel" });
       }
     },
-    [sound, dispatch, estateUnread, retryEstate, dispense],
+    [sound, serviceKey, dispatch, estateUnread, retryEstate, dispense],
   );
 
   const logout = useCallback((): void => {
@@ -726,6 +815,12 @@ export function useCabinet(input: {
   useEffect(() => {
     const escape = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (serviceRef.current !== null) {
+        event.preventDefault();
+        setService(null);
+        setLampTest(false);
+        return;
+      }
       if (stateRef.current.receipt !== null) {
         event.preventDefault();
         void crumple();
@@ -737,7 +832,7 @@ export function useCabinet(input: {
     };
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
-  }, [dispatch, crumple]);
+  }, [dispatch, crumple, setService]);
 
   useEffect(() => {
     if (state.receipt !== null) return;
@@ -779,12 +874,41 @@ export function useCabinet(input: {
   const arrived = useCameraArrival(camera, "whole", { onRestore: restored });
   useScanWipe(screen, view, arrived === "screen");
   useFollowFocus(screen, state.receipt === null ? view : "paper", returnTo);
-  const lit = litKeys(state, fault ?? model.screen, fault !== null);
-  useMachineKeys((key) => void pressKey(key), lit);
+  const lit = litKeys(
+    state,
+    fault ?? model.screen,
+    fault !== null,
+    service !== null,
+  );
+  useMachineKeys((key) => void pressKey(key), lit, touch);
 
   const delivery = useMemo((): Delivered | null => {
     const bay = state.receipt;
     if (bay === null || taken === null) return null;
+    if (bay === AUDIT) {
+      const host = window.location.host;
+      const model = SERIAL.replace(/^PAWL-/u, "");
+      return {
+        printKey: taken.key,
+        audit: {
+          serial: SERIAL,
+          model,
+          host,
+          printed: taken.at,
+          lines: auditLines({
+            serial: SERIAL,
+            model,
+            host,
+            bays: state.catalog.map((entry) => ({
+              code: entry.code,
+              title: entry.title,
+              vends: vends.current.get(entry.code) ?? 0,
+            })),
+            reads: reads.current,
+          }),
+        },
+      };
+    }
     const entry = state.catalog.find((candidate) => candidate.code === bay);
     if (entry === undefined) return null;
     const carded = entry.card === true;
@@ -809,10 +933,25 @@ export function useCabinet(input: {
     return { printKey: taken.key, facts, body };
   }, [state, taken, model.holder, card, count.left]);
 
+  const sold = [...vends.current.values()].reduce((sum, n) => sum + n, 0);
+
   return {
     state,
     model,
     fault,
+    service:
+      service === null
+        ? null
+        : {
+            copy: serviceCopy(service, {
+              fault:
+                lastFault.current ??
+                (model.screen.includes("UNREADABLE") ? model.screen : null),
+              vends: sold,
+            }),
+            credit: lampTest ? "8888" : serviceCredit(service),
+          },
+    lampTest,
     said: said.view === view ? said.text : "",
     lcd,
     leaving,
@@ -825,6 +964,7 @@ export function useCabinet(input: {
     },
     on: {
       key: (key: string) => void pressKey(key),
+      touch,
       tile: (bay: BayCode) => void dispense(bay),
       signIn: () => void leaveForSignIn(),
       account: () => dispatch({ type: "open-account" }),

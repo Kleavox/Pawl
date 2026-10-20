@@ -41,6 +41,7 @@ import {
 } from "./DeliveryReceipt";
 import { Tiles } from "./Tiles";
 import { TrayBay } from "./TrayBay";
+import type { Notice } from "./useEggs";
 
 export type CabinetViewProps = {
   siteName: string;
@@ -54,8 +55,14 @@ export type CabinetViewProps = {
   sound: { on: boolean; toggle: () => void };
   delivery: Delivered | null;
   copied: string | null;
+  notice?: Notice | null;
+  rocking?: boolean;
+  service?: { copy: ScreenCopy; credit: string } | null;
+  lampTest?: boolean;
+  credit?: ReactNode;
   on: {
     key: (key: string) => void;
+    touch?: (key: string) => void;
     tile: (bay: BayCode) => void;
     signIn: () => void;
     account: () => void;
@@ -87,7 +94,12 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
   const view = viewFor(state);
   const shown =
     props.fault === null ? model : { ...model, screen: props.fault };
-  const copy = props.lcd ?? screenCopy(state, shown);
+  const servicing = props.service != null;
+  const copy = props.lcd ??
+    props.service?.copy ?? {
+      ...screenCopy(state, shown),
+      ...(props.notice ?? {}),
+    };
   const guest = state.access === "guest";
   const said = (name: string): string => (view === name ? props.said : "");
   return (
@@ -97,19 +109,29 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
         rootOrigin=""
         framing="whole"
         ticker={model.ticker}
-        chip={{ state: state.access, word: CABINET_WORD[state.access] }}
+        chip={
+          servicing
+            ? { state: "service", word: "SERVICE MODE" }
+            : { state: state.access, word: CABINET_WORD[state.access] }
+        }
         lcd={copy}
         keypad={{
           mode: "machine",
-          lit: litKeys(state, shown.screen, props.fault !== null),
+          lit: litKeys(state, shown.screen, props.fault !== null, servicing),
           onPress: on.key,
+          onTouch: on.touch,
         }}
         headingBrand
         sound={
           <SoundSwitch pressed={props.sound.on} onToggle={props.sound.toggle} />
         }
         tray={<TrayBay state={state} onTake={on.take} />}
-        machine={machineAttributes(state)}
+        machine={{
+          ...machineAttributes(state),
+          ...(props.rocking ? { "data-rocking": "" } : {}),
+          ...(props.lampTest ? { "data-lamp-test": "" } : {}),
+        }}
+        credit={props.credit}
         cameraRef={props.refs?.camera}
         machineRef={props.refs?.machine}
         tickerRef={props.refs?.ticker}
@@ -118,7 +140,7 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
             <View
               name="products"
               hidden={view !== "products"}
-              inert={state.receipt !== null}
+              inert={state.receipt !== null || servicing}
               aria-label="Products"
               tabIndex={-1}
               onFocus={(event) => {

@@ -20,8 +20,10 @@ export {
   type Severity,
 } from "./nav-counts";
 export { CAMERA_HINT_HASH, CAMERA_HINT_SCRIPT } from "./machine/camera-hint";
+export { greetConsole } from "./console";
 export { MACHINE_PARTS, SERIAL } from "./machine/parts";
 export { Machine, type MachineProps } from "./machine/Machine";
+export { Credit } from "./machine/Credit";
 export { Keypad, type KeypadProps, type MachineKey } from "./machine/Keypad";
 export { SoundSwitch } from "./machine/Base";
 export {

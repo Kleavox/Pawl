@@ -17,6 +17,12 @@ const PUSH =
 const TRAY_LABEL =
   "tray__label absolute right-14 bottom-8 text-pw-ink-dim font-pw-mono text-14 font-bold tracking-[0.2em] [.tray:has([data-tray]:not([data-tray=none]))_&]:hidden max-desk:right-8 max-desk:tracking-[0.12em]";
 
+const STICKER =
+  "tray__sticker absolute bottom-6 left-14 z-1 inline-flex items-center gap-7 py-1 pr-8 pl-6 border-[length:--spacing(2)] border-solid border-pw-black rounded-[--spacing(2)] bg-pw-warn text-pw-black font-pw-mono text-14 font-extrabold leading-none tracking-[0.06em] whitespace-nowrap [.tray:has([data-tray]:not([data-tray=none]))_&]:hidden max-desk:hidden";
+
+const TIPPING =
+  "relative w-7 h-11 border-[length:--spacing(2)] border-solid border-pw-black rounded-[--spacing(1)] [transform:rotate(-20deg)] after:absolute after:-bottom-4 after:-left-4 after:w-14 after:h-2 after:bg-pw-black after:[transform:rotate(20deg)]";
+
 const PLATE =
   "plate relative grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto_auto] content-center gap-x-8 gap-y-5 px-14 py-8 border-[length:--spacing(1)] border-solid border-pw-trim rounded-[--spacing(5)] bg-[repeating-linear-gradient(90deg,rgb(255_255_255/6%)_0_--spacing(1),transparent_--spacing(1)_--spacing(3)),linear-gradient(180deg,var(--pw-label),var(--pw-label-lo))] shadow-[inset_0_--spacing(1)_0_var(--pw-highlight)] text-pw-etch font-pw-mono max-desk:row-[4] max-desk:grid-cols-[auto_auto_minmax(0,1fr)] max-desk:grid-rows-[auto] max-desk:gap-12 max-desk:px-12 max-desk:py-0";
 
@@ -90,6 +96,10 @@ export function Base(props: {
         </span>
         <span className={TRAY_LABEL} aria-hidden="true">
           DELIVERY BAY
+        </span>
+        <span className={STICKER} data-sticker="tilt" aria-hidden="true">
+          <i className={TIPPING} />
+          NEVER ROCK OR TILT
         </span>
         {props.tray}
       </div>

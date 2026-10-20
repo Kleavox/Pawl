@@ -28,9 +28,10 @@ export function pressCap(key: string): void {
 export function useMachineKeys(
   onKey: (key: string) => void,
   lit: ReadonlySet<string>,
+  onTouch?: (key: string) => void,
 ): void {
-  const latest = useRef({ onKey, lit });
-  latest.current = { onKey, lit };
+  const latest = useRef({ onKey, lit, onTouch });
+  latest.current = { onKey, lit, onTouch };
   useEffect(() => {
     const listen = (event: KeyboardEvent): void => {
       if (event.defaultPrevented) return;
@@ -48,6 +49,7 @@ export function useMachineKeys(
       }
       event.preventDefault();
       pressCap(pressed);
+      latest.current.onTouch?.(pressed);
       if (latest.current.lit.has(pressed)) latest.current.onKey(pressed);
     };
     document.addEventListener("keydown", listen);

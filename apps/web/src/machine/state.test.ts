@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialState, permits, reduce } from "./state";
+import { AUDIT, initialState, permits, reduce } from "./state";
 import type { MachineState } from "./state";
 import { CATALOG } from "./catalog.testkit";
 
@@ -367,5 +367,17 @@ describe("a catalog that arrives after the page", () => {
     expect(after.catalog).toBe(CATALOG);
     expect(after.tray).toBeNull();
     expect(after.selection).toBeNull();
+  });
+});
+
+describe("the service audit", () => {
+  it("prints an audit paper only from an idle machine with nothing in hand", () => {
+    const idle = initialState("guest", CATALOG);
+    expect(reduce(idle, { type: "audit" }).receipt).toBe(AUDIT);
+    const busy = reduce(idle, { type: "select", bay: "3" });
+    expect(reduce(busy, { type: "audit" }).receipt).toBeNull();
+    const held = reduce(idle, { type: "audit" });
+    expect(reduce(held, { type: "audit" })).toBe(held);
+    expect(reduce(held, { type: "crumple" }).receipt).toBeNull();
   });
 });

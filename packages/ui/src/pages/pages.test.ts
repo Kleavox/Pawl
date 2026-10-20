@@ -51,6 +51,13 @@ describe("the Worker's pages", () => {
     }
   });
 
+  it("show the status code on the credit display, and FrEE where nothing is wrong", () => {
+    expect(renderErrorPage({ code: "404" })).toContain('data-credit="404"');
+    expect(renderErrorPage({ code: "500" })).toContain('data-credit="500"');
+    expect(renderErrorPage({})).toContain('data-credit="----"');
+    expect(renderConsentPage(CONSENT)).toContain('data-credit="FrEE"');
+  });
+
   it("inline the compiled theme and nothing else", () => {
     expect(renderErrorPage({ code: "404" })).toContain(
       `<style>${PAGE_CSS}</style>`,
@@ -100,7 +107,7 @@ describe("renderErrorPage", () => {
   it("leads home with both the button and the GO key, arriving on the machine's screen framing", () => {
     const html = renderErrorPage({ code: "404", homeHref: "/home" });
     expect(html).toMatch(
-      /<a class="[^"]*key--go[^"]*" href="\/home#cam=screen" aria-describedby="keys-caption">GO<\/a>/,
+      /<a class="[^"]*key--go[^"]*" href="\/home#cam=screen" aria-describedby="keys-caption">GO<span[^>]*data-tactile="circle"[^>]*><\/span><\/a>/,
     );
     expect(html).toMatch(
       /<a class="[^"]*" href="\/home#cam=screen" data-home="">Back to the machine<\/a>/,
@@ -159,7 +166,11 @@ describe("renderConsentPage", () => {
       ["CLR", "deny", "key--fn"],
       ["GO", "allow", "key--go"],
     ] as const) {
-      const button = tag(new RegExp(`<button[^>]*>${label}</button>`));
+      const button = tag(
+        new RegExp(
+          `<button[^>]*>${label}(?:<(?:span|svg)[^>]*data-tactile[\\s\\S]*?)?</button>`,
+        ),
+      );
       expect(button, label).toContain('type="submit"');
       expect(button, label).toContain('name="decision"');
       expect(button, label).toContain(`value="${value}"`);

@@ -39,6 +39,8 @@
   --color-pw-warn: var(--pw-warn);
   --color-pw-danger: var(--pw-danger);
   --color-pw-off: var(--pw-off);
+  --color-pw-seg: var(--pw-seg);
+  --color-pw-seg-off: var(--pw-seg-off);
   --color-pw-key: var(--pw-key);
   --color-pw-label: var(--pw-label);
   --color-pw-label-lo: var(--pw-label-lo);
@@ -130,6 +132,8 @@
     --pw-warn: #ffb020;
     --pw-danger: #ff4d5e;
     --pw-off: #5b6a7e;
+    --pw-seg: #ff3b30;
+    --pw-seg-off: rgb(255 59 48 / 10%);
     --pw-key: #e4e8ee;
     --pw-label: #f2f5f9;
     --pw-label-lo: #d9e0e8;
@@ -561,6 +565,73 @@
   }
   to {
     transform: none;
+  }
+}
+
+@keyframes credit-blink {
+  0%,
+  33%,
+  66% {
+    opacity: 1;
+  }
+  16%,
+  50%,
+  83% {
+    opacity: 0.15;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes machine-rock {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: rotate(-1.2deg);
+  }
+  45% {
+    transform: rotate(1deg);
+  }
+  70% {
+    transform: rotate(-0.6deg);
+  }
+  85% {
+    transform: rotate(0.3deg);
+  }
+}
+
+@keyframes led-blink-once {
+  0% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tube-start {
+  0% {
+    opacity: 0.85;
+  }
+  12% {
+    opacity: 0.1;
+  }
+  18% {
+    opacity: 0.8;
+  }
+  30% {
+    opacity: 0;
+  }
+  36% {
+    opacity: 0.7;
+  }
+  48%,
+  100% {
+    opacity: 0;
   }
 }
 
