@@ -16,7 +16,7 @@ export type Delivered =
 export type PaperActions = DeliveryActions & { crumple: () => void };
 
 const DIALOG =
-  "fixed inset-0 z-120 w-screen max-w-none h-dvh max-h-none m-0 p-0 border-0 bg-transparent overflow-hidden backdrop:bg-transparent";
+  "fixed inset-0 z-120 w-screen max-w-none h-dvh max-h-none m-0 p-0 border-0 bg-transparent overflow-hidden outline-none backdrop:bg-transparent";
 
 export function DeliveryReceipt(props: {
   delivery: Delivered | null;
@@ -31,7 +31,10 @@ export function DeliveryReceipt(props: {
   useLayoutEffect(() => {
     const node = dialog.current;
     if (node === null) return;
-    if (open && !node.open) node.showModal();
+    if (open && !node.open) {
+      node.showModal();
+      node.focus({ preventScroll: true });
+    }
     if (!open && node.open) node.close();
   }, [open]);
   return (
@@ -39,6 +42,7 @@ export function DeliveryReceipt(props: {
       ref={dialog}
       className={DIALOG}
       data-delivery
+      tabIndex={-1}
       aria-labelledby="delivery-title"
       onCancel={(event) => {
         event.preventDefault();

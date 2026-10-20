@@ -12,7 +12,7 @@ export type AuditFacts = {
 };
 
 const DEX =
-  "m-0 p-[10px] overflow-x-auto rounded-[3px] bg-[rgb(0_0_0/5%)] font-pw-mono text-rem-small leading-[1.5] whitespace-pre";
+  "m-0 p-[10px] rounded-[3px] bg-[rgb(0_0_0/5%)] font-pw-mono text-rem-small leading-[1.5] whitespace-pre-wrap break-all";
 
 const LEGEND =
   "grid grid-cols-[auto_minmax(0,1fr)] gap-x-[12px] gap-y-[2px] m-0 font-pw-mono text-rem-label [&_dt]:font-bold [&_dt]:tracking-[0.1em] [&_dd]:m-0 [&_dd]:text-pw-paper-dim";

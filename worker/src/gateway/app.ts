@@ -17,7 +17,9 @@ import {
 } from "@pawl/topology";
 import { Hono, type Context } from "hono";
 
+import { ownHeaders } from "../headers";
 import { askCard } from "./cards";
+import { securityTxt } from "./security-txt";
 import { webfinger } from "./webfinger";
 import { hostRedirect } from "./hosts";
 import { IdentityUnavailable } from "./session/keys";
@@ -48,7 +50,17 @@ export interface Env extends SessionEnv {
   [binding: string]: unknown;
 }
 
-const app = new Hono<{ Bindings: Env }>();
+type Gateway = { Bindings: Env; Variables: { passedThrough: boolean } };
+
+const app = new Hono<Gateway>();
+
+app.use(
+  "*",
+  ownHeaders<Gateway>({
+    referrerPolicy: "same-origin",
+    skip: (context) => context.get("passedThrough") === true,
+  }),
+);
 
 function registry(env: Env) {
   return registryFor(env.ESTATE_MANIFEST ?? EMPTY_MANIFEST);
@@ -69,7 +81,7 @@ function binding(env: Env, name: string): Fetcher | undefined {
     : undefined;
 }
 
-function unavailable(context: Context<{ Bindings: Env }>, key: string) {
+function unavailable(context: Context<Gateway>, key: string) {
   return context.json({ code: "APP_UNAVAILABLE", app: key }, 503);
 }
 
@@ -83,6 +95,7 @@ app.use("*", async (context, next) => {
 });
 
 app.onError((error, context) => {
+  context.set("passedThrough", false);
   console.error("[gateway]", error);
   if (error instanceof IdentityUnavailable) {
     return context.json(
@@ -122,6 +135,32 @@ app.get("/health", (context) =>
   context.json({ service: "gateway", status: "ok" }),
 );
 
+const READS = new Set(["GET", "HEAD"]);
+
+app.use("/.well-known/security.txt", async (context, next) => {
+  const url = new URL(context.req.url);
+  const viewer = viewerOrigins(context.req.raw, context.env);
+  const issuer = context.env.OIDC_ISSUER ?? viewer.pass;
+  const root =
+    url.host === new URL(issuer).host
+      ? new URL(context.env.PUBLIC_ORIGIN)
+      : new URL(viewer.root);
+  const ours = [root.hostname, new URL(issuer).hostname];
+  if (!READS.has(context.req.method) || !ours.includes(url.hostname)) {
+    await next();
+    return;
+  }
+  return context.text(
+    securityTxt({
+      contact: `privacy@${root.hostname}`,
+      canonical: `${url.origin}/.well-known/security.txt`,
+      now: new Date(),
+    }),
+    200,
+    { "content-type": "text/plain; charset=utf-8" },
+  );
+});
+
 app.use("/.well-known/webfinger", async (context, next) => {
   const request = context.req.raw;
   const url = new URL(request.url);
@@ -132,7 +171,7 @@ app.use("/.well-known/webfinger", async (context, next) => {
       ? new URL(context.env.PUBLIC_ORIGIN).origin
       : viewer.root;
   const hosts = [new URL(root).hostname, new URL(issuer).hostname];
-  if (request.method !== "GET" || !hosts.includes(url.hostname)) {
+  if (!READS.has(request.method) || !hosts.includes(url.hostname)) {
     await next();
     return;
   }
@@ -504,9 +543,9 @@ app.all("*", async (context) => {
   );
   if (route.kind === "subdomain") {
     const target = binding(context.env, route.binding);
-    return target
-      ? target.fetch(cleaned(context.req.raw))
-      : unavailable(context, route.key);
+    if (!target) return unavailable(context, route.key);
+    context.set("passedThrough", true);
+    return target.fetch(cleaned(context.req.raw));
   }
   if (route.kind === "proxy") {
     const target = binding(context.env, route.binding);
@@ -515,6 +554,7 @@ app.all("*", async (context) => {
     internal.hostname = route.host;
     internal.protocol = "http:";
     internal.port = "";
+    context.set("passedThrough", true);
     return target.fetch(
       await withPerson(
         new Request(internal, cleaned(context.req.raw)),
@@ -551,7 +591,10 @@ app.all("*", async (context) => {
         redirect: "manual",
       },
     );
-    if (response.status !== 404) return response;
+    if (response.status !== 404) {
+      context.set("passedThrough", true);
+      return response;
+    }
     if (
       apex.fileSlugPrefix &&
       slug.startsWith(apex.fileSlugPrefix) &&
@@ -563,6 +606,7 @@ app.all("*", async (context) => {
       page.hostname = apex.host;
       page.protocol = "http:";
       page.port = "";
+      context.set("passedThrough", true);
       return apexTarget.fetch(
         await withPerson(
           new Request(page, cleaned(context.req.raw)),

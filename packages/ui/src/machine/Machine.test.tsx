@@ -85,6 +85,9 @@ describe("Machine", () => {
         "shadow-[0_0_0_--spacing(2)_var(--pw-steel-hi),0_0_0_--spacing(3)_var(--pw-steel-lo),0_0_--spacing(10)",
       );
     }
+    expect(tested.querySelector(".printer__led")!.className).toContain(
+      "group-data-[lamp-test]/machine:after:opacity-100",
+    );
     const tube = tested.querySelector("[data-part='marquee'] > [data-tube]")!;
     expect(tube).toHaveAttribute("aria-hidden", "true");
     expect(tube.className).toContain(

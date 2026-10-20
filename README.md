@@ -140,8 +140,9 @@ each app's own Worker on the `local.port` its manifest entry names.
 
 `pnpm e2e` registers two fixture apps from `tooling/e2e/fixture/estate.json`
 and boots them as fixture Workers, plus a third relying party on 8792 that
-signs in with a client secret, as an app behind Cloudflare Access does. Each Worker has a health check, so the run stops
-before any test when one of them is down rather than passing by not testing.
+signs in with a client secret, as an app behind Cloudflare Access does. Each
+Worker has a health check, so the run stops before any test when one of them is
+down rather than passing by not testing.
 
 Authentication protocol changes must pass both verification gates:
 
@@ -225,9 +226,9 @@ The machine is sized in one unit, `--u`, taken from the viewport, so it fits a
 laptop or a phone without scrolling and scales as one object; what the screen
 says never resizes it. On a phone (below 900 px) the controls and the delivery
 bay share one steel door under the glass: the lights across its top, the LCD,
-the receipt slot and the bay on the left, the keypad on the right. A guest who presses a locked tile sees it refused, then
-the camera dollies into `paw.`'s sign-in, and that bay is released once they
-are back.
+the receipt slot and the bay on the left, the keypad on the right. A guest who
+presses a locked tile sees it refused, then the camera dollies into `paw.`'s
+sign-in, and that bay is released once they are back.
 
 Pages differ only in the camera's framing: `<root>` frames the whole machine,
 a receipt frames the printer, and `paw.<root>`, the OpenID Connect consent
@@ -236,7 +237,9 @@ Moving between them moves only the camera: the leaving page frames the next
 page's framing, then goes, and the next page starts there (`#cam=screen` or
 `#cam=printer` carries it, read by a one-line inline script that runs before
 the camera is parsed and marks the page, so the first frame is already the
-hinted one). Every animation runs on the compositor: the camera glides on `transform`, and every keyframe moves only `transform` and `opacity` (a control's hover feedback still repaints, briefly and in place). A receipt
+hinted one). Every animation runs on the compositor: the camera glides on
+`transform`, and every keyframe moves only `transform` and `opacity` (a
+control's hover feedback still repaints, briefly and in place). A receipt
 prints from the printer's slot, tears off with an uneven serrated edge at both
 ends, and is held up in front of the whole machine while the camera steps
 back; it scrolls freely and nothing hangs. A delivery's receipt says the bay,
@@ -292,7 +295,16 @@ redirect URIs, and no dynamic registration.
 | `GET`/`POST /oauth/connect`             | Consent to an outside app from the cabinet, before its card can be asked                                                           |
 | `POST /oauth/subjects`                  | Which of a client's subjects still exist (`pawl_subjects_endpoint`)                                                                |
 
-Every response carries `X-Clacks-Overhead: GNU Terry Pratchett`.
+Every response carries `X-Clacks-Overhead: GNU Terry Pratchett`. Pawl's own
+answers, on both hosts, also carry `Strict-Transport-Security` (no
+`includeSubDomains`), `X-Content-Type-Options`, `Referrer-Policy: same-origin`,
+`X-Frame-Options: DENY` and a `Permissions-Policy`; an app's answer behind the
+gateway keeps exactly the headers the app sent. Pawl's pages keep the edge's
+compression, so they do not say `no-transform`: Cloudflare's Web Analytics
+automatic setup belongs switched off in the dashboard (the CSP blocks its script
+either way, and the Privacy receipt promises no analytics).
+`GET /.well-known/security.txt` (RFC 9116) names the privacy contact on both
+hosts.
 
 `/oauth/logout` is a form POST, so a cross-site page cannot sign anyone out: the
 `SameSite=Lax` session cookie never rides a cross-site POST. It returns to

@@ -127,6 +127,42 @@ describe("the lucky number", () => {
     const seen = scene({ denied: true });
     expect(seen.text()).toBe("----");
   });
+
+  it("reads ---- for a denied pick even after a roll has settled", () => {
+    const seen = scene();
+    seen.to({ tray: "7" });
+    act(() => void vi.advanceTimersByTime(ROLL_MS));
+    expect(seen.text()).toBe("5556");
+    seen.to({ tray: "7", denied: true });
+    expect(seen.text()).toBe("----");
+  });
+
+  it("rolls each landing once, even after a paper comes and goes", () => {
+    let calls = 0;
+    const random = () => {
+      calls += 1;
+      return 0.5;
+    };
+    const seen = scene({ random });
+    seen.to({ tray: "7", random });
+    act(() => void vi.advanceTimersByTime(ROLL_MS));
+    const settled = calls;
+    seen.to({ tray: "7", paperOut: true, random });
+    seen.to({ tray: "7", paperOut: false, random });
+    act(() => void vi.advanceTimersByTime(ROLL_MS * 2));
+    expect(calls).toBe(settled);
+    expect(seen.text()).toBe("FrEE");
+  });
+
+  it("drops a win line when a paper comes out, so it never comes back after", () => {
+    const seen = scene({ random: () => 0 });
+    seen.to({ tray: "7" });
+    act(() => void vi.advanceTimersByTime(ROLL_MS));
+    expect(seen.notice()).toBe("|LUCKY 7777, ONE MORE ON US");
+    seen.to({ tray: "7", paperOut: true });
+    seen.to({ tray: "7", paperOut: false });
+    expect(seen.notice()).toBe("");
+  });
 });
 
 describe("rocking the machine", () => {
@@ -195,9 +231,10 @@ describe("the Konami code", () => {
     expect(seen.text()).toBe("FrEE");
   });
 
-  it("says nothing over a paper in hand", () => {
+  it("does nothing while a paper is in hand", () => {
     const seen = scene({ paperOut: true });
     for (const key of KONAMI) act(() => void press(document.body, key));
     expect(seen.notice()).toBe("");
+    expect(seen.text()).toBe("FrEE");
   });
 });

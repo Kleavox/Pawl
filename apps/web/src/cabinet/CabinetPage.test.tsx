@@ -852,6 +852,50 @@ describe("the 4-2-3-1 service menu", () => {
     ).toBe("selected");
   });
 
+  it("keeps the lamp test on for its full time after a second GO, and ends it on CLR", async () => {
+    const { user, container } = await opened(vi.fn());
+    await press(user, container, "4", "2", "3", "1", "4", "GO");
+    await advance(800);
+    await press(user, container, "GO");
+    await advance(800);
+    const machine = container.querySelector("[data-machine]")!;
+    expect(machine).toHaveAttribute("data-lamp-test");
+    await press(user, container, "CLR");
+    expect(machine).not.toHaveAttribute("data-lamp-test");
+    await press(user, container, "4", "2", "3", "1", "4", "GO", "CLR");
+    await advance(1200);
+    expect(machine).not.toHaveAttribute("data-lamp-test");
+  });
+
+  it("moves focus from a tile to the keypad on entering, and back on leaving", async () => {
+    const { user, container } = await opened(vi.fn());
+    const tile = container.querySelector<HTMLElement>("[data-cartridge='3']")!;
+    tile.focus();
+    await user.keyboard("4231");
+    expect(container.querySelector("[data-cabinet-word]")).toHaveTextContent(
+      "SERVICE MODE",
+    );
+    expect(document.activeElement).toBe(
+      container.querySelector("[data-key='GO']"),
+    );
+    await user.keyboard("{Backspace}");
+    expect(document.activeElement).toBe(tile);
+  });
+
+  it("lets a keyboard that came from a tile run the lamp test with Enter", async () => {
+    const { user, container } = await opened(vi.fn());
+    container.querySelector<HTMLElement>("[data-cartridge='3']")!.focus();
+    await user.keyboard("4231");
+    await user.keyboard("4");
+    await user.keyboard("{Enter}");
+    expect(container.querySelector("[data-machine]")).toHaveAttribute(
+      "data-lamp-test",
+    );
+    expect(container.querySelector("[data-screen]")).toHaveTextContent(
+      "SERVICE 4 TEST",
+    );
+  });
+
   it("leaves on Escape too", async () => {
     const { user, container } = await opened(vi.fn());
     await press(user, container, "4", "2", "3", "1");

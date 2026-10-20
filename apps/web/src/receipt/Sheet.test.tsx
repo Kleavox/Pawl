@@ -113,8 +113,18 @@ describe("Sheet", () => {
     );
   });
 
-  it("is no landmark inside the cabinet's dialog", () => {
-    sheet("slot", "div");
+  it("is no landmark inside the cabinet's dialog, and names nothing generic", () => {
+    const { container } = sheet("slot", "div");
     expect(screen.queryByRole("main")).toBeNull();
+    expect(container.querySelector("[data-receipt-sheet]")).not.toHaveAttribute(
+      "aria-labelledby",
+    );
+  });
+
+  it("scrolls the paper in a named region", () => {
+    sheet("feed", "main");
+    expect(screen.getByRole("region", { name: "Receipt" })).toHaveAttribute(
+      "data-receipt-frame",
+    );
   });
 });

@@ -35,13 +35,7 @@ import {
   runDispense,
   runRelease,
 } from "../machine/sequence";
-import {
-  LAMP_TEST_MS,
-  secretStep,
-  serviceCopy,
-  serviceCredit,
-  type Heard,
-} from "../machine/service";
+import { serviceCopy, serviceCredit } from "../machine/service";
 import {
   AUDIT,
   initialState,
@@ -63,6 +57,7 @@ import { useSound } from "../sound";
 import { readCardFor, type AppCard, type CardState } from "./card";
 import type { Delivered } from "./DeliveryReceipt";
 import { signInHref } from "./sign-in";
+import { useService } from "./useService";
 
 type GatewaySession = {
   authenticated: boolean;
@@ -241,10 +236,15 @@ export function useCabinet(input: {
   const keypad = useRef(createKeypad(site.bays.map((bay) => bay.code)));
   const retrying = useRef(false);
   const sound = useSound();
-  const serviceRef = useRef<number | null>(null);
-  const [service, setServiceState] = useState<number | null>(null);
-  const [lampTest, setLampTest] = useState(false);
-  const secret = useRef<Heard[]>([]);
+  const readState = useCallback((): MachineState => stateRef.current, []);
+  const {
+    item: service,
+    lampTest,
+    active: servicing,
+    touch,
+    key: serviceKey,
+    leave: leaveService,
+  } = useService({ machine, read: readState });
   const vends = useRef(new Map<BayCode, number>());
   const reads = useRef(0);
   const lastFault = useRef<string | null>(null);
@@ -260,11 +260,6 @@ export function useCabinet(input: {
     faultRef.current = next;
     if (next !== null) lastFault.current = next;
     setFaultState(next);
-  }, []);
-
-  const setService = useCallback((next: number | null): void => {
-    serviceRef.current = next;
-    setServiceState(next);
   }, []);
 
   const dispatch = useCallback(
@@ -510,8 +505,7 @@ export function useCabinet(input: {
   const { arm: armCount, start: startCount, stop: stopCount } = count;
 
   const takeDelivery = useCallback(async (): Promise<void> => {
-    setService(null);
-    setLampTest(false);
+    leaveService();
     const now = stateRef.current;
     const bay = now.tray;
     if (bay === null || now.busy || now.receipt !== null) return;
@@ -553,7 +547,15 @@ export function useCabinet(input: {
     if (stateRef.current.receipt !== bay) return;
     paper.current?.focus({ preventScroll: true });
     if (answer === null && held.dataset.stage === "hand") startCount();
-  }, [dispatch, navigate, askCard, showCard, armCount, startCount, setService]);
+  }, [
+    dispatch,
+    navigate,
+    askCard,
+    showCard,
+    armCount,
+    startCount,
+    leaveService,
+  ]);
 
   const crumple = useCallback(async (): Promise<void> => {
     const held = sheet.current;
@@ -622,8 +624,7 @@ export function useCabinet(input: {
   }, [handBack, stopCount, dispatch, showCard]);
 
   const printAudit = useCallback(async (): Promise<void> => {
-    setService(null);
-    setLampTest(false);
+    leaveService();
     if (dispatch({ type: "audit" }).receipt !== AUDIT) return;
     reads.current += 1;
     const at = new Date();
@@ -639,49 +640,13 @@ export function useCabinet(input: {
     await printOut(held, camera.current);
     if (stateRef.current.receipt !== AUDIT) return;
     paper.current?.focus({ preventScroll: true });
-  }, [dispatch, setService]);
-
-  const serviceKey = useCallback(
-    (key: string): void => {
-      if (key === "CLR") {
-        setService(null);
-        setLampTest(false);
-        return;
-      }
-      if (/^[1-5]$/u.test(key)) {
-        setService(Number(key));
-        return;
-      }
-      if (key !== "GO") return;
-      if (serviceRef.current === 4) {
-        setLampTest(true);
-        setTimeout(() => setLampTest(false), LAMP_TEST_MS);
-      }
-      if (serviceRef.current === 5) void printAudit();
-    },
-    [setService, printAudit],
-  );
-
-  const touch = useCallback(
-    (key: string): void => {
-      if (serviceRef.current !== null) return;
-      const heard = secretStep(secret.current, key, Date.now());
-      secret.current = heard.seen;
-      if (!heard.open) return;
-      const now = stateRef.current;
-      if (viewFor(now) !== "products" || now.receipt !== null || now.busy) {
-        return;
-      }
-      setService(1);
-    },
-    [setService],
-  );
+  }, [dispatch, leaveService]);
 
   const pressKey = useCallback(
     async (key: string): Promise<void> => {
       sound.key(key);
-      if (serviceRef.current !== null) {
-        serviceKey(key);
+      if (servicing()) {
+        if (serviceKey(key) === "audit") void printAudit();
         return;
       }
       const now = stateRef.current;
@@ -707,7 +672,16 @@ export function useCabinet(input: {
         dispatch({ type: "cancel" });
       }
     },
-    [sound, serviceKey, dispatch, estateUnread, retryEstate, dispense],
+    [
+      sound,
+      servicing,
+      serviceKey,
+      printAudit,
+      dispatch,
+      estateUnread,
+      retryEstate,
+      dispense,
+    ],
   );
 
   const logout = useCallback((): void => {
@@ -815,10 +789,9 @@ export function useCabinet(input: {
   useEffect(() => {
     const escape = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (serviceRef.current !== null) {
+      if (servicing()) {
         event.preventDefault();
-        setService(null);
-        setLampTest(false);
+        leaveService();
         return;
       }
       if (stateRef.current.receipt !== null) {
@@ -832,7 +805,7 @@ export function useCabinet(input: {
     };
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
-  }, [dispatch, crumple, setService]);
+  }, [dispatch, crumple, leaveService]);
 
   useEffect(() => {
     if (state.receipt !== null) return;

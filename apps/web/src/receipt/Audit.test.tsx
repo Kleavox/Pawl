@@ -45,6 +45,14 @@ describe("the audit ticket", () => {
     );
   });
 
+  it("wraps a long line on the paper instead of hiding it sideways", () => {
+    const { container } = printed();
+    const pre = container.querySelector("pre[data-dex]")!;
+    expect(pre.className).toContain("whitespace-pre-wrap");
+    expect(pre.className).toContain("break-all");
+    expect(pre.className).not.toContain("overflow-x-auto");
+  });
+
   it("says what each segment is", () => {
     const { container } = printed();
     for (const segment of ["ID1", "VA1", "VA3", "PA1", "PA2", "EA3", "G85"]) {

@@ -5,7 +5,6 @@ import {
   Body,
   cleanCamHint,
   Foot,
-  Kbd,
   Machine,
   Screen,
   settle,
@@ -46,13 +45,7 @@ function Shelf(props: { site: PublicView }): ReactNode {
       <Body variant="tiles">
         <Tiles state={state} model={model} onTake={() => undefined} />
       </Body>
-      <Foot
-        hint={
-          <>
-            <Kbd>1</Kbd>–<Kbd>9</Kbd> pick · <Kbd go>GO</Kbd> take
-          </>
-        }
-      />
+      <Foot hint="" />
     </View>
   );
 }

@@ -278,3 +278,59 @@ describe("WebFinger on an app's own host", () => {
     );
   });
 });
+
+describe("paw.'s own pages", () => {
+  it("carry HSTS and leave compression to the edge", async () => {
+    const target = env({ ASSETS: assets({ "/pass/": "<!doctype html>" }) });
+    const response = await handle(
+      new Request("https://paw.example.com/", {
+        headers: { accept: "text/html" },
+      }),
+      target,
+      ctx,
+    );
+    expect(response.headers.get("strict-transport-security")).toBe(
+      "max-age=31536000",
+    );
+    expect(response.headers.get("cache-control") ?? "").not.toContain(
+      "no-transform",
+    );
+    expect(response.headers.get("x-frame-options")).toBe("DENY");
+  });
+});
+
+describe("security.txt", () => {
+  it("names the privacy contact on the cabinet's host and paw.'s", async () => {
+    for (const url of [
+      "https://example.com/.well-known/security.txt",
+      "https://paw.example.com/.well-known/security.txt",
+    ]) {
+      const response = await handle(new Request(url), env(), ctx);
+      expect(response.status, url).toBe(200);
+      expect(response.headers.get("content-type"), url).toBe(
+        "text/plain; charset=utf-8",
+      );
+      const text = await response.text();
+      expect(text, url).toContain("Contact: mailto:privacy@example.com");
+      expect(text, url).toContain(`Canonical: ${url}`);
+    }
+  });
+
+  it("answers a HEAD as it answers a GET, here and for WebFinger", async () => {
+    for (const url of [
+      "https://example.com/.well-known/security.txt",
+      "https://paw.example.com/.well-known/security.txt",
+      "https://example.com/.well-known/webfinger?resource=acct:coke@example.com",
+    ]) {
+      const response = await handle(
+        new Request(url, { method: "HEAD" }),
+        env(),
+        ctx,
+      );
+      expect(response.status, url).toBe(200);
+      expect(response.headers.get("content-type"), url).toMatch(
+        /^(text\/plain|application\/jrd\+json)/,
+      );
+    }
+  });
+});

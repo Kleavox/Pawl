@@ -1,7 +1,7 @@
 import { INTERNAL_HOSTS, SESSION_COOKIE } from "@pawl/config";
 import { localWorkerOrigin } from "@pawl/topology";
+import { ownHeaders } from "../headers";
 import { signedInHint } from "./lib/cookies";
-import { securityHeaders } from "./lib/http";
 import { Hono } from "hono";
 
 import { registerAccountRoutes } from "./routes/account";
@@ -80,7 +80,7 @@ app.onError((cause, context) => {
   );
 });
 
-app.use("*", securityHeaders({ referrerPolicy: "same-origin" }));
+app.use("*", ownHeaders({ referrerPolicy: "same-origin" }));
 
 app.use("*", async (context, next) => {
   await next();

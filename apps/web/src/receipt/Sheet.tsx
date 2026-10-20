@@ -59,7 +59,7 @@ export function Sheet(props: {
       className: SHEET,
       "data-receipt-sheet": "",
       "data-stage": props.from,
-      "aria-labelledby": props.labelledBy,
+      "aria-labelledby": props.as === "main" ? props.labelledBy : undefined,
       suppressHydrationWarning: true,
     },
     <>
@@ -79,6 +79,7 @@ export function Sheet(props: {
         <div
           className={FRAME}
           data-receipt-frame
+          role="region"
           tabIndex={0}
           aria-label="Receipt"
         >

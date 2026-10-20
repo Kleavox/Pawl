@@ -14,7 +14,7 @@ export function crc16arc(text: string): number {
 export function dexText(value: string): string {
   return value
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/gu, "")
+    .replace(/\p{M}/gu, "")
     .replace(/[*~\r\n]/gu, " ")
     .replace(/[^\x20-\x7e]/gu, "?")
     .toUpperCase()

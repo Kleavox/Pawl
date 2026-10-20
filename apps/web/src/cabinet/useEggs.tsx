@@ -56,6 +56,8 @@ export function useEggs(input: {
   const [rocking, setRocking] = useState(false);
   const [credit, setCredit] = useState<string | undefined>(undefined);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const papered = useRef(paperOut);
+  papered.current = paperOut;
 
   const later = useCallback((ms: number, done: () => void): void => {
     const timer = setTimeout(() => {
@@ -86,6 +88,12 @@ export function useEggs(input: {
   );
 
   useEffect(() => {
+    if (!paperOut) return;
+    setNotice(null);
+    setCredit(undefined);
+  }, [paperOut]);
+
+  useEffect(() => {
     const node = machine.current;
     if (node === null) return;
     let taps: number[] = [];
@@ -108,6 +116,7 @@ export function useEggs(input: {
     let heard: string[] = [];
     const listen = (event: KeyboardEvent): void => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (papered.current) return;
       if (event.target instanceof Element && event.target.closest(TYPING)) {
         return;
       }
@@ -142,13 +151,16 @@ export function LuckyCredit(props: {
     random: props.random ?? Math.random,
     onLucky: props.onLucky,
   };
+  const rolled = useRef<string | null>(null);
   const rolling = props.tray !== null && !props.paperOut;
 
   useEffect(() => {
-    if (!rolling) {
+    if (props.tray === null) rolled.current = null;
+    if (!rolling || rolled.current === props.tray) {
       setRoll(null);
       return;
     }
+    const landing = props.tray;
     setRoll({ face: rollFace(latest.current.random), won: false });
     const tick = setInterval(
       () => setRoll({ face: rollFace(latest.current.random), won: false }),
@@ -157,6 +169,7 @@ export function LuckyCredit(props: {
     const stop = setTimeout(() => {
       clearInterval(tick);
       const face = rollResult(latest.current.random);
+      rolled.current = landing;
       setRoll({ face, won: face === LUCKY });
       if (face === LUCKY) latest.current.onLucky?.();
     }, ROLL_MS);
@@ -166,7 +179,8 @@ export function LuckyCredit(props: {
     };
   }, [rolling, props.tray]);
 
-  const text = props.override ?? roll?.face ?? (props.denied ? "----" : "FrEE");
+  const text =
+    props.override ?? (props.denied ? "----" : (roll?.face ?? "FrEE"));
   return (
     <Credit
       text={text}

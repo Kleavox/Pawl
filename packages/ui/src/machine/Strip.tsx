@@ -69,7 +69,7 @@ const SLOT =
   "printer__slot relative w-[calc(var(--slot-w)_*_var(--u))] h-9 rounded-[--spacing(5)] bg-pw-black shadow-[inset_0_--spacing(2)_--spacing(3)_var(--pw-black),0_--spacing(1)_0_var(--pw-highlight)] after:absolute after:right-6 after:-bottom-1 after:left-6 after:h-3 after:[background:linear-gradient(135deg,transparent_50%,var(--pw-steel-lo)_50%)_0_0/--spacing(4)_--spacing(3)_repeat-x] after:opacity-80";
 
 const PRINTER_LED =
-  "printer__led absolute -top-6 -right-12 size-5 rounded-full bg-pw-off after:absolute after:inset-0 after:rounded-full after:bg-pw-ok after:shadow-[0_0_--spacing(6)_var(--pw-ok)] after:opacity-0 group-data-[leaving=printer]/machine:after:animate-[printer-blink_120ms_steps(1,end)_1_both] group-data-[leaving=tear]/machine:after:animate-[printer-blink-once_60ms_steps(1,end)_1_both]";
+  "printer__led absolute -top-6 -right-12 size-5 rounded-full bg-pw-off after:absolute after:inset-0 after:rounded-full after:bg-pw-ok after:shadow-[0_0_--spacing(6)_var(--pw-ok)] after:opacity-0 group-data-[lamp-test]/machine:after:opacity-100 group-data-[leaving=printer]/machine:after:animate-[printer-blink_120ms_steps(1,end)_1_both] group-data-[leaving=tear]/machine:after:animate-[printer-blink-once_60ms_steps(1,end)_1_both]";
 
 const PRINTER_LABEL =
   "printer__label text-pw-etch font-pw-mono text-14 font-bold tracking-[0.2em] uppercase max-desk:leading-none";

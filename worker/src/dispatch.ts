@@ -15,7 +15,10 @@ interface Half<E> {
 }
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost"]);
-const WEBFINGER = "/.well-known/webfinger";
+const GATEWAY_EVERYWHERE = new Set([
+  "/.well-known/webfinger",
+  "/.well-known/security.txt",
+]);
 const CLACKS = "GNU Terry Pratchett";
 const ACCOUNT_APP = "/pass";
 
@@ -128,7 +131,7 @@ export async function handle(
   const incoming = isInternal(url) ? request : withoutStatedIdentity(request);
   const { pass: passEnv, gateway: gatewayEnv } = halves(env, ctx);
   const answered = await (isProvider(url, env.OIDC_ISSUER) &&
-  url.pathname !== WEBFINGER
+  !GATEWAY_EVERYWHERE.has(url.pathname)
     ? (pass as Half<PassEnv>).fetch(incoming, passEnv, ctx)
     : (gateway as Half<GatewayEnv>).fetch(incoming, gatewayEnv, ctx));
   const clacked = new Response(answered.body, answered);

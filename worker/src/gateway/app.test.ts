@@ -211,6 +211,25 @@ describe("apps from the manifest", () => {
     }
   });
 
+  it("leaves an app's own well-known files to the app on its subdomain", async () => {
+    const { env, reached } = appsEnv();
+    for (const path of [
+      "/.well-known/security.txt",
+      "/.well-known/webfinger?resource=acct:coke@docs.example.test",
+    ]) {
+      const response = await app.request(
+        `https://docs.example.test${path}`,
+        {},
+        env,
+      );
+      expect(await response.text(), path).toBe("docs.example.test");
+    }
+    expect(reached).toEqual([
+      "docs GET https://docs.example.test/.well-known/security.txt",
+      "docs GET https://docs.example.test/.well-known/webfinger?resource=acct:coke@docs.example.test",
+    ]);
+  });
+
   it("hands an app's subdomain to its binding unchanged", async () => {
     const { env, reached } = appsEnv();
     await app.request("https://docs.example.test/page", {}, env);
@@ -372,5 +391,93 @@ describe("the estate call itself", () => {
     expect(seen[0]?.get("cookie")).toBeNull();
     expect(seen[0]?.get("x-pawl-user")).toBe("user-1");
     expect(seen[0]?.get("x-pawl-role")).toBe("ADMIN");
+  });
+});
+
+describe("the gateway's own answers and the apps' answers", () => {
+  const OWN = [
+    "strict-transport-security",
+    "x-content-type-options",
+    "referrer-policy",
+    "x-frame-options",
+    "permissions-policy",
+  ];
+
+  it("dresses the cabinet's pages, its 404 and its API in the safe headers", async () => {
+    const env = {
+      ASSETS: {
+        fetch: vi.fn(async (request: Request) =>
+          new URL(request.url).pathname === "/"
+            ? new Response("<p>cabinet</p>", {
+                headers: {
+                  "content-type": "text/html",
+                  "cache-control": "public, max-age=0, must-revalidate",
+                },
+              })
+            : new Response("nope", { status: 404 }),
+        ),
+      },
+      PUBLIC_ORIGIN: "https://product.test",
+    } as unknown as Env;
+    const html = { headers: { accept: "text/html" } };
+    for (const path of ["/", "/no/such/path", "/api/session", "/health"]) {
+      const response = await app.request(
+        `https://product.test${path}`,
+        html,
+        env,
+      );
+      for (const name of OWN) {
+        expect(response.headers.get(name), `${path} ${name}`).not.toBeNull();
+      }
+    }
+    const page = await app.request("https://product.test/", html, env);
+    expect(page.headers.get("cache-control")).toBe(
+      "public, max-age=0, must-revalidate",
+    );
+  });
+
+  it("dresses its own error answer even when an app's call failed", async () => {
+    const { env } = appsEnv(() => {
+      throw new Error("the app is down");
+    });
+    const response = await app.request(
+      "https://example.test/api/notes/list",
+      {},
+      env,
+    );
+    expect(response.status).toBe(500);
+    for (const name of OWN) {
+      expect(response.headers.get(name), name).not.toBeNull();
+    }
+  });
+
+  it("hands every app's answer back with only the app's own headers", async () => {
+    const { env } = appsEnv(
+      (request) =>
+        new Response(
+          new URL(request.url).pathname.startsWith("/internal/resolve/")
+            ? null
+            : "<p>app</p>",
+          {
+            status: new URL(request.url).pathname.startsWith(
+              "/internal/resolve/",
+            )
+              ? 302
+              : 200,
+            headers: { "content-type": "text/html", "x-app": "1" },
+          },
+        ),
+    );
+    for (const url of [
+      "https://docs.example.test/page",
+      "https://example.test/api/notes/list",
+      "https://example.test/hello",
+    ]) {
+      const response = await app.request(url, {}, env);
+      expect(response.headers.get("x-app"), url).toBe("1");
+      for (const name of [...OWN, "cache-control"]) {
+        expect(response.headers.get(name), `${url} ${name}`).toBeNull();
+      }
+    }
   });
 });

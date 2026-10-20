@@ -64,6 +64,7 @@ describe("the DEX/UCS audit", () => {
     expect(dexText("a*b~c")).toBe("A B C");
     expect(dexText("two\nlines")).toBe("TWO LINES");
     expect(dexText("Café ☕")).toBe("CAFE ?");
+    expect(dexText("e\u0301")).toBe("E");
     expect(dexText("x".repeat(40))).toHaveLength(30);
     const lines = auditLines({
       ...INPUT,

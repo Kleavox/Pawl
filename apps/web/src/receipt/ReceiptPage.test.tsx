@@ -205,6 +205,14 @@ describe("ReceiptPage", () => {
     expect(camera.dataset.framing).toBe("whole");
   });
 
+  it("offers no keys on the shelf behind the paper, since none of them act", () => {
+    const html = renderToStaticMarkup(
+      <ReceiptPage site={SITE} kind="privacy" hosts={HOSTS} />,
+    );
+    const shelf = html.slice(html.indexOf('data-view-panel="products"'));
+    expect(shelf.slice(0, shelf.indexOf("</section>"))).not.toMatch(/pick/);
+  });
+
   it("names the receipt on the printer's LCD and keeps the bays on the screen behind it", () => {
     const { container } = render(
       <ReceiptPage site={SITE} kind="terms" hosts={HOSTS} />,

@@ -121,7 +121,7 @@ pub fn production(input: &Production) -> Result<Value, String> {
         "account_id": input.account_id,
         "main": "../../worker/src/index.ts",
         "compatibility_date": input.compatibility_date,
-        "workers_dev": true,
+        "workers_dev": false,
         "preview_urls": false,
         "observability": { "enabled": true },
         "assets": {
@@ -238,6 +238,13 @@ mod tests {
         assert_eq!(config["d1_databases"][0]["database_name"], "pawl");
         assert_eq!(config["d1_databases"][0]["database_id"], "d1-id");
         assert_eq!(config["kv_namespaces"][0]["id"], "kv-id");
+    }
+
+    #[test]
+    fn answers_only_on_its_own_domains_in_production() {
+        assert_eq!(production(&input("")).unwrap()["workers_dev"], false);
+        let local = local(&root(), "", "key").unwrap();
+        assert_eq!(local["workers_dev"], true);
     }
 
     #[test]
