@@ -226,7 +226,7 @@ export function useCabinet(input: {
   const screen = useRef<HTMLDivElement>(null);
   const ticker = useRef<HTMLSpanElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
-  const paper = useRef<HTMLDivElement>(null);
+  const paper = useRef<HTMLElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
   const keypad = useRef(createKeypad(site.bays.map((bay) => bay.code)));
   const retrying = useRef(false);
@@ -743,6 +743,7 @@ export function useCabinet(input: {
     if (state.receipt !== null) return;
     stopCount();
     setTaken(null);
+    setSaid({ view: "products", text: "" });
   }, [state.receipt, stopCount]);
 
   useEffect(() => {
@@ -777,7 +778,7 @@ export function useCabinet(input: {
   const view = viewFor(state);
   const arrived = useCameraArrival(camera, "whole", { onRestore: restored });
   useScanWipe(screen, view, arrived === "screen");
-  useFollowFocus(screen, view, returnTo);
+  useFollowFocus(screen, state.receipt === null ? view : "paper", returnTo);
   const lit = litKeys(state, fault ?? model.screen, fault !== null);
   useMachineKeys((key) => void pressKey(key), lit);
 
@@ -799,7 +800,12 @@ export function useCabinet(input: {
     };
     const body: DeliveryBody = carded
       ? { kind: "card", title: entry.title, card }
-      : { kind: "link", href: taken.href, left: count.left };
+      : {
+          kind: "link",
+          title: entry.title,
+          href: taken.href,
+          left: count.left,
+        };
     return { printKey: taken.key, facts, body };
   }, [state, taken, model.holder, card, count.left]);
 
@@ -813,7 +819,7 @@ export function useCabinet(input: {
     sound,
     delivery,
     copied,
-    refs: { camera, machine, screen, ticker, sheet, frame: paper },
+    refs: { camera, machine, screen, ticker, sheet, paper },
     onProductsFocus: (target: HTMLElement) => {
       returnTo.current = target;
     },

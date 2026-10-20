@@ -10,13 +10,13 @@ const STICKER =
   "falling-cartridge__sticker grid place-items-center w-full h-full overflow-hidden rounded-[--spacing(3)] bg-[linear-gradient(180deg,var(--pw-label),var(--pw-label-lo))] text-pw-etch [font:700_--spacing(14)/1_var(--pw-mono)]";
 
 const RESULT =
-  "tray__result relative z-3 hidden items-center gap-14 [&:not([data-tray=none])]:flex [&:not([data-tray=none])]:animate-[tray-arrive_320ms_var(--pw-ease-mech)_1_both] max-desk:gap-10";
+  "tray__result relative z-3 hidden items-center gap-14 [&:not([data-tray=none])]:flex [&:not([data-tray=none])]:animate-[tray-arrive_320ms_var(--pw-ease-mech)_1_both] max-desk:gap-6 max-desk:data-[tray-shape=wide]:flex-col";
 
 const ITEM =
-  "tray-item grid content-between w-max min-w-46 max-w-140 h-60 p-5 border-[length:--spacing(1)] border-solid border-pw-trim rounded-[--spacing(5)_--spacing(5)_--spacing(3)_--spacing(3)] bg-[linear-gradient(165deg,var(--pw-graphite),var(--pw-graphite-lo))] shadow-[0_--spacing(6)_--spacing(12)_rgb(0_0_0/60%)] text-pw-ink font-pw-mono [[data-tray-shape=wide]_&]:min-w-72 [[data-tray-shape=wide]_&]:h-46 [[data-tray-shape=wide]_&]:rounded-[--spacing(3)_--spacing(7)_--spacing(3)_--spacing(3)] max-desk:min-w-40 max-desk:h-52 max-desk:[[data-tray-shape=wide]_&]:min-w-56 max-desk:[[data-tray-shape=wide]_&]:h-40";
+  "tray-item grid content-between w-max min-w-46 max-w-140 h-60 p-5 border-[length:--spacing(1)] border-solid border-pw-trim rounded-[--spacing(5)_--spacing(5)_--spacing(3)_--spacing(3)] bg-[linear-gradient(165deg,var(--pw-graphite),var(--pw-graphite-lo))] shadow-[0_--spacing(6)_--spacing(12)_rgb(0_0_0/60%)] text-pw-ink font-pw-mono [[data-tray-shape=wide]_&]:min-w-72 [[data-tray-shape=wide]_&]:h-46 [[data-tray-shape=wide]_&]:rounded-[--spacing(3)_--spacing(7)_--spacing(3)_--spacing(3)] max-desk:min-w-40 max-desk:max-w-44 max-desk:[[data-tray-shape=wide]_&]:max-w-120 max-desk:h-52 max-desk:[[data-tray-shape=wide]_&]:min-w-56 max-desk:[[data-tray-shape=wide]_&]:h-40";
 
 const ACTION =
-  "tray-action min-h-56 px-18 border-[length:--spacing(1)] border-solid border-pw-cobalt rounded-[--spacing(6)] bg-pw-cobalt shadow-[0_--spacing(3)_0_var(--pw-cobalt-lo),0_0_--spacing(18)_var(--pw-cobalt-glow)] text-pw-white [font:700_--spacing(15)/1_var(--pw-mono)] tracking-[0.1em] cursor-pointer hover:bg-pw-cobalt-hi active:[transform:translateY(--spacing(2))] active:shadow-[0_--spacing(1)_0_var(--pw-cobalt-lo)]";
+  "tray-action min-h-56 px-18 border-[length:--spacing(1)] border-solid border-pw-cobalt rounded-[--spacing(6)] bg-pw-cobalt shadow-[0_--spacing(3)_0_var(--pw-cobalt-lo),0_0_--spacing(18)_var(--pw-cobalt-glow)] text-pw-white [font:700_--spacing(15)/1_var(--pw-mono)] tracking-[0.1em] cursor-pointer hover:bg-pw-cobalt-hi active:[transform:translateY(--spacing(2))] active:shadow-[0_--spacing(1)_0_var(--pw-cobalt-lo)] max-desk:min-h-55 max-desk:max-w-90 max-desk:px-6 max-desk:[font:700_--spacing(14)/1.15_var(--pw-mono)] max-desk:tracking-[0.04em]";
 
 export function TrayBay(props: {
   state: MachineState;

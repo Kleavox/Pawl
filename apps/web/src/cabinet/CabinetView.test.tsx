@@ -82,21 +82,30 @@ const PRINTED: Delivered = {
     holder: "annisa",
     printed: new Date(2026, 9, 19, 14, 3),
   },
-  body: { kind: "link", href: "https://docs.example.test/", left: 10 },
+  body: {
+    kind: "link",
+    title: "Docs",
+    href: "https://docs.example.test/",
+    left: 10,
+  },
 };
 
 describe("a receipt in hand", () => {
-  it("shows the printed view on the screen and the delivery on the paper, with every key dark", () => {
+  it("keeps the products on the screen and the delivery on the paper, with every key dark", () => {
     const state = { ...initialState("visitor", CATALOG), receipt: "3" };
     const root = drawn(state, model, { delivery: PRINTED });
     const visible = [...root.querySelectorAll("[data-view-panel]")]
       .filter((panel) => !(panel as HTMLElement).hidden)
       .map((panel) => panel.getAttribute("data-view-panel"));
-    expect(visible).toEqual(["receipt"]);
+    expect(visible).toEqual(["products"]);
+    expect(root.querySelector("[data-view-panel='receipt']")).toBeNull();
+    expect(root.querySelector("[data-view-panel='products']")).toHaveAttribute(
+      "inert",
+    );
     expect(text(root, "[data-screen]")).toBe("RECEIPT PRINTED");
     expect(text(root, "[data-screen-sub]")).toBe("3 MANUAL");
     expect(root.querySelector("dialog[data-delivery]")).toHaveAttribute("open");
-    expect(text(root, "[data-receipt] h1")).toBe("MANUAL");
+    expect(text(root, "[data-receipt] h1")).toBe("Docs");
     expect(
       [...root.querySelectorAll<HTMLElement>("[data-key]")].every(
         (key) => key.getAttribute("aria-disabled") === "true",
@@ -104,19 +113,22 @@ describe("a receipt in hand", () => {
     ).toBe(true);
   });
 
-  it("says what went wrong on the receipt view, like every other view", () => {
+  it("says what went wrong on the products behind the paper", () => {
     const state = { ...initialState("visitor", CATALOG), receipt: "3" };
     const root = drawn(state, model, {
       delivery: PRINTED,
       said: "This browser cannot hold your bay request.",
     });
-    expect(text(root, "[data-view-panel='receipt'] [data-say]")).toBe(
+    expect(text(root, "[data-view-panel='products'] [data-say]")).toBe(
       "This browser cannot hold your bay request.",
     );
   });
 
   it("keeps the dialog closed and empty while nothing is printed", () => {
     const root = drawn(initialState("visitor", CATALOG), model);
+    expect(
+      root.querySelector("[data-view-panel='products']"),
+    ).not.toHaveAttribute("inert");
     expect(root.querySelector("dialog[data-delivery]")).not.toHaveAttribute(
       "open",
     );
@@ -204,7 +216,11 @@ describe("CabinetView", () => {
         model,
         "working",
       ],
-      [{ ...initialState("visitor", CATALOG), receipt: "3" }, model, "receipt"],
+      [
+        { ...initialState("visitor", CATALOG), receipt: "3" },
+        model,
+        "products",
+      ],
     ];
     for (const [state, at, expected] of steps) {
       const root = drawn(state, at);

@@ -1,18 +1,26 @@
 import type { PublicView } from "@pawl/registry";
 import {
   arrivalFraming,
+  Bar,
+  Body,
   cleanCamHint,
+  Foot,
+  Kbd,
   Machine,
   Screen,
   settle,
   SoundSwitch,
+  View,
 } from "@pawl/ui";
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 
+import { Tiles } from "../cabinet/Tiles";
+import { toMachineModel } from "../estate-adapter";
 import { contactAddress } from "../legal-facts";
+import { greeting } from "../machine/copy";
+import { initialState } from "../machine/state";
 import { crumpleInto, holdOut, printOut } from "../receipt";
 import { useSound } from "../sound";
-import { Printed } from "./Printed";
 import { Privacy } from "./Privacy";
 import { Sheet } from "./Sheet";
 import { Terms } from "./Terms";
@@ -21,6 +29,32 @@ const TITLES = { privacy: "Privacy policy", terms: "Terms of service" };
 
 function assign(url: string): void {
   window.location.assign(url);
+}
+
+function Shelf(props: { site: PublicView }): ReactNode {
+  const state = initialState("guest", props.site.bays);
+  const model = toMachineModel(
+    { authenticated: false },
+    null,
+    props.site.bays,
+    [],
+    props.site.site.name,
+  );
+  return (
+    <View name="products" hidden={false} aria-label="Products" inert>
+      <Bar where={greeting(state, model)} />
+      <Body variant="tiles">
+        <Tiles state={state} model={model} onTake={() => undefined} />
+      </Body>
+      <Foot
+        hint={
+          <>
+            <Kbd>1</Kbd>–<Kbd>9</Kbd> pick · <Kbd go>GO</Kbd> take
+          </>
+        }
+      />
+    </View>
+  );
 }
 
 export function ReceiptPage(props: {
@@ -32,7 +66,7 @@ export function ReceiptPage(props: {
   const camera = useRef<HTMLDivElement>(null);
   const machine = useRef<HTMLDivElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
-  const frame = useRef<HTMLDivElement>(null);
+  const paper = useRef<HTMLElement>(null);
   const navigate = useRef(props.navigate ?? assign);
   navigate.current = props.navigate ?? assign;
   const sound = useSound();
@@ -53,10 +87,10 @@ export function ReceiptPage(props: {
 
   useEffect(() => {
     cleanCamHint(window.location, window.history);
-    const paper = sheet.current;
-    if (paper === null) return;
-    void printOut(paper, camera.current).then(() =>
-      frame.current?.focus({ preventScroll: true }),
+    const held = sheet.current;
+    if (held === null) return;
+    void printOut(held, camera.current).then(() =>
+      paper.current?.focus({ preventScroll: true }),
     );
     const escape = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -92,7 +126,7 @@ export function ReceiptPage(props: {
         lcd={{ main: "RECEIPT PRINTED", sub: title.toUpperCase() }}
         keypad={{ mode: "service", lit: new Set() }}
         sound={<SoundSwitch pressed={sound.on} onToggle={sound.toggle} />}
-        machine={{ "data-status": "idle", "data-view": "receipt" }}
+        machine={{ "data-status": "idle", "data-view": "products" }}
         main={false}
         settled
         fixed
@@ -100,7 +134,7 @@ export function ReceiptPage(props: {
         machineRef={machine}
         display={
           <Screen>
-            <Printed hidden={false} />
+            <Shelf site={props.site} />
           </Screen>
         }
       />
@@ -109,7 +143,7 @@ export function ReceiptPage(props: {
         as="main"
         labelledBy="receipt-title"
         sheetRef={sheet}
-        frameRef={frame}
+        paperRef={paper}
         onCrumple={() => void crumple()}
       >
         {props.kind === "privacy" ? (

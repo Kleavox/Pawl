@@ -34,7 +34,6 @@ import {
   type ScreenCopy,
 } from "../machine/copy";
 import type { BayCode, MachineState } from "../machine/state";
-import { Printed } from "../receipt/Printed";
 import {
   DeliveryReceipt,
   type PaperActions,
@@ -73,7 +72,7 @@ export type CabinetViewProps = {
     ticker?: Ref<HTMLSpanElement>;
     products?: (node: HTMLElement | null) => void;
     sheet?: Ref<HTMLDivElement>;
-    frame?: Ref<HTMLDivElement>;
+    paper?: Ref<HTMLElement>;
   };
   onProductsFocus?: (target: HTMLElement) => void;
 };
@@ -119,6 +118,7 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
             <View
               name="products"
               hidden={view !== "products"}
+              inert={state.receipt !== null}
               aria-label="Products"
               tabIndex={-1}
               onFocus={(event) => {
@@ -226,7 +226,6 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
                 }
               />
             </View>
-            <Printed hidden={view !== "receipt"} said={said("receipt")} />
           </Screen>
         }
       />
@@ -235,7 +234,7 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
         siteName={props.siteName}
         copied={props.copied}
         sheetRef={props.refs?.sheet}
-        frameRef={props.refs?.frame}
+        paperRef={props.refs?.paper}
         on={on.paper}
       />
     </>

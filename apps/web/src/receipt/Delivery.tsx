@@ -1,4 +1,4 @@
-import { PW_BUTTON, PW_BUTTON_PRIMARY } from "@pawl/ui";
+import { PW_BUTTON, PW_BUTTON_PRIMARY, SERIAL } from "@pawl/ui";
 import type { MouseEvent, ReactNode } from "react";
 
 import type { AppCard, CardState } from "../cabinet/card";
@@ -17,7 +17,7 @@ export type DeliveryFacts = {
 };
 
 export type DeliveryBody =
-  | { kind: "link"; href: string; left: number | null }
+  | { kind: "link"; title: string; href: string; left: number | null }
   | { kind: "card"; title: string; card: CardState };
 
 export type DeliveryActions = {
@@ -37,7 +37,7 @@ const PRINTED_AT = new Intl.DateTimeFormat("en-GB", {
 const HEAD =
   "receipt__head grid justify-items-center gap-[10px] pb-[18px] [border-bottom:2px_dashed_var(--pw-paper-rule)] text-center";
 
-const SERIAL =
+const SERIAL_LINE =
   "receipt__serial m-0 text-pw-paper-dim font-pw-mono text-rem-label font-bold tracking-[0.18em]";
 
 const EYEBROW =
@@ -72,8 +72,8 @@ export function passLine(access: AccessRole): string {
   return PASS_KIND[access] || "GUEST";
 }
 
-function titleOf(body: DeliveryBody, item: string): string {
-  if (body.kind === "link") return item;
+function titleOf(body: DeliveryBody): string {
+  if (body.kind === "link") return body.title;
   switch (body.card.kind) {
     case "shown":
       return body.card.card.title;
@@ -179,6 +179,7 @@ function LinkBody(props: {
 }
 
 function CardBody(props: {
+  siteName: string;
   host: string;
   card: CardState;
   copied: string | null;
@@ -219,8 +220,8 @@ function CardBody(props: {
       return (
         <>
           <p>
-            Pawl asks you once what it may see. You can disconnect it under
-            Account → Apps.
+            {props.siteName} asks you once what it may see. You can disconnect
+            it under Account → Apps.
           </p>
           <div className={ACTIONS}>
             <a
@@ -261,10 +262,12 @@ export function Delivery(props: {
   return (
     <>
       <div className={HEAD}>
-        <p className={SERIAL}>PAWL-GW-01 · {props.siteName.toUpperCase()}</p>
+        <p className={SERIAL_LINE}>
+          {SERIAL} · {props.siteName.toUpperCase()}
+        </p>
         {connecting && <p className={EYEBROW}>First time</p>}
         <h1 id="delivery-title" className="[overflow-wrap:anywhere]">
-          {titleOf(body, facts.item)}
+          {titleOf(body)}
         </h1>
         <Facts facts={facts} />
       </div>
@@ -278,6 +281,7 @@ export function Delivery(props: {
           />
         ) : (
           <CardBody
+            siteName={props.siteName}
             host={facts.place.host}
             card={body.card}
             copied={props.copied}

@@ -125,7 +125,7 @@ describe("ReceiptPage", () => {
     expect(camera.dataset.framing).toBe("whole");
     await act(() => vi.advanceTimersByTimeAsync(STEP_BACK_MS));
     expect(document.activeElement).toBe(
-      container.querySelector("[data-receipt-frame]"),
+      container.querySelector("article[data-receipt]"),
     );
   });
 
@@ -205,7 +205,7 @@ describe("ReceiptPage", () => {
     expect(camera.dataset.framing).toBe("whole");
   });
 
-  it("names the receipt on the printer's LCD and says it is in your hand", () => {
+  it("names the receipt on the printer's LCD and keeps the bays on the screen behind it", () => {
     const { container } = render(
       <ReceiptPage site={SITE} kind="terms" hosts={HOSTS} />,
     );
@@ -215,9 +215,16 @@ describe("ReceiptPage", () => {
     expect(container.querySelector("[data-screen-sub]")).toHaveTextContent(
       "TERMS OF SERVICE",
     );
-    expect(
-      container.querySelector("[data-view-panel='receipt']"),
-    ).toHaveTextContent("Your receipt is in your hand");
+    expect(container.querySelector("[data-view-panel='receipt']")).toBeNull();
+    const products = container.querySelector("[data-view-panel='products']")!;
+    expect(products).not.toHaveAttribute("hidden");
+    expect(products).toHaveAttribute("inert");
+    expect(products.querySelectorAll("[data-tile]")).toHaveLength(9);
+    for (const bay of SITE.bays) {
+      expect(
+        products.querySelector(`[data-tile='${bay.code}']`),
+      ).toHaveTextContent(bay.product);
+    }
   });
 });
 

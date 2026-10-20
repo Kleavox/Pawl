@@ -6,7 +6,7 @@ const BASE =
   "machine__base grid grid-cols-[minmax(0,1fr)_--spacing(240)] grid-rows-[minmax(0,1fr)] gap-10 pb-10 max-desk:contents";
 
 const TRAY =
-  "tray relative grid place-items-center overflow-hidden border-[length:--spacing(2)] border-solid border-pw-trim rounded-[--spacing(10)] bg-[linear-gradient(180deg,var(--pw-black),var(--pw-graphite-lo))] shadow-[inset_0_--spacing(12)_--spacing(26)_rgb(0_0_0/85%),0_--spacing(1)_0_var(--pw-highlight)] max-desk:row-[4] max-desk:mb-0";
+  "tray relative grid place-items-center overflow-hidden border-[length:--spacing(2)] border-solid border-pw-trim rounded-[--spacing(10)] bg-[linear-gradient(180deg,var(--pw-black),var(--pw-graphite-lo))] shadow-[inset_0_--spacing(12)_--spacing(26)_rgb(0_0_0/85%),0_--spacing(1)_0_var(--pw-highlight)] max-desk:row-[3] max-desk:col-[1] max-desk:self-end max-desk:justify-self-start max-desk:w-144 max-desk:h-109 max-desk:mb-9 max-desk:ml-9 max-desk:rounded-[--spacing(8)]";
 
 const FLAP =
   "tray__flap absolute top-8 right-8 bottom-auto left-8 z-2 grid place-items-center h-[58%] border-[length:--spacing(1)] border-solid border-pw-trim rounded-[--spacing(6)_--spacing(6)_--spacing(3)_--spacing(3)] bg-(image:--pw-brushed) shadow-[inset_0_--spacing(1)_0_var(--pw-highlight),0_--spacing(6)_--spacing(12)_rgb(0_0_0/55%)] origin-top [transition:transform_360ms_var(--pw-ease-mech)] [.tray:has([data-tray]:not([data-tray=none]))_&]:[transform:perspective(--spacing(420))_rotateX(-62deg)] group-data-[status=dispensing]/machine:animate-[flap-thunk_var(--pw-t6)_var(--pw-ease-mech)_1_both] group-data-[swallow]/machine:animate-[flap-swallow_200ms_var(--pw-ease-mech)_1_both]";
@@ -15,10 +15,10 @@ const PUSH =
   "tray__push text-pw-etch-dim font-pw-mono text-14 font-bold tracking-[0.4em]";
 
 const TRAY_LABEL =
-  "tray__label absolute right-14 bottom-8 text-pw-ink-dim font-pw-mono text-14 font-bold tracking-[0.2em] [.tray:has([data-tray]:not([data-tray=none]))_&]:hidden";
+  "tray__label absolute right-14 bottom-8 text-pw-ink-dim font-pw-mono text-14 font-bold tracking-[0.2em] [.tray:has([data-tray]:not([data-tray=none]))_&]:hidden max-desk:right-8 max-desk:tracking-[0.12em]";
 
 const PLATE =
-  "plate relative grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto_auto] content-center gap-x-8 gap-y-5 px-14 py-8 border-[length:--spacing(1)] border-solid border-pw-trim rounded-[--spacing(5)] bg-[repeating-linear-gradient(90deg,rgb(255_255_255/6%)_0_--spacing(1),transparent_--spacing(1)_--spacing(3)),linear-gradient(180deg,var(--pw-label),var(--pw-label-lo))] shadow-[inset_0_--spacing(1)_0_var(--pw-highlight)] text-pw-etch font-pw-mono max-desk:row-[5] max-desk:grid-cols-[auto_auto_minmax(0,1fr)] max-desk:grid-rows-[auto] max-desk:gap-12 max-desk:px-12 max-desk:py-0";
+  "plate relative grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto_auto] content-center gap-x-8 gap-y-5 px-14 py-8 border-[length:--spacing(1)] border-solid border-pw-trim rounded-[--spacing(5)] bg-[repeating-linear-gradient(90deg,rgb(255_255_255/6%)_0_--spacing(1),transparent_--spacing(1)_--spacing(3)),linear-gradient(180deg,var(--pw-label),var(--pw-label-lo))] shadow-[inset_0_--spacing(1)_0_var(--pw-highlight)] text-pw-etch font-pw-mono max-desk:row-[4] max-desk:grid-cols-[auto_auto_minmax(0,1fr)] max-desk:grid-rows-[auto] max-desk:gap-12 max-desk:px-12 max-desk:py-0";
 
 const RIVETS =
   "plate__rivets absolute inset-0 pointer-events-none max-desk:hidden";

@@ -272,6 +272,33 @@ test("the receipt's paper feeds from the slot without the slot ever changing siz
   );
 });
 
+test("the paper takes the keys without a ring around it, and they scroll it", async ({
+  page,
+}) => {
+  await page.goto(`${GATEWAY}/privacy.html`);
+  await inHand(page);
+  const paper = page.locator("article[data-receipt]");
+  const frame = page.locator("[data-receipt-frame]");
+  await expect(paper).toBeFocused();
+  expect(
+    await page.evaluate(() => {
+      const ringed = (node: Element | null): boolean =>
+        node !== null && getComputedStyle(node).outlineStyle !== "none";
+      return {
+        paper: ringed(document.querySelector("article[data-receipt]")),
+        inner: ringed(document.querySelector("[data-receipt-inner]")),
+        frame: document
+          .querySelector("[data-receipt-frame]")!
+          .matches(":focus-visible"),
+      };
+    }),
+  ).toEqual({ paper: false, inner: false, frame: false });
+  await page.keyboard.press("PageDown");
+  await expect
+    .poll(() => frame.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(0);
+});
+
 test("the paper in hand scrolls freely and nothing hangs", async ({ page }) => {
   await page.goto(`${GATEWAY}/privacy.html`);
   await inHand(page);

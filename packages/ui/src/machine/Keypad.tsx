@@ -17,7 +17,7 @@ export type KeypadProps = {
 };
 
 const KEYPAD =
-  "keypad grid grid-cols-3 grid-rows-[--spacing(16)_repeat(4,minmax(0,1fr))] gap-6 p-10 rounded-[--spacing(10)] bg-[linear-gradient(180deg,var(--pw-steel-mid),var(--pw-steel-lo))] shadow-[inset_0_--spacing(2)_--spacing(5)_rgb(0_0_0/30%),0_--spacing(1)_0_rgb(255_255_255/40%)] max-desk:col-[2] max-desk:row-[1/5] max-desk:grid-rows-[--spacing(13)_repeat(4,minmax(0,1fr))] max-desk:gap-4.5 max-desk:p-8";
+  "keypad grid grid-cols-3 grid-rows-[--spacing(16)_repeat(4,minmax(0,1fr))] gap-6 p-10 rounded-[--spacing(10)] bg-[linear-gradient(180deg,var(--pw-steel-mid),var(--pw-steel-lo))] shadow-[inset_0_--spacing(2)_--spacing(5)_rgb(0_0_0/30%),0_--spacing(1)_0_rgb(255_255_255/40%)] max-desk:col-[2] max-desk:row-[2/5] max-desk:grid-rows-[--spacing(13)_repeat(4,minmax(0,1fr))] max-desk:gap-3 max-desk:p-5";
 
 const MODE_ROW =
   "keypad__mode col-span-full flex items-center justify-center gap-22 max-desk:gap-14";

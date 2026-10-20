@@ -24,7 +24,7 @@ export function DeliveryReceipt(props: {
   siteName: string;
   copied: string | null;
   sheetRef?: Ref<HTMLDivElement>;
-  frameRef?: Ref<HTMLDivElement>;
+  paperRef?: Ref<HTMLElement>;
   on: PaperActions;
 }): ReactNode {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -53,7 +53,7 @@ export function DeliveryReceipt(props: {
           as="div"
           labelledBy="delivery-title"
           sheetRef={props.sheetRef ?? null}
-          frameRef={props.frameRef ?? null}
+          paperRef={props.paperRef ?? null}
           onCrumple={props.on.crumple}
         >
           <Delivery

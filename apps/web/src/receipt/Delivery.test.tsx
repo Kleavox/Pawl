@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { SERIAL } from "@pawl/ui";
+
 import type { CardState } from "../cabinet/card";
 import {
   Delivery,
@@ -66,17 +68,18 @@ function carded(card: CardState) {
 
 const LINK: DeliveryBody = {
   kind: "link",
+  title: "Docs",
   href: "https://docs.example.test/",
   left: 10,
 };
 
 describe("a delivery receipt", () => {
-  it("prints the serial, the bay, the item, where it goes, the pass and the time", () => {
+  it("prints the serial, the app's name, the bay, the item, where it goes, the pass and the time", () => {
     const { container } = printed(LINK);
     const paper = container.textContent ?? "";
-    expect(paper).toContain("PAWL-GW-01 · FIXTURE");
+    expect(paper).toContain(`${SERIAL} · FIXTURE`);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "MANUAL",
+      /^Docs$/,
     );
     expect(screen.getByRole("heading", { level: 1 })).toHaveAttribute(
       "id",
@@ -180,14 +183,18 @@ describe("a delivery receipt", () => {
     ).toHaveTextContent("Copied");
   });
 
-  it("asks a first-time app to connect in Pawl's words", async () => {
-    const { on } = carded({
+  it("asks a first-time app to connect in the site's own words", async () => {
+    const { on, container } = carded({
       kind: "connect",
       href: "https://paw.example.test/oauth/connect?app=dns",
     });
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "DNS needs to know who you are",
     );
+    expect(container).toHaveTextContent(
+      "Fixture asks you once what it may see.",
+    );
+    expect(container).not.toHaveTextContent("Pawl");
     const connect = screen.getByRole("link", { name: /Connect/ });
     expect(connect).toHaveAttribute(
       "href",

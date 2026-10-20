@@ -320,9 +320,9 @@ describe("a key is lit only when it does something on this screen", () => {
     ).toBe("working");
   });
 
-  it("shows the printed view while a receipt is out, with every key dark and the machine busy", () => {
+  it("keeps the products on the screen while a receipt is out, with every key dark and the machine busy", () => {
     const out = { ...initialState("visitor", CATALOG), receipt: "1" };
-    expect(viewFor(out)).toBe("receipt");
+    expect(viewFor(out)).toBe("products");
     expect(keys(out)).toEqual([]);
     expect(machineAttributes(out)["data-busy"]).toBe("true");
     expect(screenCopy(out, model)).toEqual({

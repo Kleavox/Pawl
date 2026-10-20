@@ -10,20 +10,20 @@ function sheet(
   onCrumple = vi.fn(),
 ) {
   const sheetRef = createRef<HTMLDivElement>();
-  const frameRef = createRef<HTMLDivElement>();
+  const paperRef = createRef<HTMLElement>();
   const view = render(
     <Sheet
       from={from}
       as={as}
       labelledBy="paper-title"
       sheetRef={sheetRef}
-      frameRef={frameRef}
+      paperRef={paperRef}
       onCrumple={onCrumple}
     >
       <h1 id="paper-title">Paper</h1>
     </Sheet>,
   );
-  return { ...view, sheetRef, frameRef, onCrumple };
+  return { ...view, sheetRef, paperRef, onCrumple };
 }
 
 describe("Sheet", () => {
@@ -37,7 +37,7 @@ describe("Sheet", () => {
         as="div"
         labelledBy="paper-title"
         sheetRef={sheetRef}
-        frameRef={createRef()}
+        paperRef={createRef()}
         onCrumple={() => {}}
       >
         <h1 id="paper-title">Paper</h1>
@@ -47,13 +47,13 @@ describe("Sheet", () => {
   });
 
   it("holds the paper in a frame that scrolls by itself, with the dim, the creases and the ball beside it", () => {
-    const { sheetRef, frameRef } = sheet("feed");
+    const { sheetRef, paperRef } = sheet("feed");
     const root = sheetRef.current!;
-    expect(frameRef.current).toHaveAttribute("data-receipt-frame");
-    expect(frameRef.current).toHaveAttribute("tabindex", "0");
-    expect(
-      frameRef.current!.querySelector("article[data-receipt]"),
-    ).toHaveTextContent("Paper");
+    const frame = root.querySelector("[data-receipt-frame]")!;
+    expect(frame).toHaveAttribute("tabindex", "0");
+    expect(paperRef.current).toBe(frame.querySelector("article[data-receipt]"));
+    expect(paperRef.current).toHaveTextContent("Paper");
+    expect(paperRef.current).toHaveAttribute("tabindex", "-1");
     for (const part of [
       "[data-receipt-dim]",
       "[data-receipt-creases]",
@@ -65,7 +65,7 @@ describe("Sheet", () => {
         "true",
       );
     }
-    expect(frameRef.current!.querySelector("[data-receipt-ball]")).toBeNull();
+    expect(frame.querySelector("[data-receipt-ball]")).toBeNull();
   });
 
   it("hides Crumple until the paper is in hand, and crumples on it", () => {
@@ -84,8 +84,8 @@ describe("Sheet", () => {
   });
 
   it("tears the paper's top only once it has ripped, and its end always", () => {
-    const { frameRef } = sheet("feed");
-    const paper = frameRef.current!.querySelector("article[data-receipt]")!;
+    const { paperRef } = sheet("feed");
+    const paper = paperRef.current!;
     expect(paper.className).toContain("receipt-edge");
     expect(paper.className).toContain(
       "group-data-[stage=rip]/sheet:receipt-torn",
@@ -96,9 +96,10 @@ describe("Sheet", () => {
   });
 
   it("lets the end of the paper scroll into view while it rests at the slot", () => {
-    const { frameRef } = sheet("feed");
+    const { sheetRef } = sheet("feed");
+    const frame = sheetRef.current!.querySelector("[data-receipt-frame]")!;
     for (const stage of ["slot", "feed"]) {
-      expect(frameRef.current!.className).toContain(
+      expect(frame.className).toContain(
         `group-data-[stage=${stage}]/sheet:pb-(--lift)`,
       );
     }

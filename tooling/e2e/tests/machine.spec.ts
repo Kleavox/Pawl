@@ -645,6 +645,9 @@ test("the receipts print from the machine's printer, whole and without a header"
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
     await expect(page.locator("[data-receipt]")).toBeVisible();
+    await expect(
+      page.locator("[data-view-panel='products'] [data-tile]"),
+    ).toHaveCount(9);
     await expect(page.locator("header, footer")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Crumple the receipt" }),
@@ -1549,7 +1552,16 @@ test("taking the delivery prints a receipt in a real modal, read in front of the
     };
   });
   expect(sealed).toEqual({ modal: true, reachedBehind: false });
-  await expect(page.locator("[data-receipt] h1")).toBeVisible();
+  await expect(page.locator("[data-view-panel='products']")).toBeVisible();
+  await expect(page.locator("[data-view-panel='receipt']")).toHaveCount(0);
+  const seven = await page.evaluate(async () => {
+    const answer = await fetch("/api/catalog");
+    const { bays } = (await answer.json()) as {
+      bays: { code: string; title: string }[];
+    };
+    return bays.find((bay) => bay.code === "7")!.title;
+  });
+  await expect(page.locator("[data-receipt] h1")).toHaveText(seven);
   await expect(page.locator("[data-receipt]")).toContainText("Bay");
   await expect(page).toHaveURL(/:\d+\/$/);
 });

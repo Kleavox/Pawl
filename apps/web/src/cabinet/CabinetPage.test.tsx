@@ -83,13 +83,13 @@ describe("CabinetPage", () => {
     expect(sessionStorage.getItem("pawl:machine-request")).toBe("1");
   });
 
-  it("shows only the products, working, account and receipt views", async () => {
+  it("shows only the products, working and account views", async () => {
     const { container } = await opened(vi.fn());
     expect(
       [...container.querySelectorAll("[data-view-panel]")].map((view) =>
         view.getAttribute("data-view-panel"),
       ),
-    ).toEqual(["products", "working", "account", "receipt"]);
+    ).toEqual(["products", "working", "account"]);
   });
 
   it("releases an open bay from the keypad: the number, then GO", async () => {
@@ -309,10 +309,10 @@ describe("taking a delivery prints a receipt", () => {
     await advance(STEPPED_BACK_MS);
     expect(camera.dataset.framing).toBe("whole");
     expect(
-      screen.getByRole("heading", { level: 1, name: "MANUAL" }),
+      screen.getByRole("heading", { level: 1, name: "Docs" }),
     ).toBeInTheDocument();
     expect(document.activeElement).toBe(
-      container.querySelector("[data-receipt-frame]"),
+      container.querySelector("article[data-receipt]"),
     );
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -482,7 +482,7 @@ describe("an outside app's card prints on the receipt", () => {
     expect(paper).toHaveTextContent("From enroll.elsewhere.test");
     expect(screen.queryByRole("timer")).toBeNull();
     expect(
-      container.querySelector("[data-view-panel='receipt']"),
+      container.querySelector("[data-view-panel='products']"),
     ).not.toHaveAttribute("hidden");
   });
 
@@ -570,7 +570,7 @@ describe("an outside app's card prints on the receipt", () => {
     });
     await user.click(screen.getByRole("link", { name: /Connect/ }));
     expect(
-      container.querySelector("[data-view-panel='receipt'] [data-say]"),
+      container.querySelector("[data-view-panel='products'] [data-say]"),
     ).toHaveTextContent("This browser cannot hold your bay request.");
     vi.mocked(Storage.prototype.setItem).mockRestore();
   });
@@ -586,6 +586,32 @@ describe("an outside app's card prints on the receipt", () => {
     await user.click(screen.getByRole("link", { name: "Detail ↗" }));
     await advance(700);
     expect(go).toHaveBeenCalledWith("https://enroll.elsewhere.test/");
+  });
+
+  it("takes what was said behind the paper away with the paper", async () => {
+    routed({ status: 200, body: { card: DNS_CARD } });
+    const { container, user } = await delivered(vi.fn(), "5");
+    await user.click(
+      container.querySelector<HTMLElement>("[data-tray-action]")!,
+    );
+    await inHand(container);
+    Object.defineProperty(navigator, "clipboard", {
+      value: {
+        writeText: vi.fn(async () => {
+          throw new Error("no clipboard");
+        }),
+      },
+      configurable: true,
+    });
+    await user.click(screen.getByRole("button", { name: "Copy Client ID" }));
+    await advance(0);
+    const say = () =>
+      container.querySelector("[data-view-panel='products'] [data-say]");
+    expect(say()).toHaveTextContent("Copy did not work here.");
+    await user.keyboard("{Escape}");
+    await advance(CRUMPLED_MS);
+    expect(stageOf(container)).toBeUndefined();
+    expect(say()).toHaveTextContent(/^$/);
   });
 
   it("copies a card field and says so on its button", async () => {

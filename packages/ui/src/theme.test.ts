@@ -37,9 +37,11 @@ describe("the theme, Tailwind's one configuration file", () => {
       "--screen-w: 978;",
       "--screen-h: 544;",
       "--mw: 370;",
-      "--mh: 896;",
-      "--slot-cy: 701;",
-      "--screen-h: 678;",
+      "--mh: 805;",
+      "--screen-y: 57;",
+      "--slot-cx: 90;",
+      "--slot-cy: 598.5;",
+      "--screen-h: 691;",
     ]) {
       expect(flat).toContain(measure);
     }

@@ -1,3 +1,4 @@
+import { SERIAL } from "@pawl/ui";
 import type { ReactNode } from "react";
 
 import { EFFECTIVE } from "../legal-facts";
@@ -19,7 +20,7 @@ export function Privacy({
     <>
       <div className="receipt__head grid justify-items-center gap-[10px] pb-[18px] [border-bottom:2px_dashed_var(--pw-paper-rule)] text-center">
         <p className="receipt__serial m-0 text-pw-paper-dim font-pw-mono text-rem-label font-bold tracking-[0.18em]">
-          PAWL-GW-01 · {siteName.toUpperCase()}
+          {SERIAL} · {siteName.toUpperCase()}
         </p>
         <h1 id="receipt-title">Privacy policy</h1>
         <dl className="receipt__meta flex flex-wrap justify-center gap-x-[18px] gap-y-[4px] m-0 font-pw-mono text-rem-label [&_div]:flex [&_div]:gap-[6px] [&_dt]:text-pw-paper-dim [&_dt]:font-bold [&_dt]:tracking-[0.1em] [&_dt]:uppercase [&_dd]:m-0 [&_dd]:[overflow-wrap:anywhere]">

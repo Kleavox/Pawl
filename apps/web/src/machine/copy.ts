@@ -4,7 +4,7 @@ import type { MachineModel } from "../estate-adapter";
 import { permits } from "./state";
 import type { AccessRole, BayCode, Catalog, MachineState } from "./state";
 
-export type ScreenView = "products" | "working" | "account" | "receipt";
+export type ScreenView = "products" | "working" | "account";
 
 export type ScreenCopy = { main: string; sub: string };
 
@@ -51,7 +51,6 @@ export const ROLE_LINE: Record<AccessRole, string> = {
 export function viewFor(state: MachineState): ScreenView {
   if (state.authStep === "leaving") return "working";
   if (state.authStep === "account") return "account";
-  if (state.receipt !== null) return "receipt";
   return "products";
 }
 
@@ -210,7 +209,7 @@ export function litKeys(
   const view = viewFor(state);
   if (view === "working") return new Set();
   if (view === "account") return new Set(["CLR"]);
-  if (view === "receipt") return new Set();
+  if (state.receipt !== null) return new Set();
   if (state.busy) return new Set();
   const lit = new Set(state.catalog.map((bay) => bay.code));
   const pending = state.status === "selected";

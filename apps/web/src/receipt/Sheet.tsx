@@ -24,7 +24,7 @@ const SHADOW =
   "absolute inset-x-0 top-[calc(4*var(--k))] bottom-0 rounded-[2px] shadow-[calc(10*var(--k))_calc(16*var(--k))_calc(24*var(--k))_rgb(0_0_0/55%)] pointer-events-none print:hidden";
 
 const PAPER =
-  "receipt relative pt-[26px] before:absolute before:inset-x-0 before:top-0 before:h-[calc(6*var(--k))] before:bg-[linear-gradient(180deg,rgb(0_0_0/38%),transparent)] before:pointer-events-none print:before:hidden px-[clamp(14px,6%,28px)] pb-[46px] bg-pw-paper bg-[repeating-linear-gradient(180deg,rgb(0_0_0/1.6%)_0_1px,transparent_1px_4px),linear-gradient(90deg,rgb(0_0_0/5%),transparent_5%,transparent_95%,rgb(0_0_0/5%))] text-pw-paper-ink font-pw-serif text-[1.0625rem] leading-[1.6] receipt-edge origin-top group-data-[stage=slot]/sheet:invisible group-data-[stage=feed]/sheet:animate-[receipt-feed_540ms_steps(24,end)_1_both] group-data-[stage=rip]/sheet:receipt-torn group-data-[stage=hand]/sheet:receipt-torn group-data-[stage=crumple]/sheet:receipt-torn [&_h1]:m-0 [&_h1]:font-pw-mono [&_h1]:text-[clamp(1.375rem,4vw,1.75rem)] [&_h1]:font-extrabold [&_h1]:tracking-[0.08em] [&_h1]:leading-[1.15] [&_h1]:uppercase [&_h2]:mt-0 [&_h2]:mb-[8px] [&_h2]:font-pw-mono [&_h2]:text-rem-small [&_h2]:font-extrabold [&_h2]:tracking-[0.1em] [&_h2]:uppercase [&_section]:mt-[26px] [&_p]:m-0 [&_p]:mb-[10px] [&_ul]:m-0 [&_ul]:mb-[10px] [&_ul]:pl-[1.2em] [&_li]:mb-[6px] marker:text-pw-paper-dim marker:content-['–_'] [&_a:not(.pw-button)]:text-pw-cobalt-lo [&_a:not(.pw-button)]:decoration-1 [&_a:not(.pw-button)]:underline-offset-[3px] [&_a:not(.pw-button)]:[overflow-wrap:anywhere] [&_code]:px-[4px] [&_code]:py-[1px] [&_code]:rounded-[3px] [&_code]:bg-[rgb(0_0_0/6%)] [&_code]:font-pw-mono [&_code]:text-[0.85em] [&_code]:[overflow-wrap:anywhere] max-desk:text-[1rem] print:pt-0 print:[mask:none] print:animate-none";
+  "receipt relative outline-none pt-[26px] before:absolute before:inset-x-0 before:top-0 before:h-[calc(6*var(--k))] before:bg-[linear-gradient(180deg,rgb(0_0_0/38%),transparent)] before:pointer-events-none print:before:hidden px-[clamp(14px,6%,28px)] pb-[46px] bg-pw-paper bg-[repeating-linear-gradient(180deg,rgb(0_0_0/1.6%)_0_1px,transparent_1px_4px),linear-gradient(90deg,rgb(0_0_0/5%),transparent_5%,transparent_95%,rgb(0_0_0/5%))] text-pw-paper-ink font-pw-serif text-[1.0625rem] leading-[1.6] receipt-edge origin-top group-data-[stage=slot]/sheet:invisible group-data-[stage=feed]/sheet:animate-[receipt-feed_540ms_steps(24,end)_1_both] group-data-[stage=rip]/sheet:receipt-torn group-data-[stage=hand]/sheet:receipt-torn group-data-[stage=crumple]/sheet:receipt-torn [&_h1]:m-0 [&_h1]:font-pw-mono [&_h1]:text-[clamp(1.375rem,4vw,1.75rem)] [&_h1]:font-extrabold [&_h1]:tracking-[0.08em] [&_h1]:leading-[1.15] [&_h1]:uppercase [&_h2]:mt-0 [&_h2]:mb-[8px] [&_h2]:font-pw-mono [&_h2]:text-rem-small [&_h2]:font-extrabold [&_h2]:tracking-[0.1em] [&_h2]:uppercase [&_section]:mt-[26px] [&_p]:m-0 [&_p]:mb-[10px] [&_ul]:m-0 [&_ul]:mb-[10px] [&_ul]:pl-[1.2em] [&_li]:mb-[6px] marker:text-pw-paper-dim marker:content-['–_'] [&_a:not(.pw-button)]:text-pw-cobalt-lo [&_a:not(.pw-button)]:decoration-1 [&_a:not(.pw-button)]:underline-offset-[3px] [&_a:not(.pw-button)]:[overflow-wrap:anywhere] [&_code]:px-[4px] [&_code]:py-[1px] [&_code]:rounded-[3px] [&_code]:bg-[rgb(0_0_0/6%)] [&_code]:font-pw-mono [&_code]:text-[0.85em] [&_code]:[overflow-wrap:anywhere] max-desk:text-[1rem] print:pt-0 print:[mask:none] print:animate-none";
 
 const CREASES =
   "absolute inset-x-(--g) top-[52px] bottom-0 opacity-0 pointer-events-none [transition:opacity_200ms_linear] group-data-[stage=crumple]/sheet:opacity-100 print:hidden";
@@ -48,7 +48,7 @@ export function Sheet(props: {
   as: "main" | "div";
   labelledBy: string;
   sheetRef: Ref<HTMLDivElement>;
-  frameRef: Ref<HTMLDivElement>;
+  paperRef: Ref<HTMLElement>;
   onCrumple: () => void;
   children: ReactNode;
 }): ReactNode {
@@ -77,7 +77,6 @@ export function Sheet(props: {
           </button>
         </div>
         <div
-          ref={props.frameRef}
           className={FRAME}
           data-receipt-frame
           tabIndex={0}
@@ -85,7 +84,12 @@ export function Sheet(props: {
         >
           <div className={INNER} data-receipt-inner>
             <div className={SHADOW} aria-hidden="true" />
-            <article className={PAPER} data-receipt>
+            <article
+              ref={props.paperRef}
+              className={PAPER}
+              data-receipt
+              tabIndex={-1}
+            >
               {props.children}
             </article>
           </div>

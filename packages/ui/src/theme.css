@@ -266,14 +266,14 @@
   @media (max-width: 899px) {
     :root {
       --mw: 370;
-      --mh: 896;
+      --mh: 805;
       --margin: 10px;
       --screen-x: 9;
-      --screen-y: 63;
+      --screen-y: 57;
       --screen-w: 352;
-      --screen-h: 678;
-      --slot-cx: 83;
-      --slot-cy: 701;
+      --screen-h: 691;
+      --slot-cx: 90;
+      --slot-cy: 598.5;
       --slot-w: 110;
       --printer-s: min(
         3.6,

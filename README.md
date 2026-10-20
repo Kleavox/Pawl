@@ -222,7 +222,9 @@ no pass card.
 
 The machine is sized in one unit, `--u`, taken from the viewport, so it fits a
 laptop or a phone without scrolling and scales as one object; what the screen
-says never resizes it. A guest who presses a locked tile sees it refused, then
+says never resizes it. On a phone (below 900 px) the controls and the delivery
+bay share one steel door under the glass: the lights across its top, the LCD,
+the receipt slot and the bay on the left, the keypad on the right. A guest who presses a locked tile sees it refused, then
 the camera dollies into `paw.`'s sign-in, and that bay is released once they
 are back.
 
