@@ -90,3 +90,39 @@ test("security.txt names the contact on both hosts", async ({ request }) => {
     );
   }
 });
+
+test("every page of Pawl's own names a fresh nonce for the edge's scripts, and breaks no rule of its own", async ({
+  page,
+  request,
+}) => {
+  const nonceOf = (policy: string | undefined) =>
+    /'nonce-([A-Za-z0-9+/]+=*)'/.exec(policy ?? "")?.[1];
+  for (const url of [
+    `${GATEWAY}/`,
+    `${GATEWAY}/privacy.html`,
+    `${GATEWAY}/no/such/bay`,
+    `${PASS}/`,
+  ]) {
+    const asked = { headers: { accept: "text/html" } };
+    const first = (await request.get(url, asked)).headers()[
+      "content-security-policy"
+    ];
+    const second = (await request.get(url, asked)).headers()[
+      "content-security-policy"
+    ];
+    expect(nonceOf(first), url).toBeDefined();
+    expect(nonceOf(first), url).not.toBe(nonceOf(second));
+    expect(first, url).toMatch(/script-src [^;]*'self'/);
+    const refused: string[] = [];
+    const listen = (message: { type: () => string; text: () => string }) => {
+      if (/Content Security Policy/i.test(message.text())) {
+        refused.push(message.text());
+      }
+    };
+    page.on("console", listen);
+    await page.goto(url);
+    await page.waitForLoadState("networkidle");
+    page.off("console", listen);
+    expect(refused, url).toEqual([]);
+  }
+});

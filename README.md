@@ -298,8 +298,9 @@ redirect URIs, and no dynamic registration.
 Every response carries `X-Clacks-Overhead: GNU Terry Pratchett`. Pawl's own
 answers, on both hosts, also carry `Strict-Transport-Security` (no
 `includeSubDomains`), `X-Content-Type-Options`, `Referrer-Policy: same-origin`,
-`X-Frame-Options: DENY` and a `Permissions-Policy`; an app's answer behind the
-gateway keeps exactly the headers the app sent. Pawl's pages keep the edge's
+`X-Frame-Options: DENY` and a `Permissions-Policy`, and every page's CSP names a
+fresh nonce, which Cloudflare puts on the bot-detection script it injects; an
+app's answer behind the gateway keeps exactly the headers the app sent. Pawl's pages keep the edge's
 compression, so they do not say `no-transform`: Cloudflare's Web Analytics
 automatic setup belongs switched off in the dashboard (the CSP blocks its script
 either way, and the Privacy receipt promises no analytics).

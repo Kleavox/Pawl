@@ -148,6 +148,17 @@ describe("connecting an outside app from the cabinet", () => {
     expect(html).not.toContain('name="request"');
   });
 
+  it("guards its consent page with a CSP whose form reaches only Pawl and the cabinet", async () => {
+    const response = await app.request(
+      connectUrl(),
+      { headers: { cookie: await cookie() } },
+      env,
+    );
+    expect(response.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self' https://product.test; frame-ancestors 'none'",
+    );
+  });
+
   it("records the grant with the app's own subject on Allow and goes back to the cabinet", async () => {
     const response = await decide("allow", {
       cookie: await cookie(),

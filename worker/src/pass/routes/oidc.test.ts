@@ -420,6 +420,13 @@ describe("consent", () => {
     expect(body).not.toContain("code=");
   });
 
+  it("guards the page with a CSP whose form reaches only Pawl and the app's registered callback", async () => {
+    const response = await signedInAuthorize("docs-access");
+    expect(response.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self' https://team.cloudflareaccess.com; frame-ancestors 'none'",
+    );
+  });
+
   it("asks on the machine's screen, with one Allow, one Deny, and the keypad answering too", async () => {
     const body = await (await signedInAuthorize("docs-access")).text();
     expect(body).toContain("NOTHING SHARED YET");

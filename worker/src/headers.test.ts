@@ -34,6 +34,17 @@ function app(skip?: (path: string) => boolean) {
         },
       }),
   );
+  served.get(
+    "/hashed",
+    () =>
+      new Response("<p>hashed</p>", {
+        headers: {
+          "content-type": "text/html",
+          "content-security-policy":
+            "default-src 'self'; script-src 'self' 'sha256-abc'; connect-src 'self' https://paw.example.test",
+        },
+      }),
+  );
   served.get("/json", (context) => context.json({ ok: true }));
   served.get("/moved", (context) => context.redirect("/page", 302));
   served.get("/same", () => new Response(null, { status: 304 }));
@@ -68,8 +79,28 @@ describe("Pawl's own answers", () => {
     expect(response.headers.get("cache-control")).toBe(
       "public, max-age=0, must-revalidate",
     );
-    expect(response.headers.get("content-security-policy")).toBeNull();
     expect(await response.text()).toBe("<p>page</p>");
+  });
+
+  it("give a page without a policy none, so a consent form may still redirect to its app", async () => {
+    const response = await app().request("/page");
+    expect(response.headers.get("content-security-policy")).toBeNull();
+  });
+
+  it("add a fresh nonce to a page's own script list, keeping its hashes and its connections", async () => {
+    const first = (await app().request("/hashed")).headers.get(
+      "content-security-policy",
+    )!;
+    const second = (await app().request("/hashed")).headers.get(
+      "content-security-policy",
+    )!;
+    const nonce = (policy: string) =>
+      /'nonce-([A-Za-z0-9+/]{22}==)'/u.exec(policy)?.[1];
+    expect(nonce(first)).toBeDefined();
+    expect(nonce(first)).not.toBe(nonce(second));
+    expect(first.replace(/'nonce-[^']+'/u, "'nonce-N'")).toBe(
+      "default-src 'self'; script-src 'self' 'sha256-abc' 'nonce-N'; connect-src 'self' https://paw.example.test",
+    );
   });
 
   it("add no caching rule to a page that named none", async () => {
@@ -77,13 +108,17 @@ describe("Pawl's own answers", () => {
     expect(response.headers.get("cache-control")).toBeNull();
   });
 
-  it("keep a page's own policy", async () => {
+  it("keep a page's own policy, opening it only to its own scripts and a nonce", async () => {
     const response = await app().request("/kept");
     expect(response.headers.get("cache-control")).toBe(
       "no-store, no-transform",
     );
-    expect(response.headers.get("content-security-policy")).toBe(
-      "default-src 'none'",
+    expect(
+      response.headers
+        .get("content-security-policy")!
+        .replace(/'nonce-[^']+'/u, "'nonce-N'"),
+    ).toBe(
+      "default-src 'none'; script-src 'self' 'nonce-N'; connect-src 'self'",
     );
   });
 
@@ -91,6 +126,7 @@ describe("Pawl's own answers", () => {
     const response = await app().request("/json");
     expect(safe(response)).toEqual(SAFE);
     expect(response.headers.get("cache-control")).toBeNull();
+    expect(response.headers.get("content-security-policy")).toBeNull();
     expect(await response.json()).toEqual({ ok: true });
   });
 
@@ -110,6 +146,7 @@ describe("Pawl's own answers", () => {
       Object.fromEntries(Object.keys(SAFE).map((name) => [name, null])),
     );
     expect(response.headers.get("cache-control")).toBeNull();
+    expect(response.headers.get("content-security-policy")).toBeNull();
     expect(response.headers.get("x-app")).toBe("1");
   });
 });

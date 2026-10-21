@@ -202,6 +202,16 @@ function cabinetOrigin(requestUrl: string, env: Env): string {
     : `https://${env.ROOT_DOMAIN}`;
 }
 
+function consentPolicy(destination: string): Record<string, string> {
+  const target = new URL(destination);
+  const source = ["http:", "https:"].includes(target.protocol)
+    ? target.origin
+    : target.protocol;
+  return {
+    "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self' ${source}; frame-ancestors 'none'`,
+  };
+}
+
 function consentPage(
   request: AuthorizeRequest,
   identity: Identity,
@@ -605,6 +615,8 @@ export function registerOidcRoutes(app: PassApp): void {
           cabinetOrigin(context.req.url, context.env),
           registryFor(context.env.ESTATE_MANIFEST ?? EMPTY_MANIFEST).siteName(),
         ),
+        200,
+        consentPolicy(request.redirectUri),
       );
     }
     return redirectWithCode(context, request, userId, session.sessionId);
@@ -687,6 +699,8 @@ export function registerOidcRoutes(app: PassApp): void {
         cabinetOrigin(context.req.url, context.env),
         registryFor(context.env.ESTATE_MANIFEST ?? EMPTY_MANIFEST).siteName(),
       ),
+      200,
+      consentPolicy(back),
     );
   });
 
