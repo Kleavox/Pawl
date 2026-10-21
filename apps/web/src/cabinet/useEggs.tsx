@@ -30,17 +30,11 @@ const NOT_STEEL =
 
 const TYPING = "input, textarea, select, [contenteditable]";
 
-const LUCKY_NOTICE: Notice = { sub: "LUCKY 7777, ONE MORE ON US" };
-
-const ROCK_NOTICE: Notice = {
-  main: "NEVER ROCK OR TILT",
-  sub: "IT IS FREE ANYWAY",
-};
-
-const KONAMI_NOTICE: Notice = {
-  main: "+30 LIVES",
-  sub: "NOT THAT YOU NEED THEM",
-};
+export const NOTICES = {
+  lucky: { main: "LUCKY 7777", sub: "ONE MORE ON US" },
+  rock: { main: "NEVER ROCK IT", sub: "IT IS FREE ANYWAY" },
+  konami: { main: "+30 LIVES", sub: "NOBODY LOSES HERE" },
+} as const satisfies Record<string, Notice>;
 
 export function useEggs(input: {
   machine: RefObject<HTMLDivElement | null>;
@@ -83,7 +77,7 @@ export function useEggs(input: {
   );
 
   const lucky = useCallback(
-    (): void => say(LUCKY_NOTICE, LUCKY_HOLD_MS),
+    (): void => say(NOTICES.lucky, LUCKY_HOLD_MS),
     [say],
   );
 
@@ -106,7 +100,7 @@ export function useEggs(input: {
       taps = [];
       setRocking(true);
       later(ROCK_MS, () => setRocking(false));
-      say(ROCK_NOTICE, ROCK_HOLD_MS);
+      say(NOTICES.rock, ROCK_HOLD_MS);
     };
     node.addEventListener("click", click);
     return () => node.removeEventListener("click", click);
@@ -125,7 +119,7 @@ export function useEggs(input: {
       if (!next.done) return;
       setCredit("  30");
       later(KONAMI_HOLD_MS, () => setCredit(undefined));
-      say(KONAMI_NOTICE, KONAMI_HOLD_MS);
+      say(NOTICES.konami, KONAMI_HOLD_MS);
     };
     document.addEventListener("keydown", listen);
     return () => document.removeEventListener("keydown", listen);

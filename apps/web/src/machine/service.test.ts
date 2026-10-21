@@ -1,4 +1,7 @@
+import { LCD_FIT } from "@pawl/ui";
 import { describe, expect, it } from "vitest";
+
+import { FAULT } from "./copy";
 
 import {
   SECRET_GAP_MS,
@@ -78,12 +81,13 @@ describe("the service menu", () => {
       main: "SERVICE 1 ERROR",
       sub: "NONE",
     });
-    expect(
-      serviceCopy(1, { fault: "RELEASE FAILED, TRY AGAIN", vends: 0 }),
-    ).toEqual({ main: "SERVICE 1 ERROR", sub: "RELEASE FAILED, TRY AGAIN" });
+    expect(serviceCopy(1, { fault: "RELEASE FAILED", vends: 0 })).toEqual({
+      main: "SERVICE 1 ERROR",
+      sub: "RELEASE FAILED",
+    });
     expect(serviceCopy(2, facts)).toEqual({
       main: "SERVICE 2 SALE",
-      sub: "2 VENDED THIS PAGE",
+      sub: "2 SOLD THIS PAGE",
     });
     expect(serviceCopy(3, facts)).toEqual({
       main: "SERVICE 3 CASH",
@@ -91,7 +95,7 @@ describe("the service menu", () => {
     });
     expect(serviceCopy(4, facts)).toEqual({
       main: "SERVICE 4 TEST",
-      sub: "GO RUNS THE LAMP TEST",
+      sub: "GO RUNS LAMP TEST",
     });
     expect(serviceCopy(5, facts)).toEqual({
       main: "SERVICE 5 AUDIT",
@@ -107,5 +111,19 @@ describe("the service menu", () => {
       "SEr4",
       "SEr5",
     ]);
+  });
+});
+
+describe("the service menu on the LCD", () => {
+  it("fits every item on one line of the LCD, the longest fault and count included", () => {
+    const longest = Object.values(FAULT).reduce(
+      (most, fault) => (fault.main.length > most.length ? fault.main : most),
+      "",
+    );
+    for (const item of [1, 2, 3, 4, 5]) {
+      const copy = serviceCopy(item, { fault: longest, vends: 9999 });
+      expect(copy.main.length, copy.main).toBeLessThanOrEqual(LCD_FIT.main);
+      expect(copy.sub.length, copy.sub).toBeLessThanOrEqual(LCD_FIT.sub);
+    }
   });
 });

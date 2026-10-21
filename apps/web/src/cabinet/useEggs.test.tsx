@@ -1,9 +1,10 @@
+import { LCD_FIT } from "@pawl/ui";
 import { act, fireEvent, render } from "@testing-library/react";
 import { useRef, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { KONAMI, LUCKY_HOLD_MS, ROCK_HOLD_MS, ROCK_MS, ROLL_MS } from "./eggs";
-import { LuckyCredit, useEggs } from "./useEggs";
+import { LuckyCredit, NOTICES, useEggs } from "./useEggs";
 
 type Scene = {
   tray: string | null;
@@ -97,7 +98,7 @@ describe("the lucky number", () => {
     act(() => void vi.advanceTimersByTime(ROLL_MS));
     expect(seen.text()).toBe("7777");
     expect(seen.credit()).toHaveAttribute("data-credit-blink");
-    expect(seen.notice()).toBe("|LUCKY 7777, ONE MORE ON US");
+    expect(seen.notice()).toBe("LUCKY 7777|ONE MORE ON US");
     act(() => void vi.advanceTimersByTime(LUCKY_HOLD_MS));
     expect(seen.notice()).toBe("");
   });
@@ -158,7 +159,7 @@ describe("the lucky number", () => {
     const seen = scene({ random: () => 0 });
     seen.to({ tray: "7" });
     act(() => void vi.advanceTimersByTime(ROLL_MS));
-    expect(seen.notice()).toBe("|LUCKY 7777, ONE MORE ON US");
+    expect(seen.notice()).toBe("LUCKY 7777|ONE MORE ON US");
     seen.to({ tray: "7", paperOut: true });
     seen.to({ tray: "7", paperOut: false });
     expect(seen.notice()).toBe("");
@@ -171,7 +172,7 @@ describe("rocking the machine", () => {
     const steel = seen.container.querySelector("[data-steel]")!;
     for (let tap = 0; tap < 5; tap += 1) fireEvent.click(steel);
     expect(seen.machine()).toHaveAttribute("data-rocking");
-    expect(seen.notice()).toBe("NEVER ROCK OR TILT|IT IS FREE ANYWAY");
+    expect(seen.notice()).toBe("NEVER ROCK IT|IT IS FREE ANYWAY");
     act(() => void vi.advanceTimersByTime(ROCK_MS));
     expect(seen.machine()).not.toHaveAttribute("data-rocking");
     act(() => void vi.advanceTimersByTime(ROCK_HOLD_MS - ROCK_MS));
@@ -218,7 +219,7 @@ describe("the Konami code", () => {
     }
     expect(prevented).toBe(false);
     expect(seen.text()).toBe("  30");
-    expect(seen.notice()).toBe("+30 LIVES|NOT THAT YOU NEED THEM");
+    expect(seen.notice()).toBe("+30 LIVES|NOBODY LOSES HERE");
     act(() => void vi.advanceTimersByTime(3000));
     expect(seen.text()).toBe("FrEE");
     expect(seen.notice()).toBe("");
@@ -236,5 +237,14 @@ describe("the Konami code", () => {
     for (const key of KONAMI) act(() => void press(document.body, key));
     expect(seen.notice()).toBe("");
     expect(seen.text()).toBe("FrEE");
+  });
+});
+
+describe("what the eggs say", () => {
+  it("fits one line of the LCD each", () => {
+    for (const notice of Object.values(NOTICES)) {
+      expect(notice.main.length, notice.main).toBeLessThanOrEqual(LCD_FIT.main);
+      expect(notice.sub.length, notice.sub).toBeLessThanOrEqual(LCD_FIT.sub);
+    }
   });
 });

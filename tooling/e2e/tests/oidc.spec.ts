@@ -91,9 +91,7 @@ test("a person connects a third-party app, finds it in their account, and discon
   await page.goto(`${CABINET}/`);
   const cabinet = await partSizes(page);
   await page.goto(`${THIRD_PARTY}/login`);
-  await expect(page.locator("[data-screen]")).toHaveText(
-    "AN APP WANTS YOUR PASS",
-  );
+  await expect(page.locator("[data-screen]")).toHaveText("CONSENT");
   expect(
     await partSizes(page),
     "the consent page draws the same machine as the cabinet",

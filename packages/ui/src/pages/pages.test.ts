@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MACHINE_PARTS } from "../machine/parts";
+import { LCD_FIT, MACHINE_PARTS } from "../machine/parts";
 import { PAGE_CSS } from "../page-css";
 import { errorCodeCopy, renderConsentPage, renderErrorPage } from "./index";
 
@@ -18,7 +18,7 @@ describe("errorCodeCopy", () => {
   it("returns generic, app-agnostic copy per known status", () => {
     expect(errorCodeCopy("403")).toEqual({
       title: "Access denied",
-      message: "You don't have permission to view this page.",
+      message: "You do not have permission to view this page.",
     });
     expect(errorCodeCopy("404").title).toBe("Page not found");
     expect(errorCodeCopy("503").title).toBe("Service unavailable");
@@ -82,7 +82,7 @@ describe("renderErrorPage", () => {
 
   it("captions GO in words short enough for the keypad's lamp row", () => {
     expect(renderErrorPage({ code: "404" })).toMatch(
-      /id="keys-caption">GO · TO THE MACHINE<\/p>/,
+      /id="keys-caption">GO to the machine<\/p>/,
     );
   });
 
@@ -96,8 +96,33 @@ describe("renderErrorPage", () => {
     expect(bar("403")).toBe("FAULT 403");
   });
 
+  it("writes every LCD line on one line of the LCD, and the same word on the bar", () => {
+    const line = (html: string, mark: string) =>
+      new RegExp(`${mark}[^>]*>([^<]*)<`).exec(html)?.[1] ?? "";
+    for (const code of [
+      "400",
+      "401",
+      "403",
+      "404",
+      "410",
+      "429",
+      "500",
+      "503",
+    ]) {
+      const html = renderErrorPage({ code });
+      const main = line(html, "data-screen");
+      expect(main.length, main).toBeLessThanOrEqual(LCD_FIT.main);
+      expect(line(html, "data-screen-sub").length).toBeLessThanOrEqual(
+        LCD_FIT.sub,
+      );
+      expect(line(html, "data-page-bar[^>]*><span")).toBe(main);
+    }
+  });
+
   it("says an empty bay for a 404 and hangs an out-of-order card for a 5xx", () => {
-    expect(renderErrorPage({ code: "404" })).toContain("NOTHING IN THIS BAY");
+    expect(renderErrorPage({ code: "404" })).toMatch(
+      /data-screen[^>]*>EMPTY BAY</,
+    );
     expect(renderErrorPage({ code: "404" })).not.toContain("bezel__sign");
     const broken = renderErrorPage({ code: "500" });
     expect(broken).toContain("bezel__sign");
@@ -147,7 +172,7 @@ describe("renderConsentPage", () => {
     expect(html).toContain("ana_01");
     expect(html).toContain("<li");
     expect(html).toContain("Your username");
-    expect(html).toMatch(/data-screen[^>]*>AN APP WANTS YOUR PASS</);
+    expect(html).toMatch(/data-screen[^>]*>CONSENT</);
     expect(html).toMatch(/data-screen-sub[^>]*>NOTHING SHARED YET</);
   });
 
@@ -180,6 +205,6 @@ describe("renderConsentPage", () => {
         expect(button, label).toContain('aria-describedby="keys-caption"');
       }
     }
-    expect(html).toMatch(/id="keys-caption">CLR DENY · GO ALLOW<\/p>/);
+    expect(html).toMatch(/id="keys-caption">CLR deny · GO allow<\/p>/);
   });
 });

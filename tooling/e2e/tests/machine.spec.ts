@@ -228,7 +228,9 @@ test("pressing a bay twice still leaves the product in the tray", async ({
     page.locator("[data-tray]"),
     "a second release timer would have copied an empty selection over the tray",
   ).toHaveAttribute("data-tray", "7");
-  await expect(page.locator("[data-screen]")).toContainText("DELIVERED");
+  await expect(page.locator("[data-screen-sub]")).toHaveText(
+    "PRESS TAKE DELIVERY",
+  );
 });
 
 test("every key looks alike and presses, even one with nothing to do", async ({
@@ -1122,7 +1124,9 @@ test("a guest can take MANUAL without a pass", async ({ page }) => {
   await page.goto("/");
   await page.locator("[data-cartridge='7']").click();
   await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
-  await expect(page.locator("[data-screen]")).toContainText("DELIVERED");
+  await expect(page.locator("[data-screen-sub]")).toHaveText(
+    "PRESS TAKE DELIVERY",
+  );
 });
 
 test("number entry and GO reach the same place as tapping", async ({
@@ -1130,7 +1134,10 @@ test("number entry and GO reach the same place as tapping", async ({
 }) => {
   await page.goto("/");
   await page.keyboard.press("Digit7");
-  await expect(page.locator("[data-screen]")).toContainText("7 SELECTED");
+  await expect(page.locator("[data-screen]")).toHaveText("07 MANUAL");
+  await expect(page.locator("[data-screen-sub]")).toHaveText(
+    "PRESS GO TO TAKE",
+  );
   await page.keyboard.press("Enter");
   await expect(page.locator("[data-tray]")).toHaveAttribute("data-tray", "7");
 });
@@ -1219,7 +1226,7 @@ test.describe("with a real pass in the machine", () => {
     });
     await signedIn.reload();
     await expect(signedIn.locator("[data-screen]")).toContainText(
-      "SESSION UNREADABLE",
+      "PASS UNREADABLE",
     );
 
     await signedIn.locator("[data-key='GO']").click();
@@ -1323,13 +1330,16 @@ test.describe("with a real pass in the machine", () => {
     );
 
     await signedIn.locator("[data-key='GO']").click();
-    await expect(screen).toHaveText("ESTATE STILL UNREADABLE");
+    await expect(screen).toHaveText("ESTATE UNREADABLE");
+    await expect(signedIn.locator("[data-screen-sub]")).toHaveText(
+      "STILL. GO RETRIES",
+    );
 
     failing = false;
     await signedIn.locator("[data-key='GO']").click();
     await expect(screen).not.toContainText("UNREADABLE", { timeout: 20_000 });
     await expect(signedIn.locator("[data-screen-sub]")).toHaveText(
-      "SELECT A BAY",
+      "PICK A BAY",
     );
     await signedIn.unroute("**/api/estate");
   });
@@ -1345,7 +1355,7 @@ test.describe("with a real pass in the machine", () => {
     });
     await signedIn.goto(GATEWAY);
     await expect(signedIn.locator("[data-screen]")).toHaveText(
-      "SESSION UNREADABLE",
+      "PASS UNREADABLE",
     );
     await expect(signedIn.locator("[data-cabinet-state]")).toHaveText(
       "GUEST MODE",
@@ -1425,7 +1435,7 @@ test.describe("with a real pass in the machine", () => {
       "screen",
     );
     await expect(signedIn.locator("[data-screen-sub]")).toHaveText(
-      /^PROBEMACHINE\d* · OWNER PASS$/,
+      "OWNER PASS",
     );
     await expect(
       signedIn.getByRole("heading", { name: /^probemachine\d*$/ }),
@@ -1484,9 +1494,11 @@ test("a fault holds the screen until the next touch, then the estate line comes 
   await page.locator("[data-tray-action]").click();
   await paperInHand(page);
 
-  await expect(page.locator("[data-screen]")).toHaveText(
-    "OPEN FAILED, RELEASE IT AGAIN",
-    { timeout: 15_000 },
+  await expect(page.locator("[data-screen]")).toHaveText("OPEN FAILED", {
+    timeout: 15_000,
+  });
+  await expect(page.locator("[data-screen-sub]")).toHaveText(
+    "RELEASE IT AGAIN",
   );
   await expect(page.locator("dialog[data-delivery]")).not.toHaveAttribute(
     "open",

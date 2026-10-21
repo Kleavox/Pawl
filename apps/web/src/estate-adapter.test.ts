@@ -38,7 +38,7 @@ describe("machine model", () => {
       CATALOG,
       KEYS,
     );
-    expect(model.screen).toBe("2 NEED ATTENTION");
+    expect(model.screen).toBe("2 NEED YOU");
   });
 
   it("says nothing needs you when the estate is clear and fully known", () => {
@@ -114,7 +114,7 @@ describe("a definite count is never printed over an estate that is only partly r
       { kind: "b" },
     ]);
     expect(toMachineModel(ADMIN, partial, CATALOG, KEYS).screen).toBe(
-      "AT LEAST 2 NEED ATTENTION",
+      "2+ NEED YOU",
     );
   });
 
@@ -122,7 +122,7 @@ describe("a definite count is never printed over an estate that is only partly r
     expect(
       toMachineModel(ADMIN, estate(READ, [{ kind: "a" }]), CATALOG, KEYS)
         .screen,
-    ).toBe("1 NEED ATTENTION");
+    ).toBe("1 NEEDS YOU");
   });
 });
 

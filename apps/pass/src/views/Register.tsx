@@ -1,6 +1,6 @@
 import { ApiError, errorMessage } from "@pawl/core";
 import { createAccountCredential } from "@pawl/crypto";
-import { Back, Field, Form, Kbd, Note, PW_LINK, Title } from "@pawl/ui";
+import { Field, Form, Kbd, Note, PW_LINK, Title } from "@pawl/ui";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { api } from "../helpers";
@@ -26,19 +26,11 @@ export function RegisterStep(): ReactNode {
   return (
     <Frame
       name="register"
-      where="CREATE ACCOUNT"
-      step="STEP 1 OF 2"
       labelledBy="register-title"
       foot={
         <>
           <Kbd go>GO</Kbd> next · <Kbd>CLR</Kbd> back
         </>
-      }
-      back={
-        <Back
-          label="Other ways to sign in"
-          onClick={() => pass.dispatch({ type: "back" })}
-        />
       }
     >
       <Title id="register-title">Create your account</Title>
@@ -70,7 +62,7 @@ export function RegisterStep(): ReactNode {
         />
       </Form>
       <Note tone="line" aside>
-        3-20 lowercase letters, digits, or underscores. Already registered?{" "}
+        3–20 lowercase letters, digits, or underscores. Already registered?{" "}
         <button
           className={PW_LINK}
           type="button"
@@ -129,19 +121,11 @@ export function RegisterKeyStep(): ReactNode {
   return (
     <Frame
       name="register-key"
-      where="CREATE ACCOUNT"
-      step="STEP 2 OF 2"
       labelledBy="register-key-title"
       foot={
         <>
           <Kbd go>GO</Kbd> create · <Kbd>CLR</Kbd> back
         </>
-      }
-      back={
-        <Back
-          label="Change the username or email"
-          onClick={() => pass.dispatch({ type: "back" })}
-        />
       }
     >
       <Title id="register-key-title">Choose a password</Title>
@@ -188,19 +172,11 @@ export function SentStep(): ReactNode {
   return (
     <Frame
       name="sent"
-      where="CHECK YOUR INBOX"
-      step="SENT"
       labelledBy="sent-title"
       foot={
         <>
-          <Kbd>CLR</Kbd> back to sign in
+          <Kbd>CLR</Kbd> back
         </>
-      }
-      back={
-        <Back
-          label="Back to sign in"
-          onClick={() => pass.dispatch({ type: "back" })}
-        />
       }
     >
       <Title id="sent-title">Look in your inbox</Title>

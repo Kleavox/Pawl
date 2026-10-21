@@ -204,9 +204,12 @@ function cabinetOrigin(requestUrl: string, env: Env): string {
 
 function consentPolicy(destination: string): Record<string, string> {
   const target = new URL(destination);
-  const source = ["http:", "https:"].includes(target.protocol)
-    ? target.origin
-    : target.protocol;
+  const source =
+    target.protocol === "https:"
+      ? "https:"
+      : target.protocol === "http:"
+        ? target.origin
+        : target.protocol;
   return {
     "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self' ${source}; frame-ancestors 'none'`,
   };

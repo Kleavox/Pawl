@@ -1,12 +1,18 @@
+import { LCD_FIT } from "@pawl/ui";
 import { describe, expect, it } from "vitest";
 
 import {
   BACK,
+  backLabel,
+  CODE_LENGTH,
   initialFlow,
   methodChoices,
   pageOf,
   passKeys,
   reduceFlow,
+  SCREEN_NAME,
+  SCREEN_SUB,
+  stepOf,
   type PassView,
 } from "./flow";
 
@@ -321,5 +327,52 @@ describe("a pass that ended", () => {
     s = reduceFlow(s, { type: "signed-out" });
     s = reduceFlow(s, { type: "signed-in", needsUsername: false });
     expect(s.view).toBe("account");
+  });
+});
+
+describe("one way of naming a screen", () => {
+  it("fits every name and second line on one line of the LCD", () => {
+    const mains = [
+      ...Object.values(SCREEN_NAME),
+      `EMAIL CODE ${CODE_LENGTH}/${CODE_LENGTH}`,
+      "CODE REJECTED",
+    ];
+    const subs = [
+      ...Object.values(SCREEN_SUB),
+      "VISITOR PASS",
+      "OWNER PASS",
+      "10 TRIES LEFT",
+    ];
+    for (const main of mains) {
+      expect(main.length, main).toBeLessThanOrEqual(LCD_FIT.main);
+    }
+    for (const sub of subs) {
+      expect(sub.length, sub).toBeLessThanOrEqual(LCD_FIT.sub);
+    }
+  });
+
+  it("tags a screen with its place in a series, and the account's sections out of their real count", () => {
+    expect(stepOf("email", false)).toBe("1 OF 2");
+    expect(stepOf("code", false)).toBe("2 OF 2");
+    expect(stepOf("register-key", false)).toBe("2 OF 2");
+    expect(stepOf("registry-return", true)).toBe("3 OF 3");
+    expect(stepOf("security", false)).toBe("4 OF 4");
+    expect(stepOf("security", true)).toBe("4 OF 5");
+    expect(stepOf("registry", true)).toBe("5 OF 5");
+    for (const alone of ["methods", "password", "forgot", "sent", "delete"]) {
+      expect(stepOf(alone as PassView, true)).toBeNull();
+    }
+  });
+
+  it("names the screen a step back goes to", () => {
+    expect(backLabel("email")).toBe("Sign-in options");
+    expect(backLabel("code")).toBe("Email");
+    expect(backLabel("forgot")).toBe("Password");
+    expect(backLabel("register-key")).toBe("Name and email");
+    expect(backLabel("devices")).toBe("Account");
+    expect(backLabel("delete")).toBe("Security");
+    expect(backLabel("registry-return")).toBe("On the cabinet");
+    expect(backLabel("methods")).toBeNull();
+    expect(backLabel("account")).toBeNull();
   });
 });

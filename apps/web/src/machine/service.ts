@@ -26,9 +26,9 @@ const SAYS: Record<
   (facts: { fault: string | null; vends: number }) => string
 > = {
   1: (facts) => facts.fault ?? "NONE",
-  2: (facts) => `${facts.vends} VENDED THIS PAGE`,
+  2: (facts) => `${facts.vends} SOLD THIS PAGE`,
   3: () => "0.00 · FREE VEND",
-  4: () => "GO RUNS THE LAMP TEST",
+  4: () => "GO RUNS LAMP TEST",
   5: () => "GO PRINTS THE AUDIT",
 };
 

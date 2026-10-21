@@ -9,7 +9,8 @@ const CODES = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 const GRID = "tiles grid grid-cols-3 grid-rows-3 gap-10 h-full max-desk:gap-6";
 
-const TILE = "tile relative min-w-0 min-h-0 rounded-[--spacing(9)]";
+const TILE =
+  "tile relative min-w-0 min-h-0 rounded-[--spacing(9)] after:absolute after:top-[calc(100%_+_--spacing(3))] after:-inset-x-5 after:h-4 after:rounded-[--spacing(1)] after:bg-[linear-gradient(180deg,var(--pw-screen-edge),var(--pw-screen-line))] after:shadow-[0_--spacing(2)_--spacing(4)_rgb(0_0_0/60%)] after:pointer-events-none max-desk:after:top-[calc(100%_+_--spacing(2))] max-desk:after:-inset-x-3 max-desk:after:h-2";
 
 const LAYOUT =
   "grid [grid-template-areas:'code_badge'_'art_art'_'name_name'] grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-6 w-full h-full px-12 py-10 border-0 rounded-[inherit] [font:inherit] text-left max-desk:[grid-template-areas:'art'_'name'_'badge'] max-desk:grid-cols-[minmax(0,1fr)] max-desk:grid-rows-[minmax(0,1fr)_auto_auto] max-desk:gap-3 max-desk:p-6";
@@ -37,7 +38,53 @@ const CODE =
 const NAME =
   "tile__name [grid-area:name] min-w-0 overflow-hidden [font:700_--spacing(15)/1.1_var(--pw-mono)] tracking-[0.08em] text-ellipsis whitespace-nowrap max-desk:text-14 max-desk:tracking-[0.04em]";
 
-const ART_CELL = "tile__art [grid-area:art] grid place-items-center min-h-0";
+const ART_CELL =
+  "tile__art relative [grid-area:art] grid place-items-center min-h-0";
+
+const TUBES =
+  "tile__tubes absolute inset-x-0 top-[8%] bottom-[8%] pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-2 before:rounded-full after:absolute after:inset-y-0 after:right-0 after:w-2 after:rounded-full max-desk:top-[42%]";
+
+const TUBES_LIT =
+  "before:bg-pw-ice before:shadow-[0_0_--spacing(8)_var(--pw-cobalt)] after:bg-pw-ice after:shadow-[0_0_--spacing(8)_var(--pw-cobalt)]";
+
+const TUBES_DARK = "before:bg-pw-screen-edge after:bg-pw-screen-edge";
+
+const COIL =
+  "tile__coil absolute inset-x-[7%] bottom-[4%] h-[42%] overflow-hidden pointer-events-none";
+
+const COIL_RINGS =
+  "block w-[116.667%] h-full fill-none stroke-pw-steel-mid [stroke-width:1.6]";
+
+const COIL_TURN = "animate-[coil-turn_600ms_var(--pw-ease-mech)_1_both]";
+
+const RINGS = [8, 24, 40, 56, 72, 88, 104];
+
+function Coil(props: { empty?: boolean; turning?: boolean }): ReactNode {
+  return (
+    <span
+      className={`${COIL} ${props.empty ? "opacity-35" : "opacity-70"}`}
+      data-coil
+      aria-hidden="true"
+    >
+      <svg
+        className={`${COIL_RINGS} ${props.turning ? COIL_TURN : ""}`}
+        viewBox="0 0 112 40"
+        preserveAspectRatio="none"
+      >
+        {RINGS.map((x) => (
+          <ellipse
+            key={x}
+            cx={x}
+            cy={20}
+            rx={10}
+            ry={17}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+      </svg>
+    </span>
+  );
+}
 
 const ART_SHAPE: Record<"tall" | "wide", string> = {
   tall: "relative block h-[min(100%,--spacing(64))] aspect-[3/4] border-[length:--spacing(2)] border-solid border-pw-graphite rounded-[--spacing(6)_--spacing(6)_--spacing(3)_--spacing(3)]",
@@ -46,6 +93,11 @@ const ART_SHAPE: Record<"tall" | "wide", string> = {
 
 const ART_OPEN =
   "bg-[linear-gradient(180deg,var(--pw-label),var(--pw-label-lo))] shadow-[0_0_--spacing(14)_rgb(91_140_255/35%)] after:absolute after:right-[14%] after:bottom-[12%] after:left-[14%] after:h-4 after:rounded-[--spacing(2)]";
+
+const ART_HARDWARE: Record<"tall" | "wide", string> = {
+  tall: "before:absolute before:top-[14%] before:inset-x-[20%] before:h-[30%] before:rounded-[--spacing(2)] before:bg-pw-graphite before:shadow-[inset_0_--spacing(1)_--spacing(2)_rgb(0_0_0/55%)]",
+  wide: "before:absolute before:top-[14%] before:inset-x-[12%] before:h-[42%] before:bg-[repeating-linear-gradient(180deg,var(--pw-steel-lo)_0_--spacing(1),transparent_--spacing(1)_--spacing(4))]",
+};
 
 const ART_STRIPE: Record<string, string> = {
   warn: "after:bg-pw-warn",
@@ -89,10 +141,11 @@ function face(view: TileView): string {
 }
 
 function art(bay: BayView, view: TileView): string {
-  const shape = ART_SHAPE[bay.shape === "wide" ? "wide" : "tall"];
+  const form = bay.shape === "wide" ? "wide" : "tall";
+  const shape = ART_SHAPE[form];
   const look =
     view.locked === ""
-      ? `${ART_OPEN} ${ART_STRIPE[view.badge.severity] ?? "after:bg-pw-cobalt"}`
+      ? `${ART_OPEN} ${ART_HARDWARE[form]} ${ART_STRIPE[view.badge.severity] ?? "after:bg-pw-cobalt"}`
       : ART_LOCKED;
   const motion = view.state === "releasing" ? ART_RELEASE : "";
   return `${shape} ${look} ${motion}`;
@@ -128,6 +181,11 @@ function Tile(props: {
           className={`${ART_CELL} tile__art--${bay.shape}`}
           aria-hidden="true"
         >
+          <span
+            className={`${TUBES} ${view.lit ? TUBES_LIT : TUBES_DARK}`}
+            data-tubes={view.lit ? "lit" : "dark"}
+          />
+          <Coil turning={view.state === "releasing"} />
           <i className={art(bay, view)} />
         </span>
         <span className={`${NAME} text-pw-ink`}>{bay.product}</span>
@@ -163,6 +221,10 @@ export function Tiles(props: {
             >
               <span className={`${CODE} text-pw-screen-edge`}>
                 {code.padStart(2, "0")}
+              </span>
+              <span className={ART_CELL}>
+                <span className={`${TUBES} ${TUBES_DARK}`} data-tubes="dark" />
+                <Coil empty />
               </span>
               <span className={EMPTY_NAME}>—</span>
             </div>

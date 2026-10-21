@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const KEY = "pawl:sound";
 const CLICK_SECONDS = 0.03;
 const TONE_SECONDS = 0.09;
+const MOTOR_SECONDS = 0.9;
+const THUD_SECONDS = 0.16;
 
 const DTMF: Readonly<Record<string, readonly [number, number]>> = {
   "1": [697, 1209],
@@ -40,6 +42,8 @@ export function useSound(): {
   toggle: () => void;
   click: () => void;
   key: (label: string) => void;
+  motor: () => void;
+  thud: () => void;
 } {
   const [on, setOn] = useState(false);
   const live = useRef(false);
@@ -56,6 +60,7 @@ export function useSound(): {
       type: OscillatorType,
       level: number,
       seconds: number,
+      held = 0,
     ): void => {
       if (!live.current) return;
       try {
@@ -64,6 +69,7 @@ export function useSound(): {
         const now = audio.currentTime;
         const gain = audio.createGain();
         gain.gain.setValueAtTime(level, now);
+        gain.gain.setValueAtTime(level, now + seconds * held);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
         gain.connect(audio.destination);
         for (const hz of frequencies) {
@@ -95,6 +101,16 @@ export function useSound(): {
     [play, click],
   );
 
+  const motor = useCallback(
+    (): void => play([92, 184], "sawtooth", 0.018, MOTOR_SECONDS, 0.8),
+    [play],
+  );
+
+  const thud = useCallback(
+    (): void => play([64], "sine", 0.14, THUD_SECONDS),
+    [play],
+  );
+
   const toggle = useCallback((): void => {
     live.current = !live.current;
     remember(live.current);
@@ -102,5 +118,5 @@ export function useSound(): {
     click();
   }, [click]);
 
-  return { on, toggle, click, key };
+  return { on, toggle, click, key, motor, thud };
 }

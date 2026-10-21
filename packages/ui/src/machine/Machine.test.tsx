@@ -196,7 +196,7 @@ describe("Machine", () => {
           value: "deny",
         },
         go: { kind: "link", href: "/#cam=screen" },
-        caption: "CLR DENY · GO ALLOW",
+        caption: "CLR deny · GO allow",
       },
     });
     expect(
@@ -213,7 +213,7 @@ describe("Machine", () => {
     );
     expect(
       root.querySelector("p#keys-caption.keypad__caption"),
-    ).toHaveTextContent("CLR DENY · GO ALLOW");
+    ).toHaveTextContent("CLR deny · GO allow");
     expect(root.textContent).not.toContain("Service");
   });
 

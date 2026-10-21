@@ -12,12 +12,7 @@ import { useCanSetPassword, WelcomeKeyStep, WelcomeStep } from "./Welcome";
 
 function Loading(): ReactNode {
   return (
-    <Frame
-      name="loading"
-      where="ONE MOMENT"
-      label="Reading your pass"
-      foot="Reading your pass"
-    >
+    <Frame name="loading" label="Reading your pass" foot="reading your pass">
       <Eyebrow>Reading pass</Eyebrow>
       <Loader />
     </Frame>

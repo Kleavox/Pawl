@@ -71,10 +71,9 @@ test("an admin registers an outside app; a person connects it on the cabinet, re
       card.getByRole("heading", { name: "Monitor needs to know who you are" }),
     ).toBeVisible({ timeout: 20_000 });
     await card.getByRole("link", { name: /Connect/ }).click();
-    await expect(page.locator("[data-screen]")).toHaveText(
-      "AN APP WANTS YOUR PASS",
-      { timeout: 20_000 },
-    );
+    await expect(page.locator("[data-screen]")).toHaveText("CONSENT", {
+      timeout: 20_000,
+    });
     await page.getByRole("button", { name: "Allow" }).click();
 
     await expect(page).toHaveURL(new RegExp(`^${CABINET}/`), {

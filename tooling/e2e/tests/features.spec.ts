@@ -532,7 +532,7 @@ test("pass: a control reached by Tab is clear of the screen's fade", async ({
   });
   await guest.goto(`${PASS}/?mode=register`);
   const back = view(guest, "register").getByRole("button", {
-    name: "‹ Other ways to sign in",
+    name: "‹ Sign-in options",
   });
   await expect(back).toBeVisible();
   await expect(guest.locator("[data-camera]")).not.toHaveAttribute(

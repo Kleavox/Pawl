@@ -1,5 +1,5 @@
 import { ApiError, apiFetch } from "@pawl/core";
-import { Back, Field, Form, Kbd, Note, Title, ViewButton } from "@pawl/ui";
+import { Field, Form, Kbd, Note, Title, ViewButton } from "@pawl/ui";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { redirectToFreshChallenge } from "../helpers";
@@ -18,16 +18,11 @@ export function SecurityStep(): ReactNode {
   return (
     <Frame
       name="security"
-      where="SECURITY"
-      step="4 OF 4"
       labelledBy="security-title"
       foot={
         <>
           <Kbd>CLR</Kbd> back
         </>
-      }
-      back={
-        <Back label="Account" onClick={() => pass.dispatch({ type: "back" })} />
       }
     >
       <Title id="security-title">Security</Title>
@@ -86,19 +81,11 @@ export function DeleteStep(): ReactNode {
   return (
     <Frame
       name="delete"
-      where="SECURITY"
-      step="DELETE"
       labelledBy="delete-title"
       foot={
         <>
           <Kbd go>GO</Kbd> delete · <Kbd>CLR</Kbd> back
         </>
-      }
-      back={
-        <Back
-          label="Security"
-          onClick={() => pass.dispatch({ type: "back" })}
-        />
       }
     >
       <Title id="delete-title">Delete this account</Title>

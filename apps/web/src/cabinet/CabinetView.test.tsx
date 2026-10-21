@@ -26,11 +26,11 @@ const ownerModel: MachineModel = {
     { code: "1", lit: true },
     { code: "3", lit: true },
   ],
-  screen: "2 NEED ATTENTION",
+  screen: "2 NEED YOU",
   holder: "annisa",
   email: "annisa@example.test",
   indicators: { notes: { count: 7, severity: "warn" } },
-  ticker: "2 NEED ATTENTION · NOTE 7",
+  ticker: "2 NEED YOU · NOTE 7",
 };
 
 function props(
@@ -103,7 +103,7 @@ describe("a receipt in hand", () => {
       "inert",
     );
     expect(text(root, "[data-screen]")).toBe("RECEIPT PRINTED");
-    expect(text(root, "[data-screen-sub]")).toBe("3 MANUAL");
+    expect(text(root, "[data-screen-sub]")).toBe("03 MANUAL");
     expect(root.querySelector("dialog[data-delivery]")).toHaveAttribute("open");
     expect(text(root, "[data-receipt] h1")).toBe("Docs");
     expect(
@@ -155,16 +155,17 @@ function attr(root: HTMLElement, selector: string, name: string): string {
 describe("CabinetView", () => {
   it("writes the status line and the ticker the model computed", () => {
     const root = drawn(initialState("owner", CATALOG), ownerModel);
-    expect(text(root, "[data-screen]")).toBe("2 NEED ATTENTION");
-    expect(text(root, "[data-screen-sub]")).toBe("SELECT A BAY");
-    expect(text(root, "[data-ticker-text]")).toBe("2 NEED ATTENTION · NOTE 7");
+    expect(text(root, "[data-screen]")).toBe("2 NEED YOU");
+    expect(text(root, "[data-screen-sub]")).toBe("PICK A BAY");
+    expect(text(root, "[data-ticker-text]")).toBe("2 NEED YOU · NOTE 7");
   });
 
   it("holds a fault on the status line and lights CLR to clear it", () => {
     const root = drawn(initialState("guest", CATALOG), model, {
-      fault: "RELEASE FAILED, TRY AGAIN",
+      fault: { main: "RELEASE FAILED", sub: "TRY AGAIN" },
     });
-    expect(text(root, "[data-screen]")).toBe("RELEASE FAILED, TRY AGAIN");
+    expect(text(root, "[data-screen]")).toBe("RELEASE FAILED");
+    expect(text(root, "[data-screen-sub]")).toBe("TRY AGAIN");
     expect(attr(root, "[data-key='CLR']", "aria-disabled")).toBe("false");
   });
 
@@ -331,25 +332,25 @@ describe("the eggs on the cabinet", () => {
   it("lays a notice over the LCD, a whole one or only its second line", () => {
     const state = initialState("guest", CATALOG);
     const whole = drawn(state, model, {
-      notice: { main: "+30 LIVES", sub: "NOT THAT YOU NEED THEM" },
+      notice: { main: "+30 LIVES", sub: "NOBODY LOSES HERE" },
     });
     expect(whole.querySelector("[data-screen]")).toHaveTextContent("+30 LIVES");
     expect(whole.querySelector("[data-screen-sub]")).toHaveTextContent(
-      "NOT THAT YOU NEED THEM",
+      "NOBODY LOSES HERE",
     );
     const line = drawn(state, model, {
-      notice: { sub: "LUCKY 7777, ONE MORE ON US" },
+      notice: { sub: "ONE MORE ON US" },
     });
     expect(line.querySelector("[data-screen]")).toHaveTextContent("PICK A BAY");
     expect(line.querySelector("[data-screen-sub]")).toHaveTextContent(
-      "LUCKY 7777, ONE MORE ON US",
+      "ONE MORE ON US",
     );
   });
 
   it("lets a leaving message win over a notice", () => {
     const root = drawn(initialState("guest", CATALOG), model, {
       lcd: { main: "OPENING ACCOUNT", sub: "ONE MOMENT" },
-      notice: { main: "+30 LIVES", sub: "NOT THAT YOU NEED THEM" },
+      notice: { main: "+30 LIVES", sub: "NOBODY LOSES HERE" },
     });
     expect(root.querySelector("[data-screen]")).toHaveTextContent(
       "OPENING ACCOUNT",

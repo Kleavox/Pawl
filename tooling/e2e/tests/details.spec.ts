@@ -196,12 +196,11 @@ test("a forced lucky roll ends on 7777 and says so", async ({ page }) => {
   const credit = page.locator("[data-part='credit']");
   await expect(credit).toHaveAttribute("data-credit", "7777");
   await expect(credit).toHaveAttribute("data-credit-blink", "");
-  await expect(page.locator("[data-screen-sub]")).toHaveText(
-    "LUCKY 7777, ONE MORE ON US",
-  );
+  await expect(page.locator("[data-screen]")).toHaveText("LUCKY 7777");
+  await expect(page.locator("[data-screen-sub]")).toHaveText("ONE MORE ON US");
   await page.locator("[data-tray-action]").click();
   await expect(credit).toHaveAttribute("data-credit", "FrEE");
-  await expect(page.locator("[data-screen-sub]")).not.toHaveText(/LUCKY/);
+  await expect(page.locator("[data-screen]")).not.toHaveText(/LUCKY/);
 });
 
 test("five taps on the steel rock the machine and warn", async ({ page }) => {
@@ -213,7 +212,7 @@ test("five taps on the steel rock the machine and warn", async ({ page }) => {
     "data-rocking",
     "",
   );
-  await expect(page.locator("[data-screen]")).toHaveText("NEVER ROCK OR TILT");
+  await expect(page.locator("[data-screen]")).toHaveText("NEVER ROCK IT");
   await expect(page.locator("[data-screen-sub]")).toHaveText(
     "IT IS FREE ANYWAY",
   );

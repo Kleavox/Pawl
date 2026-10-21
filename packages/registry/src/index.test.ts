@@ -44,6 +44,23 @@ describe("registryFor", () => {
     expect(registryFor(MANIFEST)).toBe(registryFor(MANIFEST));
   });
 
+  it("keeps the manifest and the one merged with outside apps side by side, as the gateway asks for both", () => {
+    const merged = withOutsideApps(MANIFEST, [
+      {
+        key: "adns",
+        label: "dns",
+        title: "DNS",
+        origin: "https://adns.example",
+        access: "visitor",
+        card: true,
+      },
+    ]);
+    const base = registryFor(MANIFEST);
+    const both = registryFor(merged);
+    expect(registryFor(MANIFEST)).toBe(base);
+    expect(registryFor(merged)).toBe(both);
+  });
+
   it("refuses an invalid manifest with every problem named", () => {
     const invalid = JSON.stringify({
       site: { name: "" },

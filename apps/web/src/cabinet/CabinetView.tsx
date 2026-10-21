@@ -48,7 +48,7 @@ export type CabinetViewProps = {
   passHref: string;
   state: MachineState;
   model: MachineModel;
-  fault: string | null;
+  fault: ScreenCopy | null;
   said: string;
   lcd: ScreenCopy | null;
   leaving: "sign-in" | "manage" | null;
@@ -92,12 +92,10 @@ const RELEASING =
 export function CabinetView(props: CabinetViewProps): ReactNode {
   const { state, model, on } = props;
   const view = viewFor(state);
-  const shown =
-    props.fault === null ? model : { ...model, screen: props.fault };
   const servicing = props.service != null;
   const copy = props.lcd ??
     props.service?.copy ?? {
-      ...screenCopy(state, shown),
+      ...(props.fault ?? screenCopy(state, model)),
       ...(props.notice ?? {}),
     };
   const guest = state.access === "guest";
@@ -117,7 +115,12 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
         lcd={copy}
         keypad={{
           mode: "machine",
-          lit: litKeys(state, shown.screen, props.fault !== null, servicing),
+          lit: litKeys(
+            state,
+            props.fault?.main ?? model.screen,
+            props.fault !== null,
+            servicing,
+          ),
           onPress: on.key,
           onTouch: on.touch,
         }}
@@ -181,7 +184,7 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
                       </span>
                     </span>
                     <span className={RELEASING}>
-                      Releasing… take it from the bay below
+                      releasing… take it from the bay below
                     </span>
                   </>
                 }
@@ -200,7 +203,7 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
                 <Loader />
                 <Say>{said("working")}</Say>
               </Body>
-              <Foot hint="Hold on, the machine is busy" />
+              <Foot hint="the machine is busy" />
             </View>
             <View
               name="account"
@@ -234,11 +237,7 @@ export function CabinetView(props: CabinetViewProps): ReactNode {
                   </ViewButton>
                 </Actions>
                 <Say>{said("account")}</Say>
-                <Back
-                  label="Back to the bays"
-                  data-account-close
-                  onClick={on.back}
-                />
+                <Back label="Bays" data-account-close onClick={on.back} />
               </Body>
               <Foot
                 hint={

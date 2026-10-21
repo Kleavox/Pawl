@@ -33,11 +33,11 @@ const ERROR_CODE_COPY: Record<string, { title: string; message: string }> = {
   },
   "403": {
     title: "Access denied",
-    message: "You don't have permission to view this page.",
+    message: "You do not have permission to view this page.",
   },
   "404": {
     title: "Page not found",
-    message: "This page doesn't exist, or it has moved or expired.",
+    message: "This page does not exist, or it has moved or expired.",
   },
   "410": {
     title: "Gone",
@@ -85,12 +85,10 @@ export function renderErrorPage(options: ErrorPageOptions): string {
   const fault = code ? `FAULT ${code}` : "FAULT";
   return renderMachinePage({
     title: `${title} · ${service}`,
-    status:
-      code === "404" ? "NOTHING IN THIS BAY" : broken ? "OUT OF ORDER" : fault,
-    where: code === "404" ? "EMPTY BAY" : broken ? "OUT OF ORDER" : fault,
+    status: code === "404" ? "EMPTY BAY" : broken ? "OUT OF ORDER" : fault,
     sub: code ? `CODE ${code}` : undefined,
     keys: { go: { kind: "link", href: home } },
-    caption: "GO · TO THE MACHINE",
+    caption: "GO to the machine",
     sign: broken ? "OUT OF ORDER" : undefined,
     credit: code !== undefined && /^\d{1,4}$/u.test(code) ? code : "----",
     siteName: service,

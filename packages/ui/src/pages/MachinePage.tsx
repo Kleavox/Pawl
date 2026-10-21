@@ -24,7 +24,7 @@ const VIEW_UNDER_SIGN =
   "page-view flex flex-col gap-12 min-h-0 overflow-y-auto overscroll-contain pt-116 pb-24 px-32 [scrollbar-color:var(--pw-cobalt)_transparent] [scrollbar-width:thin] text-16 leading-[1.5] *:shrink-0 max-desk:pb-16 max-desk:px-16 max-desk:text-15";
 
 const FOOT =
-  "page-foot grid place-items-center [border-top:--spacing(1)_solid_var(--pw-screen-line)] text-pw-ink-dim [font:600_--spacing(14)/1_var(--pw-mono)] tracking-[0.08em] uppercase";
+  "page-foot grid place-items-center [border-top:--spacing(1)_solid_var(--pw-screen-line)] text-pw-ink-dim [font:600_--spacing(14)/1_var(--pw-mono)] tracking-[0.08em]";
 
 export const EYEBROW =
   "m-0 text-pw-ice [font:700_--spacing(14)/1_var(--pw-mono)] tracking-[0.16em] uppercase";
@@ -51,7 +51,6 @@ export type MachinePageProps = {
   title: string;
   status: string;
   sub?: string;
-  where?: string;
   keys?: { clr?: MachineKey; go?: MachineKey };
   caption?: string;
   sign?: string;
@@ -96,7 +95,7 @@ function MachinePage(props: MachinePageProps): ReactNode {
           display={
             <div className={SCREEN}>
               <div className={BAR} data-page-bar>
-                <span className={WHERE}>{props.where ?? props.status}</span>
+                <span className={WHERE}>{props.status}</span>
                 <a className={TO_MACHINE} href={`${root}/#cam=screen`}>
                   ‹ Machine
                 </a>

@@ -98,12 +98,7 @@ export function VerifyStep(): ReactNode {
     "Verification token is missing.",
   );
   return (
-    <Frame
-      name="verify"
-      where="VERIFY EMAIL"
-      label="Verify email"
-      foot="Checking the link"
-    >
+    <Frame name="verify" label="Verify email" foot="checking the link">
       <Outcome
         outcome={outcome}
         title={{
@@ -133,9 +128,8 @@ export function LinkStep(): ReactNode {
   return (
     <Frame
       name="link"
-      where="LINK PROVIDER"
       label="Link sign-in provider"
-      foot="Linking the provider"
+      foot="linking the provider"
     >
       <Outcome
         outcome={outcome}
@@ -189,8 +183,6 @@ export function ResetStep(): ReactNode {
   return (
     <Frame
       name="reset"
-      where="NEW PASSWORD"
-      step="NEW KEY"
       labelledBy="reset-title"
       foot={
         <>
@@ -250,12 +242,7 @@ export function ChallengeStep(): ReactNode {
     active: shown,
   });
   return (
-    <Frame
-      name="challenge"
-      where="HUMAN CHECK"
-      label="Security check"
-      foot="One moment"
-    >
+    <Frame name="challenge" label="Security check" foot="one moment">
       <Eyebrow>Human check</Eyebrow>
       <Title>Just a moment</Title>
       <Note>

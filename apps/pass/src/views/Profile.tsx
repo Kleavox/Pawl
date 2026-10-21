@@ -2,7 +2,6 @@ import { ApiError, apiFetch, type Identity } from "@pawl/core";
 import { createAccountCredential } from "@pawl/crypto";
 import {
   Actions,
-  Back,
   Field,
   Form,
   Kbd,
@@ -38,13 +37,6 @@ const FACT_NAME =
 const FACT_VALUE =
   "m-0 min-w-0 overflow-hidden text-pw-ink text-ellipsis whitespace-nowrap";
 
-function BackTo(props: { label: string }): ReactNode {
-  const pass = usePass();
-  return (
-    <Back label={props.label} onClick={() => pass.dispatch({ type: "back" })} />
-  );
-}
-
 function saved(pass: Pass, text: string): void {
   pass.dispatch({ type: "open", view: "profile" });
   pass.dispatch({ type: "say", say: { kind: "success", text } });
@@ -59,8 +51,6 @@ export function ProfileStep(props: {
   return (
     <Frame
       name="profile"
-      where="PROFILE"
-      step="1 OF 4"
       labelledBy="profile-title"
       tells
       foot={
@@ -68,7 +58,6 @@ export function ProfileStep(props: {
           <Kbd>CLR</Kbd> back
         </>
       }
-      back={<BackTo label="Account" />}
     >
       <Title id="profile-title">Profile</Title>
       <dl className={FACTS}>
@@ -142,15 +131,12 @@ export function ProfileNameStep(props: { user: Identity }): ReactNode {
   return (
     <Frame
       name="profile-name"
-      where="PROFILE"
-      step="USERNAME"
       labelledBy="profile-name-title"
       foot={
         <>
           <Kbd go>GO</Kbd> save · <Kbd>CLR</Kbd> back
         </>
       }
-      back={<BackTo label="Profile" />}
     >
       <Title id="profile-name-title">Change your username</Title>
       <Form
@@ -216,15 +202,12 @@ export function ProfileKeyStep(props: { onPassword: () => void }): ReactNode {
   return (
     <Frame
       name="profile-key"
-      where="PROFILE"
-      step="PASSWORD"
       labelledBy="profile-key-title"
       foot={
         <>
           <Kbd go>GO</Kbd> save · <Kbd>CLR</Kbd> back
         </>
       }
-      back={<BackTo label="Profile" />}
     >
       <Title id="profile-key-title">Set a password</Title>
       <Form

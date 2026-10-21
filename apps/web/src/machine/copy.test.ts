@@ -1,8 +1,10 @@
+import { LCD_FIT } from "@pawl/ui";
 import { describe, expect, it } from "vitest";
 
 import type { MachineModel } from "../estate-adapter";
 import { CATALOG } from "./catalog.testkit";
 import {
+  FAULT,
   greeting,
   litKeys,
   machineAttributes,
@@ -31,11 +33,11 @@ const ownerModel: MachineModel = {
     { code: "1", lit: true },
     { code: "3", lit: true },
   ],
-  screen: "2 NEED ATTENTION",
+  screen: "2 NEED YOU",
   holder: "annisa",
   email: "annisa@example.test",
   indicators: { notes: { count: 7, severity: "warn" } },
-  ticker: "2 NEED ATTENTION · NOTE 7",
+  ticker: "2 NEED YOU · NOTE 7",
 };
 
 const OWNED = [{ ...CATALOG[0]!, access: "owner" as const }, CATALOG[1]!];
@@ -56,11 +58,11 @@ describe("the status line", () => {
   it("writes the screen as text, never as colour alone", () => {
     expect(screenCopy(initialState("guest", CATALOG), model)).toEqual({
       main: "PICK A BAY",
-      sub: "OR SIGN IN ON SCREEN",
+      sub: "OR SIGN IN",
     });
     expect(screenCopy(initialState("owner", CATALOG), ownerModel)).toEqual({
-      main: "2 NEED ATTENTION",
-      sub: "SELECT A BAY",
+      main: "2 NEED YOU",
+      sub: "PICK A BAY",
     });
   });
 
@@ -71,8 +73,8 @@ describe("the status line", () => {
         model,
       ),
     ).toEqual({
-      main: "1 DENIED, VISITOR PASS REQUIRED",
-      sub: "SIGN IN TO UNLOCK",
+      main: "01 DENIED",
+      sub: "NEEDS VISITOR PASS",
     });
   });
 
@@ -83,8 +85,8 @@ describe("the status line", () => {
         { ...ownerModel, access: "visitor" },
       ),
     ).toEqual({
-      main: "1 DENIED, OWNER PASS REQUIRED",
-      sub: "FOR THE OWNER ONLY",
+      main: "01 DENIED",
+      sub: "NEEDS OWNER PASS",
     });
   });
 
@@ -121,17 +123,29 @@ describe("the status line", () => {
     ).toEqual({ main: "ESTATE UNREADABLE", sub: "PRESS GO TO RETRY" });
   });
 
+  it("says a picked bay and what GO does with it", () => {
+    expect(
+      screenCopy(
+        reduce(initialState("owner", CATALOG), { type: "preselect", bay: "1" }),
+        ownerModel,
+      ),
+    ).toEqual({ main: "01 NOTE", sub: "PRESS GO TO TAKE" });
+  });
+
   it("follows a release through to the tray", () => {
     const releasing = reduce(initialState("owner", CATALOG), {
       type: "select",
       bay: "1",
     });
-    expect(screenCopy(releasing, ownerModel).main).toBe("1 RELEASING, NOTE");
+    expect(screenCopy(releasing, ownerModel)).toEqual({
+      main: "01 NOTE",
+      sub: "DROPPING TO THE BAY",
+    });
     expect(
       screenCopy(reduce(releasing, { type: "tray-ready" }), ownerModel),
     ).toEqual({
-      main: "1 DELIVERED, NOTE",
-      sub: "OPEN THE FLAP BELOW",
+      main: "01 NOTE",
+      sub: "PRESS TAKE DELIVERY",
     });
   });
 });
@@ -289,7 +303,7 @@ describe("a key is lit only when it does something on this screen", () => {
 
   it("lights CLR while a fault holds the screen, because CLR clears it", () => {
     expect(
-      keys(initialState("guest", CATALOG), "RELEASE FAILED, TRY AGAIN", true),
+      keys(initialState("guest", CATALOG), FAULT.release.main, true),
     ).toContain("CLR");
   });
 
@@ -327,7 +341,7 @@ describe("a key is lit only when it does something on this screen", () => {
     expect(machineAttributes(out)["data-busy"]).toBe("true");
     expect(screenCopy(out, model)).toEqual({
       main: "RECEIPT PRINTED",
-      sub: "1 NOTE",
+      sub: "01 NOTE",
     });
   });
 });
@@ -348,5 +362,61 @@ describe("the service menu on the keys and the LCD", () => {
       sub: "DEX/UCS",
     });
     expect(keys(held)).toEqual([]);
+  });
+});
+
+describe("every line the cabinet's LCD can show fits it on one line", () => {
+  const LONGEST = CATALOG.map((bay) => ({
+    ...bay,
+    product: "ABCDEFGHIJKL",
+  }));
+  const busiest: MachineModel = {
+    ...ownerModel,
+    screen: "999+ NEED YOU",
+  };
+  const states: MachineState[] = [];
+  for (const access of ["guest", "visitor", "owner"] as const) {
+    const start = initialState(access, LONGEST);
+    const picked = reduce(start, { type: "preselect", bay: "1" });
+    const dropping = reduce(start, { type: "select", bay: "1" });
+    states.push(
+      start,
+      picked,
+      dropping,
+      reduce(dropping, { type: "tray-ready" }),
+      { ...start, status: "denied", selection: "1" },
+      { ...start, status: "denied", selection: null },
+      { ...start, status: "granted" },
+      { ...start, receipt: "1" },
+      reduce(start, { type: "audit" }),
+      reduce(start, { type: "sign-in" }),
+      { ...start, authStep: "account" },
+    );
+  }
+
+  it.each(states.map((state, at) => [at, state] as const))(
+    "state %i",
+    (_, state) => {
+      for (const at of [model, busiest]) {
+        const copy = screenCopy(state, at);
+        expect(copy.main.length, copy.main).toBeLessThanOrEqual(LCD_FIT.main);
+        expect(copy.sub.length, copy.sub).toBeLessThanOrEqual(LCD_FIT.sub);
+      }
+    },
+  );
+
+  it("holds every fault and estate line too", () => {
+    for (const fault of Object.values(FAULT)) {
+      expect(fault.main.length, fault.main).toBeLessThanOrEqual(LCD_FIT.main);
+      expect(fault.sub.length, fault.sub).toBeLessThanOrEqual(LCD_FIT.sub);
+    }
+    for (const screen of [
+      "ESTATE UNREADABLE",
+      "PASS UNREADABLE",
+      "NOTHING NEEDS YOU",
+      "SIGNED OUT",
+    ]) {
+      expect(screen.length, screen).toBeLessThanOrEqual(LCD_FIT.main);
+    }
   });
 });

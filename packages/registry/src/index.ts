@@ -87,12 +87,15 @@ export class Registry {
   }
 }
 
-let cached: { json: string; registry: Registry } | undefined;
+const KEPT = 4;
+const cached = new Map<string, Registry>();
 
 export function registryFor(json: string): Registry {
-  if (cached?.json === json) return cached.registry;
+  const kept = cached.get(json);
+  if (kept !== undefined) return kept;
   const registry = new Registry(json);
-  cached = { json, registry };
+  cached.set(json, registry);
+  if (cached.size > KEPT) cached.delete(cached.keys().next().value!);
   return registry;
 }
 

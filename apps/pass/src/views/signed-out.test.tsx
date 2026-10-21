@@ -57,7 +57,7 @@ describe("signing in on paw.", () => {
       screen.getByRole("button", { name: /Email me a code/ }),
     ).toHaveAttribute("aria-keyshortcuts", "2");
     await userEvent.keyboard("2");
-    expect(screen.getByLabelText("Email address")).toBeVisible();
+    expect(within(view("email")).getByLabelText("Email")).toBeVisible();
   });
 
   it("sends the code, then the keypad's digits fill the cells and GO checks them", async () => {
@@ -68,7 +68,10 @@ describe("signing in on paw.", () => {
       needsSetup: false,
     });
     renderPass({ view: "email" });
-    await userEvent.type(screen.getByLabelText("Email address"), "a@b.test");
+    await userEvent.type(
+      within(view("email")).getByLabelText("Email"),
+      "a@b.test",
+    );
     await userEvent.keyboard("{Enter}");
     expect(await screen.findByText(/Type the 6 digits/)).toBeVisible();
     for (const digit of "123456") {
@@ -181,7 +184,7 @@ describe("signing in on paw.", () => {
     await userEvent.type(step.getByLabelText("Email"), "ana@b.test");
     await userEvent.type(step.getByLabelText("Password"), "a secret phrase");
     await userEvent.click(
-      step.getByRole("button", { name: "‹ Other ways to sign in" }),
+      step.getByRole("button", { name: "‹ Sign-in options" }),
     );
     await userEvent.click(
       within(view("methods")).getByRole("button", { name: /Use a password/ }),
@@ -193,10 +196,8 @@ describe("signing in on paw.", () => {
   it("walks one step back on Escape, even from the code and from inside a field", async () => {
     renderPass({ view: "code", email: "a@b.test", digits: "123" });
     await userEvent.keyboard("{Escape}");
-    expect(within(view("email")).getByLabelText("Email address")).toBeVisible();
-    await userEvent.click(
-      within(view("email")).getByLabelText("Email address"),
-    );
+    expect(within(view("email")).getByLabelText("Email")).toBeVisible();
+    await userEvent.click(within(view("email")).getByLabelText("Email"));
     await userEvent.keyboard("{Escape}");
     expect(view("methods")).toBeVisible();
   });
@@ -218,7 +219,9 @@ describe("signing in on paw.", () => {
       container.querySelector("button[form='screen-form']"),
     ).toHaveAttribute("aria-disabled", "true");
     await userEvent.keyboard("{Backspace}{Backspace}{Backspace}");
-    expect(screen.getByLabelText("Email address")).toBeVisible();
-    expect(screen.getByLabelText("Email address")).toHaveValue("a@b.test");
+    expect(within(view("email")).getByLabelText("Email")).toBeVisible();
+    expect(within(view("email")).getByLabelText("Email")).toHaveValue(
+      "a@b.test",
+    );
   });
 });

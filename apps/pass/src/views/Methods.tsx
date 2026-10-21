@@ -36,12 +36,10 @@ export function Methods(): ReactNode {
   return (
     <Frame
       name="methods"
-      where="SIGN IN"
-      step="STEP 1"
       labelledBy="methods-title"
       foot={
         <>
-          <Kbd>1</Kbd>–<Kbd>{String(choices.length)}</Kbd> choose
+          <Kbd>1</Kbd>–<Kbd>{String(choices.length)}</Kbd> pick
         </>
       }
     >

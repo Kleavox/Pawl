@@ -114,7 +114,7 @@ test("a step back walks one step, and ‹ MACHINE leaves for the cabinet", async
   await expect(view(page, "methods")).toBeVisible();
   await view(page, "methods").locator("[data-method='password']").click();
   await view(page, "password")
-    .getByRole("button", { name: "‹ Other ways to sign in" })
+    .getByRole("button", { name: "‹ Sign-in options" })
     .click();
   await expect(view(page, "methods")).toBeVisible();
   await view(page, "methods").locator("[data-to-machine]").click();
@@ -141,8 +141,9 @@ test("a guest is refused NOTE, the camera dollies into paw.'s sign-in, and after
   await page.goto(`${CABINET}/`);
   await page.waitForLoadState("networkidle");
   await page.locator("[data-cartridge='2']").click();
-  await expect(page.locator("[data-screen]")).toContainText(
-    "VISITOR PASS REQUIRED",
+  await expect(page.locator("[data-screen]")).toHaveText("02 DENIED");
+  await expect(page.locator("[data-screen-sub]")).toHaveText(
+    "NEEDS VISITOR PASS",
   );
   await expect(page.locator("[data-tile='2']")).toHaveAttribute(
     "data-state",
@@ -306,12 +307,12 @@ test.describe("codes typed on paw.'s keypad", () => {
     ).toBe("2");
   });
 
-  test("Use another email steps back to the email, and the next code starts empty", async ({
+  test("‹ Email steps back to the email, and the next code starts empty", async ({
     page,
   }) => {
     const email = await reachCode(page);
     await typeCode(page, "123");
-    await page.getByRole("button", { name: "‹ Use another email" }).click();
+    await page.getByRole("button", { name: "‹ Email" }).click();
     const field = view(page, "email").locator("#code-email");
     await expect(field).toHaveValue(email);
     await expect(field).toBeFocused();

@@ -420,10 +420,10 @@ describe("consent", () => {
     expect(body).not.toContain("code=");
   });
 
-  it("guards the page with a CSP whose form reaches only Pawl and the app's registered callback", async () => {
+  it("guards the page with a CSP whose form reaches Pawl and secure hops only, so an app's callback can send the person on, as Cloudflare Access does", async () => {
     const response = await signedInAuthorize("docs-access");
     expect(response.headers.get("content-security-policy")).toBe(
-      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self' https://team.cloudflareaccess.com; frame-ancestors 'none'",
+      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self' https:; frame-ancestors 'none'",
     );
   });
 
@@ -447,7 +447,7 @@ describe("consent", () => {
       expect(button, label).toContain(`value="${value}"`);
       expect(button, label).toContain('aria-describedby="keys-caption"');
     }
-    expect(body).toContain("AN APP WANTS YOUR PASS");
+    expect(body).toMatch(/data-screen[^>]*>CONSENT</);
     expect(body).toMatch(/data-page-bar[^>]*><span[^>]*>CONSENT</);
     expect(body).toMatch(/<div[^>]*data-camera[^>]*data-framing="screen"/);
     for (const part of MACHINE_PARTS) {

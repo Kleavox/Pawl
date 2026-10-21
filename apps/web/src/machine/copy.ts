@@ -22,6 +22,10 @@ function entryOf(catalog: Catalog, bay: BayCode) {
   return catalog.find((entry) => entry.code === bay);
 }
 
+export function bayName(bay: BayCode): string {
+  return bay.padStart(2, "0");
+}
+
 export function productOf(catalog: Catalog, bay: BayCode | null): string {
   return bay === null ? "" : (entryOf(catalog, bay)?.product ?? "");
 }
@@ -59,7 +63,11 @@ function passWord(catalog: Catalog, bay: BayCode): string {
 }
 
 function denialReason(catalog: Catalog, bay: BayCode): string {
-  return `${passWord(catalog, bay).toUpperCase()} PASS REQUIRED`;
+  return `NEEDS ${passWord(catalog, bay).toUpperCase()} PASS`;
+}
+
+function selection(catalog: Catalog, bay: BayCode): string {
+  return `${bayName(bay)} ${productOf(catalog, bay)}`;
 }
 
 function cartridgeLabel(
@@ -89,47 +97,60 @@ export function screenCopy(
   if (state.receipt !== null) {
     return {
       main: "RECEIPT PRINTED",
-      sub: `${state.receipt} ${productOf(state.catalog, state.receipt)}`,
+      sub: selection(state.catalog, state.receipt),
     };
   }
   if (state.status === "denied") {
-    const sub =
-      state.access === "guest" ? "SIGN IN TO UNLOCK" : "FOR THE OWNER ONLY";
-    if (state.selection === null) return { main: "DENIED", sub };
+    if (state.selection === null) {
+      return {
+        main: "DENIED",
+        sub:
+          state.access === "guest" ? "SIGN IN TO UNLOCK" : "FOR THE OWNER ONLY",
+      };
+    }
     return {
-      main: `${state.selection} DENIED, ${denialReason(state.catalog, state.selection)}`,
-      sub,
+      main: `${bayName(state.selection)} DENIED`,
+      sub: denialReason(state.catalog, state.selection),
     };
   }
   if (state.status === "dispensing" && state.selection !== null) {
     return {
-      main: `${state.selection} RELEASING, ${productOf(state.catalog, state.selection)}`,
-      sub: "WAIT FOR THE DELIVERY BAY",
+      main: selection(state.catalog, state.selection),
+      sub: "DROPPING TO THE BAY",
     };
   }
   if (state.tray !== null) {
     return {
-      main: `${state.tray} DELIVERED, ${productOf(state.catalog, state.tray)}`,
-      sub: "OPEN THE FLAP BELOW",
+      main: selection(state.catalog, state.tray),
+      sub: "PRESS TAKE DELIVERY",
     };
   }
   if (state.status === "selected" && state.selection !== null) {
     return {
-      main: `${state.selection} SELECTED, ${productOf(state.catalog, state.selection)}`,
-      sub: "PRESS GO TO RELEASE IT",
+      main: selection(state.catalog, state.selection),
+      sub: "PRESS GO TO TAKE",
     };
   }
   if (state.status === "granted") {
-    return { main: "SIGNED IN", sub: "SELECT A BAY" };
+    return { main: "SIGNED IN", sub: "PICK A BAY" };
   }
   if (model.screen.includes("UNREADABLE")) {
     return { main: model.screen, sub: "PRESS GO TO RETRY" };
   }
   return {
     main: model.screen,
-    sub: state.access === "guest" ? "OR SIGN IN ON SCREEN" : "SELECT A BAY",
+    sub: state.access === "guest" ? "OR SIGN IN" : "PICK A BAY",
   };
 }
+
+export const FAULT = {
+  release: { main: "RELEASE FAILED", sub: "TRY AGAIN" },
+  open: { main: "OPEN FAILED", sub: "RELEASE IT AGAIN" },
+  signOut: { main: "SIGN-OUT FAILED", sub: "TRY AGAIN" },
+  signIn: { main: "NOT SIGNED IN", sub: "SIGN-IN STOPPED" },
+  pass: { main: "PASS UNREADABLE", sub: "STILL. GO RETRIES" },
+  estate: { main: "ESTATE UNREADABLE", sub: "STILL. GO RETRIES" },
+} as const satisfies Record<string, ScreenCopy>;
 
 function badgeFor(
   state: MachineState,

@@ -98,6 +98,102 @@ export const BACK: Readonly<Partial<Record<PassView, PassView>>> = {
   "registry-remove": "registry",
 };
 
+export const SCREEN_NAME: Readonly<Record<PassView, string>> = {
+  loading: "ONE MOMENT",
+  methods: "SIGN IN",
+  email: "EMAIL A CODE",
+  code: "EMAIL A CODE",
+  password: "PASSWORD",
+  register: "CREATE ACCOUNT",
+  "register-key": "CREATE ACCOUNT",
+  sent: "CHECK YOUR INBOX",
+  forgot: "RESET PASSWORD",
+  welcome: "PASS ALMOST READY",
+  "welcome-key": "PASS ALMOST READY",
+  verify: "VERIFY EMAIL",
+  reset: "NEW PASSWORD",
+  link: "LINK PROVIDER",
+  challenge: "HUMAN CHECK",
+  account: "YOUR ACCOUNT",
+  profile: "PROFILE",
+  "profile-name": "CHANGE USERNAME",
+  "profile-key": "SET A PASSWORD",
+  devices: "DEVICES",
+  apps: "APPS",
+  security: "SECURITY",
+  delete: "DELETE ACCOUNT",
+  registry: "REGISTERED APPS",
+  "registry-name": "NEW APP",
+  "registry-label": "NEW APP",
+  "registry-return": "NEW APP",
+  "registry-secret": "COPY THE SECRET",
+  "registry-remove": "REMOVE AN APP",
+};
+
+export const SCREEN_SUB: Readonly<Partial<Record<PassView, string>>> = {
+  loading: "READING YOUR PASS",
+  methods: "PICK A WAY IN",
+  email: "GO SENDS THE CODE",
+  code: "KEY IN THE CODE",
+  password: "GO SIGNS YOU IN",
+  register: "NAME AND EMAIL",
+  "register-key": "CHOOSE A PASSWORD",
+  sent: "LINK SENT",
+  forgot: "GO SENDS A LINK",
+  welcome: "PICK A USERNAME",
+  "welcome-key": "OPTIONAL PASSWORD",
+  verify: "CHECKING THE LINK",
+  reset: "RE-KEYING ACCOUNT",
+  link: "ONE MOMENT",
+  challenge: "ONE MOMENT",
+};
+
+const BACK_TO: Readonly<Partial<Record<PassView, string>>> = {
+  methods: "Sign-in options",
+  email: "Email",
+  password: "Password",
+  register: "Name and email",
+  welcome: "Username",
+  account: "Account",
+  profile: "Profile",
+  security: "Security",
+  registry: "Registered apps",
+  "registry-name": "Name and address",
+  "registry-label": "On the cabinet",
+};
+
+export function backLabel(view: PassView): string | null {
+  const to = BACK[view];
+  return to === undefined ? null : (BACK_TO[to] ?? null);
+}
+
+const SERIES: Readonly<Partial<Record<PassView, readonly [number, number]>>> = {
+  email: [1, 2],
+  code: [2, 2],
+  register: [1, 2],
+  "register-key": [2, 2],
+  welcome: [1, 2],
+  "welcome-key": [2, 2],
+  "registry-name": [1, 3],
+  "registry-label": [2, 3],
+  "registry-return": [3, 3],
+};
+
+const SECTION_ORDER: readonly PassView[] = [
+  "profile",
+  "devices",
+  "apps",
+  "security",
+  "registry",
+];
+
+export function stepOf(view: PassView, admin: boolean): string | null {
+  const place = SECTION_ORDER.indexOf(view);
+  if (place >= 0) return `${place + 1} OF ${admin ? 5 : 4}`;
+  const series = SERIES[view];
+  return series === undefined ? null : `${series[0]} OF ${series[1]}`;
+}
+
 const FORMS: ReadonlySet<PassView> = new Set([
   "email",
   "password",

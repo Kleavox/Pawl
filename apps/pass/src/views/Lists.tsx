@@ -1,6 +1,5 @@
 import { apiFetch } from "@pawl/core";
 import {
-  Back,
   formatAge,
   Kbd,
   Loader,
@@ -112,17 +111,12 @@ export function Paged<T>(props: {
 
 function SectionFrame(props: {
   name: PassView;
-  where: string;
-  step: string;
   title: string;
   children: ReactNode;
 }): ReactNode {
-  const pass = usePass();
   return (
     <Frame
       name={props.name}
-      where={props.where}
-      step={props.step}
       labelledBy={`${props.name}-title`}
       tells
       foot={
@@ -130,9 +124,6 @@ function SectionFrame(props: {
           <Kbd>←</Kbd>
           <Kbd>→</Kbd> page · <Kbd>CLR</Kbd> back
         </>
-      }
-      back={
-        <Back label="Account" onClick={() => pass.dispatch({ type: "back" })} />
       }
     >
       <Title id={`${props.name}-title`}>{props.title}</Title>
@@ -189,7 +180,7 @@ export function DevicesStep(props: {
   }
 
   return (
-    <SectionFrame name="devices" where="DEVICES" step="2 OF 4" title="Devices">
+    <SectionFrame name="devices" title="Devices">
       {devices === undefined ? (
         props.failed === null ? (
           <Loader />
@@ -265,7 +256,7 @@ export function AppsStep(props: {
   }
 
   return (
-    <SectionFrame name="apps" where="APPS" step="3 OF 4" title="Apps">
+    <SectionFrame name="apps" title="Apps">
       {apps === undefined ? (
         props.failed === null ? (
           <Loader />

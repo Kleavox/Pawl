@@ -61,12 +61,11 @@ export function WelcomeStep(props: { canSetPassword: boolean }): ReactNode {
   return (
     <Frame
       name="welcome"
-      where="PASS ALMOST READY"
-      step={props.canSetPassword ? "STEP 1 OF 2" : "LAST STEP"}
+      alone={!props.canSetPassword}
       labelledBy="welcome-title"
       foot={
         <>
-          <Kbd go>GO</Kbd> continue
+          <Kbd go>GO</Kbd> next
         </>
       }
     >
@@ -90,7 +89,7 @@ export function WelcomeStep(props: { canSetPassword: boolean }): ReactNode {
           data-autofocus
         />
       </Form>
-      <Note aside>3-20 lowercase letters, digits, or underscores.</Note>
+      <Note aside>3–20 lowercase letters, digits, or underscores.</Note>
     </Frame>
   );
 }
@@ -115,8 +114,7 @@ export function WelcomeKeyStep(): ReactNode {
   return (
     <Frame
       name="welcome-key"
-      where="PASS ALMOST READY"
-      step="STEP 2 OF 2"
+      stay
       labelledBy="welcome-key-title"
       foot={
         <>

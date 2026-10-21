@@ -1,6 +1,6 @@
 import { ApiError, errorMessage, type Identity } from "@pawl/core";
 import { deriveLoginKeys } from "@pawl/crypto";
-import { Back, Field, Form, Kbd, Note, PW_LINK, Title } from "@pawl/ui";
+import { Field, Form, Kbd, Note, PW_LINK, Title } from "@pawl/ui";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { api } from "../helpers";
@@ -50,19 +50,11 @@ export function PasswordStep(): ReactNode {
   return (
     <Frame
       name="password"
-      where="SIGN IN"
-      step="PASSWORD"
       labelledBy="password-title"
       foot={
         <>
           <Kbd go>GO</Kbd> sign in · <Kbd>CLR</Kbd> back
         </>
-      }
-      back={
-        <Back
-          label="Other ways to sign in"
-          onClick={() => pass.dispatch({ type: "back" })}
-        />
       }
     >
       <Title id="password-title">Sign in with your password</Title>
@@ -146,19 +138,11 @@ export function ForgotStep(): ReactNode {
   return (
     <Frame
       name="forgot"
-      where="RESET ACCESS"
-      step="LOST KEY"
       labelledBy="forgot-title"
       foot={
         <>
           <Kbd go>GO</Kbd> send link · <Kbd>CLR</Kbd> back
         </>
-      }
-      back={
-        <Back
-          label="Back to the password"
-          onClick={() => pass.dispatch({ type: "back" })}
-        />
       }
     >
       <Title id="forgot-title">Reset access</Title>

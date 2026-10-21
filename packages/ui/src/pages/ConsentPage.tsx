@@ -29,12 +29,11 @@ export function renderConsentPage(options: ConsentPageOptions): string {
   const name = options.clientName;
   return renderMachinePage({
     title: `Sign in to ${name} with Pawl`,
-    status: "AN APP WANTS YOUR PASS",
+    status: "CONSENT",
     sub: "NOTHING SHARED YET",
-    where: "CONSENT",
     rootOrigin: options.rootOrigin,
     siteName: options.siteName,
-    caption: "CLR DENY · GO ALLOW",
+    caption: "CLR deny · GO allow",
     keys: {
       clr: { kind: "submit", form: "consent", name: "decision", value: "deny" },
       go: { kind: "submit", form: "consent", name: "decision", value: "allow" },

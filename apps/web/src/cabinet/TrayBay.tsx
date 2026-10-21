@@ -44,11 +44,11 @@ export function TrayBay(props: {
         data-tray-shape={shapeOf(state.catalog, state.tray)}
       >
         <span className={ITEM} aria-hidden="true">
-          <strong className="text-pw-ice text-14" data-tray-code>
-            {state.tray ?? ""}
+          <strong className="text-pw-ice text-14 leading-none" data-tray-code>
+            {state.tray?.padStart(2, "0") ?? ""}
           </strong>
           <small
-            className="overflow-hidden text-14 font-bold text-ellipsis whitespace-nowrap"
+            className="overflow-hidden text-14 leading-none font-bold text-ellipsis whitespace-nowrap"
             data-tray-name
           >
             {productOf(state.catalog, state.tray)}

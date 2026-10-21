@@ -63,7 +63,12 @@ describe("a sign-in Pawl wants a human for", () => {
   it("passes the human check by itself, then sends the code", async () => {
     vi.mocked(startOtp).mockRejectedValueOnce(asked()).mockResolvedValue();
     renderPass({ view: "email" });
-    await userEvent.type(screen.getByLabelText("Email address"), "a@b.test");
+    await userEvent.type(
+      within(
+        document.querySelector<HTMLElement>("[data-view-panel=email]")!,
+      ).getByLabelText("Email"),
+      "a@b.test",
+    );
     await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(panel("code")).toBeVisible());
     expect(api).toHaveBeenCalledWith("/api/challenge", {

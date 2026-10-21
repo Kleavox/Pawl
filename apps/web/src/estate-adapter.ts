@@ -59,10 +59,10 @@ function screenFor(
   if (access === "guest") return "PICK A BAY";
   if (overview === null || counts === null) return "ESTATE UNREADABLE";
   const full = estateFullyRead(counts.indicators, keys);
-  if (overview.attention.length > 0) {
-    return full
-      ? `${overview.attention.length} NEED ATTENTION`
-      : `AT LEAST ${overview.attention.length} NEED ATTENTION`;
+  const waiting = overview.attention.length;
+  if (waiting > 0) {
+    if (!full) return `${waiting}+ NEED YOU`;
+    return waiting === 1 ? "1 NEEDS YOU" : `${waiting} NEED YOU`;
   }
   return full ? "NOTHING NEEDS YOU" : "ESTATE UNREADABLE";
 }

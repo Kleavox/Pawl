@@ -17,6 +17,8 @@ import {
   methodChoices,
   passKeys,
   reduceFlow,
+  SCREEN_NAME,
+  SCREEN_SUB,
   type PassState,
   type PassView,
   type Route,
@@ -24,7 +26,6 @@ import {
 import { api, returnTo } from "./helpers";
 import type { OAuthProviders, SessionResponse } from "./types";
 import {
-  handleOf,
   PASS_ENDED,
   PassContext,
   SCREEN_FORM,
@@ -35,38 +36,6 @@ import {
 import { sectionsFor } from "./views/Account";
 import { choose } from "./views/Methods";
 import { Screens } from "./views/Screens";
-
-const STATUS: Record<PassView, { main: string; sub: string }> = {
-  loading: { main: "ONE MOMENT", sub: "CHECKING YOUR PASS" },
-  methods: { main: "SIGN IN", sub: "PASS REQUIRED" },
-  email: { main: "ENTER YOUR EMAIL", sub: "GO SENDS THE CODE" },
-  code: { main: "EMAIL CODE", sub: "CODE FROM YOUR EMAIL" },
-  password: { main: "SIGN IN", sub: "PASSWORD" },
-  register: { main: "CREATE ACCOUNT", sub: "NEW PASS" },
-  "register-key": { main: "CREATE ACCOUNT", sub: "CHOOSE A PASSWORD" },
-  sent: { main: "CHECK YOUR INBOX", sub: "LINK SENT" },
-  forgot: { main: "RESET ACCESS", sub: "LOST KEY" },
-  welcome: { main: "PASS ALMOST READY", sub: "PICK A USERNAME" },
-  "welcome-key": { main: "PASS ALMOST READY", sub: "OPTIONAL PASSWORD" },
-  verify: { main: "VERIFY EMAIL", sub: "CHECKING THE LINK" },
-  reset: { main: "NEW PASSWORD", sub: "RE-KEYING THE ACCOUNT" },
-  link: { main: "LINK PROVIDER", sub: "ONE MOMENT" },
-  challenge: { main: "HUMAN CHECK", sub: "ONE MOMENT" },
-  account: { main: "YOUR ACCOUNT", sub: "PASS ACCEPTED" },
-  profile: { main: "ACCOUNT · PROFILE", sub: "PASS ACCEPTED" },
-  "profile-name": { main: "CHANGE USERNAME", sub: "PASS ACCEPTED" },
-  "profile-key": { main: "SET A PASSWORD", sub: "PASS ACCEPTED" },
-  devices: { main: "ACCOUNT · DEVICES", sub: "PASS ACCEPTED" },
-  apps: { main: "ACCOUNT · APPS", sub: "PASS ACCEPTED" },
-  security: { main: "ACCOUNT SECURITY", sub: "PASS ACCEPTED" },
-  delete: { main: "ACCOUNT · DELETE", sub: "PASS ACCEPTED" },
-  registry: { main: "REGISTERED APPS", sub: "PASS ACCEPTED" },
-  "registry-name": { main: "NEW APP · 1 OF 3", sub: "PASS ACCEPTED" },
-  "registry-label": { main: "NEW APP · 2 OF 3", sub: "PASS ACCEPTED" },
-  "registry-return": { main: "NEW APP · 3 OF 3", sub: "PASS ACCEPTED" },
-  "registry-secret": { main: "COPY THE SECRET", sub: "PASS ACCEPTED" },
-  "registry-remove": { main: "REMOVE AN APP", sub: "PASS ACCEPTED" },
-};
 
 const ROUTES: readonly Route[] = [
   "/",
@@ -85,22 +54,26 @@ function lcdFor(
   sub: string;
 } {
   const who = whoOf(user);
-  const status =
-    state.view !== "code"
-      ? STATUS[state.view].main
-      : state.attemptsLeft !== null && state.digits === ""
-        ? "CODE REJECTED"
-        : `EMAIL CODE ${state.digits.length}/${CODE_LENGTH}`;
-  const sub =
-    state.view === "code" && state.attemptsLeft !== null && state.digits === ""
-      ? state.attemptsLeft === 1
-        ? "1 TRY LEFT"
-        : `${state.attemptsLeft} TRIES LEFT`
-      : STATUS[state.view].sub;
+  const rejected =
+    state.view === "code" && state.attemptsLeft !== null && state.digits === "";
+  if (rejected) {
+    return {
+      main: "CODE REJECTED",
+      sub:
+        state.attemptsLeft === 1
+          ? "1 TRY LEFT"
+          : `${state.attemptsLeft} TRIES LEFT`,
+    };
+  }
   return {
-    main: status,
+    main:
+      state.view === "code"
+        ? `EMAIL CODE ${state.digits.length}/${CODE_LENGTH}`
+        : SCREEN_NAME[state.view],
     sub:
-      who === "guest" ? sub : `${handleOf(user)} · ${who.toUpperCase()} PASS`,
+      who === "guest"
+        ? (SCREEN_SUB[state.view] ?? "")
+        : `${who.toUpperCase()} PASS`,
   };
 }
 

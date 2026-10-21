@@ -161,18 +161,40 @@ const WIDE_TYPE = `:root {
 }`;
 
 const LONGEST_LCD = [
-  ["9 DENIED, VISITOR PASS REQUIRED", "SIGN IN TO UNLOCK"],
-  ["OPEN FAILED, RELEASE IT AGAIN", "OR SIGN IN ON SCREEN"],
-  ["9 RELEASING, MANUAL", "WAIT FOR THE DELIVERY BAY"],
+  ["M".repeat(17), "M".repeat(19)],
+  ["09 ABCDEFGHIJKL", "PRESS TAKE DELIVERY"],
+  ["09 DENIED", "NEEDS VISITOR PASS"],
+  ["ESTATE UNREADABLE", "STILL. GO RETRIES"],
   ["PASS ALMOST READY", "PICK A USERNAME"],
-  ["9 DELIVERED, MANUAL", "LUCKY 7777, ONE MORE ON US"],
-  ["SERVICE 1 ERROR", "OPEN FAILED, RELEASE IT AGAIN"],
-  ["SERVICE 1 ERROR", "SESSION STILL UNREADABLE"],
-  ["SERVICE 2 SALE", "999 VENDED THIS PAGE"],
-  ["SERVICE 4 TEST", "GO RUNS THE LAMP TEST"],
-  ["NEVER ROCK OR TILT", "IT IS FREE ANYWAY"],
-  ["+30 LIVES", "NOT THAT YOU NEED THEM"],
+  ["SERVICE 1 ERROR", "ESTATE UNREADABLE"],
+  ["SERVICE 2 SALE", "9999 SOLD THIS PAGE"],
+  ["NEVER ROCK IT", "IT IS FREE ANYWAY"],
+  ["+30 LIVES", "NOBODY LOSES HERE"],
 ] as const;
+
+test("the LCD holds 17 and 19 characters on one line each on a desktop, in wide type", async ({
+  browser,
+}) => {
+  for (const [width, height] of [
+    [1440, 900],
+    [1000, 748],
+  ] as const) {
+    const page = await browser.newPage({ viewport: { width, height } });
+    await page.goto(GATEWAY);
+    await page.waitForLoadState("networkidle");
+    await page.addStyleTag({ content: WIDE_TYPE });
+    const lines = await page.evaluate(() => {
+      const main = document.querySelector<HTMLElement>("[data-screen]")!;
+      const sub = document.querySelector<HTMLElement>("[data-screen-sub]")!;
+      main.textContent = "M".repeat(17);
+      sub.textContent = "M".repeat(19);
+      const count = (node: HTMLElement) => node.getClientRects().length;
+      return [count(main), count(sub)];
+    });
+    expect(lines, `at ${width}px`).toEqual([1, 1]);
+    await page.close();
+  }
+});
 
 test("the LCD holds its longest words on a phone, in wide type", async ({
   browser,

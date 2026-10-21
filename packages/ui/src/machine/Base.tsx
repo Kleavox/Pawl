@@ -18,7 +18,7 @@ const TRAY_LABEL =
   "tray__label absolute right-14 bottom-8 text-pw-ink-dim font-pw-mono text-14 font-bold tracking-[0.2em] [.tray:has([data-tray]:not([data-tray=none]))_&]:hidden max-desk:right-8 max-desk:tracking-[0.12em]";
 
 const STICKER =
-  "tray__sticker absolute bottom-6 left-14 z-1 inline-flex items-center gap-7 py-1 pr-8 pl-6 border-[length:--spacing(2)] border-solid border-pw-black rounded-[--spacing(2)] bg-pw-warn text-pw-black font-pw-mono text-14 font-extrabold leading-none tracking-[0.06em] whitespace-nowrap [.tray:has([data-tray]:not([data-tray=none]))_&]:hidden max-desk:hidden";
+  "tray__sticker absolute bottom-6 left-14 z-1 inline-flex items-center gap-10 py-1 pr-8 pl-10 border-[length:--spacing(2)] border-solid border-pw-black rounded-[--spacing(2)] bg-pw-warn text-pw-black font-pw-mono text-14 font-extrabold leading-none tracking-[0.06em] whitespace-nowrap [.tray:has([data-tray]:not([data-tray=none]))_&]:hidden max-desk:hidden";
 
 const TIPPING =
   "relative w-7 h-11 border-[length:--spacing(2)] border-solid border-pw-black rounded-[--spacing(1)] [transform:rotate(-20deg)] after:absolute after:-bottom-4 after:-left-4 after:w-14 after:h-2 after:bg-pw-black after:[transform:rotate(20deg)]";
@@ -47,7 +47,7 @@ const FEET =
   "machine__feet absolute right-60 -bottom-12 left-60 flex justify-between pointer-events-none max-desk:right-30 max-desk:left-30";
 
 const FOOT =
-  "w-56 h-12 rounded-[0_0_--spacing(4)_--spacing(4)] bg-[linear-gradient(180deg,var(--pw-steel-lo),var(--pw-graphite))] max-desk:w-40";
+  "relative w-56 h-12 before:absolute before:top-0 before:left-1/2 before:w-14 before:h-7 before:bg-[repeating-linear-gradient(180deg,var(--pw-steel-mid)_0_--spacing(1),var(--pw-graphite)_--spacing(1)_--spacing(2))] before:[transform:translateX(-50%)] after:absolute after:inset-x-0 after:bottom-0 after:h-5 after:rounded-[--spacing(2)_--spacing(2)_--spacing(4)_--spacing(4)] after:bg-[linear-gradient(180deg,var(--pw-steel-lo),var(--pw-graphite))] max-desk:w-40 max-desk:before:w-10";
 
 const SOUND =
   "sound-switch group/sound inline-flex items-center gap-6 pt-2 pr-5 pb-2 pl-8 leading-none border-[length:--spacing(1)] border-solid border-pw-trim rounded-[--spacing(12)] bg-pw-steel-hi text-pw-etch font-pw-mono text-14 font-bold tracking-[0.12em] uppercase cursor-pointer before:content-['♪'] before:text-15 before:leading-none col-[2] row-[2] max-desk:col-[3] max-desk:row-[1] max-desk:justify-self-end";

@@ -5,6 +5,7 @@ import {
   type Identity,
 } from "@pawl/core";
 import {
+  Back,
   Bar,
   BarLink,
   Body,
@@ -24,7 +25,14 @@ import {
 } from "react";
 
 import { departTo } from "../depart";
-import type { PassEvent, PassState, PassView } from "../flow";
+import {
+  backLabel,
+  SCREEN_NAME,
+  stepOf,
+  type PassEvent,
+  type PassState,
+  type PassView,
+} from "../flow";
 import { api, returnTo } from "../helpers";
 import type { OAuthProviders } from "../types";
 
@@ -59,7 +67,7 @@ export function whoOf(user: Identity | null): Who {
   return user.role === "ADMIN" ? "owner" : "visitor";
 }
 
-export function handleOf(user: Identity | null): string {
+function handleOf(user: Identity | null): string {
   return user === null
     ? ""
     : displayHandle(user.username, user.email).toUpperCase();
@@ -166,19 +174,20 @@ export async function signOutVia(pass: Pass, path: string): Promise<void> {
 
 export function Frame(props: {
   name: PassView;
-  where: string;
-  step?: string;
   labelledBy?: string;
   label?: string;
   autofocus?: boolean;
   foot: ReactNode;
-  back?: ReactNode;
+  alone?: boolean;
+  stay?: boolean;
   tells?: boolean;
   children: ReactNode;
 }): ReactNode {
   const pass = usePass();
   const who = whoOf(pass.user);
   const machine = `${pass.rootOrigin}/`;
+  const step = props.alone ? null : stepOf(props.name, who === "owner");
+  const back = props.stay ? null : backLabel(props.name);
   return (
     <View
       name={props.name}
@@ -191,11 +200,11 @@ export function Frame(props: {
       <Bar
         where={
           who === "guest"
-            ? props.where
+            ? SCREEN_NAME[props.name]
             : `HI, ${handleOf(pass.user)} · ${who.toUpperCase()}`
         }
       >
-        {props.step === undefined ? null : <Step>{props.step}</Step>}
+        {step === null ? null : <Step>{step}</Step>}
         <BarLink
           href={machine}
           data-to-machine
@@ -216,7 +225,9 @@ export function Frame(props: {
             {told(pass, props.name)}
           </Note>
         ) : null}
-        {props.back}
+        {back === null ? null : (
+          <Back label={back} onClick={() => pass.dispatch({ type: "back" })} />
+        )}
       </Body>
       <Foot hint={props.foot} />
     </View>

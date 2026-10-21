@@ -41,12 +41,11 @@ function AccountMenu(props: { user: Identity }): ReactNode {
   return (
     <Frame
       name="account"
-      where="YOUR ACCOUNT"
       labelledBy="account-holder"
       tells
       foot={
         <>
-          <Kbd>1</Kbd>–<Kbd>{String(sections.length)}</Kbd> choose
+          <Kbd>1</Kbd>–<Kbd>{String(sections.length)}</Kbd> pick
         </>
       }
     >

@@ -86,3 +86,5 @@ export const BRAILLE: Readonly<
     dots: `${DOT} before:shadow-[--spacing(10)_--spacing(15)_0_currentcolor,--spacing(15)_--spacing(10)_0_currentcolor,--spacing(15)_--spacing(15)_0_currentcolor]`,
   },
 };
+
+export const LCD_FIT = { main: 17, sub: 19 } as const;

@@ -26,7 +26,14 @@ import { flushSync } from "react-dom";
 import { signOut, silentSignInPath } from "../auth-client";
 import { toMachineModel, type MachineModel } from "../estate-adapter";
 import { auditLines } from "../machine/audit";
-import { litKeys, productOf, viewFor, type ScreenCopy } from "../machine/copy";
+import {
+  bayName,
+  FAULT,
+  litKeys,
+  productOf,
+  viewFor,
+  type ScreenCopy,
+} from "../machine/copy";
 import { createKeypad } from "../machine/keypad";
 import {
   forgetRequest,
@@ -70,7 +77,6 @@ const PASS_WAIT_MS = 4000;
 const TICKER_SPEED = 40;
 const COPIED_MS = 1500;
 const SIGNED_OUT_KEY = "pawl:signed-out";
-const SIGN_IN_UNFINISHED = "SIGN-IN DID NOT FINISH";
 
 function asked(): RequestInit {
   return {
@@ -206,8 +212,8 @@ export function useCabinet(input: {
     modelFor({ authenticated: false }, null),
   );
   const [model, setModelState] = useState(modelRef.current);
-  const faultRef = useRef<string | null>(null);
-  const [fault, setFaultState] = useState<string | null>(null);
+  const faultRef = useRef<ScreenCopy | null>(null);
+  const [fault, setFaultState] = useState<ScreenCopy | null>(null);
   const [said, setSaid] = useState<{ view: string; text: string }>({
     view: "products",
     text: "",
@@ -256,9 +262,9 @@ export function useCabinet(input: {
     setModelState(next);
   }, []);
 
-  const setFault = useCallback((next: string | null): void => {
+  const setFault = useCallback((next: ScreenCopy | null): void => {
     faultRef.current = next;
-    if (next !== null) lastFault.current = next;
+    if (next !== null) lastFault.current = next.main;
     setFaultState(next);
   }, []);
 
@@ -282,7 +288,7 @@ export function useCabinet(input: {
   );
 
   const raiseFault = useCallback(
-    (words: string): void => {
+    (words: ScreenCopy): void => {
       stateRef.current = reduce(stateRef.current, { type: "reset" });
       setState(stateRef.current);
       setFault(words);
@@ -417,7 +423,7 @@ export function useCabinet(input: {
           void leaveForSignIn();
         });
       } catch {
-        raiseFault("RELEASE FAILED, TRY AGAIN");
+        raiseFault(FAULT.release);
       }
     },
     [host, leaveForSignIn, raiseFault, passRead],
@@ -434,7 +440,9 @@ export function useCabinet(input: {
 
   const estateUnread = useCallback(
     (): boolean =>
-      (faultRef.current ?? modelRef.current.screen).includes("UNREADABLE"),
+      (faultRef.current?.main ?? modelRef.current.screen).includes(
+        "UNREADABLE",
+      ),
     [],
   );
 
@@ -446,7 +454,7 @@ export function useCabinet(input: {
       try {
         session = await readSession();
       } catch {
-        raiseFault("SESSION STILL UNREADABLE");
+        raiseFault(FAULT.pass);
         return;
       }
       if (!session.authenticated && session.reason === "expired") {
@@ -464,7 +472,7 @@ export function useCabinet(input: {
       }
       dispatch({ type: "pass-issued", access: next.access });
       if (next.screen.includes("UNREADABLE")) {
-        raiseFault("ESTATE STILL UNREADABLE");
+        raiseFault(FAULT.estate);
         return;
       }
       dispatch({ type: "reset" });
@@ -486,7 +494,7 @@ export function useCabinet(input: {
     try {
       await runRelease(host);
     } catch {
-      raiseFault("RELEASE FAILED, TRY AGAIN");
+      raiseFault(FAULT.release);
     }
   }, [host, raiseFault]);
 
@@ -495,7 +503,7 @@ export function useCabinet(input: {
       try {
         navigate(href);
       } catch {
-        raiseFault("OPEN FAILED, RELEASE IT AGAIN");
+        raiseFault(FAULT.open);
       }
     },
     [navigate, raiseFault],
@@ -688,7 +696,7 @@ export function useCabinet(input: {
     markSignedOut(true);
     signOut().catch(() => {
       markSignedOut(false);
-      raiseFault("SIGN-OUT FAILED, TRY AGAIN");
+      raiseFault(FAULT.signOut);
     });
   }, [raiseFault]);
 
@@ -714,8 +722,8 @@ export function useCabinet(input: {
       if (unread) {
         next = {
           ...next,
-          screen: "SESSION UNREADABLE",
-          ticker: "SESSION UNREADABLE · PRESS GO TO RETRY",
+          screen: "PASS UNREADABLE",
+          ticker: "PASS UNREADABLE · PRESS GO TO RETRY",
         };
       }
       if (next.access === "guest") {
@@ -729,7 +737,7 @@ export function useCabinet(input: {
         }
         setModel(next);
         passRead.done();
-        if (unfinished) setFault(SIGN_IN_UNFINISHED);
+        if (unfinished) setFault(FAULT.signIn);
         return;
       }
       signedOutJustNow();
@@ -814,6 +822,15 @@ export function useCabinet(input: {
     setSaid({ view: "products", text: "" });
   }, [state.receipt, stopCount]);
 
+  const { motor, thud } = sound;
+  useEffect(() => {
+    if (state.status === "dispensing") motor();
+  }, [state.status, motor]);
+
+  useEffect(() => {
+    if (state.tray !== null) thud();
+  }, [state.tray, thud]);
+
   useEffect(() => {
     const bay = state.tray;
     if (bay === null) {
@@ -849,7 +866,7 @@ export function useCabinet(input: {
   useFollowFocus(screen, state.receipt === null ? view : "paper", returnTo);
   const lit = litKeys(
     state,
-    fault ?? model.screen,
+    fault?.main ?? model.screen,
     fault !== null,
     service !== null,
   );
@@ -886,7 +903,7 @@ export function useCabinet(input: {
     if (entry === undefined) return null;
     const carded = entry.card === true;
     const facts: DeliveryFacts = {
-      bay,
+      bay: bayName(bay),
       item: productOf(state.catalog, bay),
       place: carded
         ? { word: "From", host: hostOf(entry.href ?? "") }

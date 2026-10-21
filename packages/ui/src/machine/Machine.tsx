@@ -82,10 +82,13 @@ const SIGN =
   "bezel__sign absolute z-3 top-70 left-1/2 px-26 py-14 border-[length:--spacing(3)] border-solid border-pw-etch rounded-[--spacing(4)] bg-pw-warn shadow-[0_--spacing(10)_--spacing(18)_rgb(0_0_0/50%)] text-pw-etch font-pw-mono text-26 font-extrabold tracking-[0.14em] whitespace-nowrap [transform:translateX(-50%)_rotate(-4deg)] before:absolute before:bottom-full before:left-[18%] before:w-2 before:h-64 before:bg-pw-steel-mid before:[transform:rotate(24deg)] before:origin-bottom after:absolute after:bottom-full after:right-[18%] after:w-2 after:h-64 after:bg-pw-steel-mid after:[transform:rotate(-24deg)] after:origin-bottom";
 
 const LOCK =
-  "machine__lock absolute top-1/2 -right-9 z-2 grid place-items-center w-14 h-52 rounded-[--spacing(7)] bg-(image:--pw-brushed) shadow-[0_--spacing(1)_0_rgb(0_0_0/40%),inset_0_--spacing(1)_0_var(--pw-highlight)] [transform:translateY(-50%)] max-desk:hidden";
+  "machine__lock absolute top-1/2 -right-9 z-2 flex flex-col items-center justify-between w-14 h-52 py-2 rounded-[--spacing(7)] bg-(image:--pw-brushed) shadow-[0_--spacing(1)_0_rgb(0_0_0/40%),inset_0_--spacing(1)_0_var(--pw-highlight)] [transform:translateY(-50%)] max-desk:hidden";
 
-const LOCK_HOLE =
-  "w-6 h-12 rounded-[--spacing(3)_--spacing(3)_--spacing(1)_--spacing(1)] bg-pw-etch";
+const LOCK_CYLINDER =
+  "relative size-10 rounded-full bg-[radial-gradient(circle_at_40%_35%,var(--pw-steel-hi),var(--pw-steel-lo)_75%)] shadow-[inset_0_0_0_--spacing(1)_var(--pw-trim)] before:absolute before:top-1/2 before:left-1/2 before:w-1.5 before:h-6 before:rounded-[--spacing(1)] before:bg-pw-etch before:[transform:translate(-50%,-50%)]";
+
+const LOCK_GRIP =
+  "w-6 h-24 mb-4 rounded-[--spacing(3)] bg-[repeating-linear-gradient(180deg,var(--pw-trim)_0_--spacing(1),transparent_--spacing(1)_--spacing(3))]";
 
 const HINGE =
   "machine__hinge absolute -left-6 z-2 w-10 h-40 rounded-[--spacing(4)] bg-(image:--pw-brushed) shadow-[0_--spacing(1)_0_rgb(0_0_0/40%),inset_0_--spacing(1)_0_var(--pw-highlight)] [transform:translateY(-50%)] before:absolute before:inset-x-0 before:top-1/2 before:h-1 before:bg-pw-trim max-desk:hidden";
@@ -189,7 +192,8 @@ export function Machine(props: MachineProps): ReactNode {
                 aria-hidden="true"
               />
               <span className={LOCK} data-part="lock" aria-hidden="true">
-                <i className={LOCK_HOLE} />
+                <i className={LOCK_CYLINDER} data-lock="cylinder" />
+                <i className={LOCK_GRIP} />
               </span>
             </section>
             <Strip

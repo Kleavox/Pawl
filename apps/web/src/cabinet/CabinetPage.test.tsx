@@ -678,9 +678,7 @@ describe("a cabinet that keeps up with the pass", () => {
   it("says a sign-in did not finish and takes the note out of the address", async () => {
     window.history.replaceState(null, "", "/?signin=failed");
     await opened(vi.fn());
-    expect(
-      screen.getAllByText("SIGN-IN DID NOT FINISH").length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("NOT SIGNED IN").length).toBeGreaterThan(0);
     expect(window.location.search).toBe("");
   });
 
@@ -745,10 +743,7 @@ describe("the 4-2-3-1 service menu", () => {
   it("hands the machine back exactly as it was on CLR, so GO releases the bay picked before", async () => {
     const { user, container } = await opened(vi.fn());
     await press(user, container, "4", "2", "3", "1", "CLR");
-    expect(lcd(container)).toEqual([
-      "3 SELECTED, MANUAL",
-      "PRESS GO TO RELEASE IT",
-    ]);
+    expect(lcd(container)).toEqual(["03 MANUAL", "PRESS GO TO TAKE"]);
     await press(user, container, "GO");
     await advance(1500);
     expect(
@@ -787,15 +782,15 @@ describe("the 4-2-3-1 service menu", () => {
       }),
     );
     const { user, container } = await opened(vi.fn());
-    expect(lcd(container)[0]).toBe("SESSION UNREADABLE");
+    expect(lcd(container)[0]).toBe("PASS UNREADABLE");
     await press(user, container, "4", "2", "3", "1");
-    expect(lcd(container)).toEqual(["SERVICE 1 ERROR", "SESSION UNREADABLE"]);
+    expect(lcd(container)).toEqual(["SERVICE 1 ERROR", "PASS UNREADABLE"]);
   });
 
   it("counts what was vended this page under SALE, and says CASH is free", async () => {
     const { user, container } = await delivered(vi.fn(), "3");
     await press(user, container, "4", "2", "3", "1", "2");
-    expect(lcd(container)).toEqual(["SERVICE 2 SALE", "1 VENDED THIS PAGE"]);
+    expect(lcd(container)).toEqual(["SERVICE 2 SALE", "1 SOLD THIS PAGE"]);
     await press(user, container, "3");
     expect(lcd(container)).toEqual(["SERVICE 3 CASH", "0.00 · FREE VEND"]);
     expect(credit(container)).toBe("SEr3");

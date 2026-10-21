@@ -163,10 +163,10 @@ describe("Keypad", () => {
       <Keypad
         mode="service"
         lit={new Set(["CLR", "GO"])}
-        caption="CLR DENY · GO ALLOW"
+        caption="CLR deny · GO allow"
       />,
     );
-    expect(screen.getByText("CLR DENY · GO ALLOW")).toHaveClass(
+    expect(screen.getByText("CLR deny · GO allow")).toHaveClass(
       "whitespace-nowrap",
     );
   });

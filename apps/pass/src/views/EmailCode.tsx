@@ -1,6 +1,5 @@
 import { ApiError } from "@pawl/core";
 import {
-  Back,
   CodeCells,
   Eyebrow,
   Field,
@@ -77,19 +76,11 @@ export function EmailStep(): ReactNode {
   return (
     <Frame
       name="email"
-      where="EMAIL A CODE"
-      step="STEP 2"
       labelledBy="email-title"
       foot={
         <>
           <Kbd go>GO</Kbd> send · <Kbd>CLR</Kbd> back
         </>
-      }
-      back={
-        <Back
-          label="Other ways to sign in"
-          onClick={() => pass.dispatch({ type: "back" })}
-        />
       }
     >
       <Title id="email-title">Where should the code go?</Title>
@@ -98,7 +89,7 @@ export function EmailStep(): ReactNode {
         onSubmit={(event) => void send(event)}
       >
         <Field
-          label="Email address"
+          label="Email"
           id="code-email"
           type="email"
           autoComplete="email"
@@ -182,8 +173,6 @@ export function CodeStep(): ReactNode {
   return (
     <Frame
       name="code"
-      where="EMAIL A CODE"
-      step="STEP 3"
       label="Type the code"
       autofocus
       foot={
@@ -191,12 +180,6 @@ export function CodeStep(): ReactNode {
           <Kbd>0</Kbd>–<Kbd>9</Kbd> type · <Kbd go>GO</Kbd> check ·{" "}
           <Kbd>CLR</Kbd> erase
         </>
-      }
-      back={
-        <Back
-          label="Use another email"
-          onClick={() => pass.dispatch({ type: "back" })}
-        />
       }
     >
       <form

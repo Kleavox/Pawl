@@ -1,7 +1,6 @@
 import { apiFetch, errorMessage } from "@pawl/core";
 import {
   Actions,
-  Back,
   Field,
   Form,
   formatAge,
@@ -127,13 +126,6 @@ function said(pass: Pass, text: string): void {
   pass.dispatch({ type: "say", say: { kind: "success", text } });
 }
 
-function BackTo(props: { label: string }): ReactNode {
-  const pass = usePass();
-  return (
-    <Back label={props.label} onClick={() => pass.dispatch({ type: "back" })} />
-  );
-}
-
 function Copyable(props: {
   label: string;
   value: string;
@@ -173,8 +165,6 @@ function ListStep(props: {
   return (
     <Frame
       name="registry"
-      where="REGISTERED APPS"
-      step="5 OF 5"
       labelledBy="registry-title"
       tells
       foot={
@@ -182,7 +172,6 @@ function ListStep(props: {
           <Kbd go>GO</Kbd> new app · <Kbd>CLR</Kbd> back
         </>
       }
-      back={<BackTo label="Account" />}
     >
       <form
         id={pass.state.view === "registry" ? SCREEN_FORM : undefined}
@@ -262,15 +251,12 @@ function NameStep(props: {
   return (
     <Frame
       name="registry-name"
-      where="NEW APP"
-      step="1 OF 3"
       labelledBy="registry-name-title"
       foot={
         <>
           <Kbd go>GO</Kbd> next · <Kbd>CLR</Kbd> back
         </>
       }
-      back={<BackTo label="Registered apps" />}
     >
       <Title id="registry-name-title">Name and address</Title>
       <Form id={shown ? SCREEN_FORM : undefined} onSubmit={next}>
@@ -333,15 +319,12 @@ function LabelStep(props: {
   return (
     <Frame
       name="registry-label"
-      where="NEW APP"
-      step="2 OF 3"
       labelledBy="registry-label-title"
       foot={
         <>
           <Kbd go>GO</Kbd> next · <Kbd>CLR</Kbd> back
         </>
       }
-      back={<BackTo label="Name and address" />}
     >
       <Title id="registry-label-title">On the cabinet</Title>
       <Form id={shown ? SCREEN_FORM : undefined} onSubmit={next}>
@@ -416,15 +399,12 @@ function ReturnStep(props: {
   return (
     <Frame
       name="registry-return"
-      where="NEW APP"
-      step="3 OF 3"
       labelledBy="registry-return-title"
       foot={
         <>
           <Kbd go>GO</Kbd> register · <Kbd>CLR</Kbd> back
         </>
       }
-      back={<BackTo label="On the cabinet" />}
     >
       <Title id="registry-return-title">Sign-in and card</Title>
       <Form
@@ -494,15 +474,12 @@ function SecretStep(props: {
   return (
     <Frame
       name="registry-secret"
-      where="NEW APP"
-      step="SECRET"
       labelledBy="registry-secret-title"
       foot={
         <>
           <Kbd>CLR</Kbd> registered apps
         </>
       }
-      back={<BackTo label="Registered apps" />}
     >
       <Title id="registry-secret-title">Copy the secret now</Title>
       <Note aside>It is not shown again. Put both in the app's settings.</Note>
@@ -551,15 +528,12 @@ function RemoveStep(props: {
   return (
     <Frame
       name="registry-remove"
-      where="REGISTERED APPS"
-      step="REMOVE"
       labelledBy="registry-remove-title"
       foot={
         <>
           <Kbd go>GO</Kbd> remove · <Kbd>CLR</Kbd> back
         </>
       }
-      back={<BackTo label="Registered apps" />}
     >
       <Title id="registry-remove-title">{`Remove ${title}?`}</Title>
       <Note>
